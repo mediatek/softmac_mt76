@@ -34,18 +34,6 @@
 #define TXID_PR_FMT	" [%d:%d]"
 #define TXID_PR_ARG	__entry->wcid, __entry->pktid
 
-DECLARE_EVENT_CLASS(dev_evt,
-	TP_PROTO(struct mt76x02_dev *dev),
-	TP_ARGS(dev),
-	TP_STRUCT__entry(
-		DEV_ENTRY
-	),
-	TP_fast_assign(
-		DEV_ASSIGN;
-	),
-	TP_printk(DEV_PR_FMT, DEV_PR_ARG)
-);
-
 DECLARE_EVENT_CLASS(dev_txid_evt,
 	TP_PROTO(struct mt76x02_dev *dev, u8 wcid, u8 pktid),
 	TP_ARGS(dev, wcid, pktid),
@@ -63,53 +51,10 @@ DECLARE_EVENT_CLASS(dev_txid_evt,
 	)
 );
 
-DEFINE_EVENT(dev_evt, mac_txstat_poll,
-	TP_PROTO(struct mt76x02_dev *dev),
-	TP_ARGS(dev)
-);
-
 DEFINE_EVENT(dev_txid_evt, mac_txdone_add,
 	TP_PROTO(struct mt76x02_dev *dev, u8 wcid, u8 pktid),
 	TP_ARGS(dev, wcid, pktid)
 );
-
-TRACE_EVENT(mac_txstat_fetch,
-	TP_PROTO(struct mt76x02_dev *dev,
-		 struct mt76x02_tx_status *stat),
-
-	TP_ARGS(dev, stat),
-
-	TP_STRUCT__entry(
-		DEV_ENTRY
-		TXID_ENTRY
-		__field(bool, success)
-		__field(bool, aggr)
-		__field(bool, ack_req)
-		__field(u16, rate)
-		__field(u8, retry)
-	),
-
-	TP_fast_assign(
-		DEV_ASSIGN;
-		__entry->success = stat->success;
-		__entry->aggr = stat->aggr;
-		__entry->ack_req = stat->ack_req;
-		__entry->wcid = stat->wcid;
-		__entry->pktid = stat->pktid;
-		__entry->rate = stat->rate;
-		__entry->retry = stat->retry;
-	),
-
-	TP_printk(
-		DEV_PR_FMT TXID_PR_FMT
-		" success:%d aggr:%d ack_req:%d"
-		" rate:%04x retry:%d",
-		DEV_PR_ARG, TXID_PR_ARG,
-		__entry->success, __entry->aggr, __entry->ack_req,
-		__entry->rate, __entry->retry
-	)
-);
-
 
 TRACE_EVENT(dev_irq,
 	TP_PROTO(struct mt76x02_dev *dev, u32 val, u32 mask),
