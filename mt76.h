@@ -1200,6 +1200,9 @@ struct mt76_dev {
 	struct device *dma_dev;
 
 	struct mt76_mcu mcu;
+	struct mt76_connac2_patch_hdr *patch_hdr;
+	struct mt76_connac2_fw_trailer *wm_hdr;
+	struct mt76_connac2_fw_trailer *wa_hdr;
 
 	struct net_device *napi_dev;
 	struct net_device *tx_napi_dev;

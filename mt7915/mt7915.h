@@ -86,10 +86,25 @@
 
 #define MT7915_RTS_LEN_THRES		0x92b
 
+#define MT7915_BUILD_TIME_LEN		24
+
 struct mt7915_vif;
 struct mt7915_sta;
 struct mt7915_dfs_pulse;
 struct mt7915_dfs_pattern;
+
+enum mt7915_ram_type {
+	MT7915_RAM_TYPE_WM,
+	MT7915_RAM_TYPE_WA,
+	__MT7915_RAM_TYPE_MAX,
+};
+
+enum mt7915_coredump_state {
+	MT7915_COREDUMP_IDLE = 0,
+	MT7915_COREDUMP_MANUAL_WA,
+	MT7915_COREDUMP_MANUAL_WM,
+	MT7915_COREDUMP_AUTO,
+};
 
 enum mt7915_txq_id {
 	MT7915_TXQ_FWDL = 16,
@@ -299,9 +314,10 @@ struct mt7915_dev {
 
 	/* protects coredump data */
 	struct mutex dump_mutex;
+	u8 dump_state;
 #ifdef CONFIG_DEV_COREDUMP
 	struct {
-		struct mt7915_crash_data *crash_data;
+		struct mt7915_crash_data *crash_data[__MT7915_RAM_TYPE_MAX];
 	} coredump;
 #endif
 
@@ -489,6 +505,7 @@ int mt7915_dma_start(struct mt7915_dev *dev, bool reset, bool wed_reset);
 int mt7915_txbf_init(struct mt7915_dev *dev);
 void mt7915_init_txpower(struct mt7915_phy *phy);
 void mt7915_reset(struct mt7915_dev *dev);
+void mt7915_coredump(struct mt7915_dev *dev, u8 state);
 int mt7915_run(struct ieee80211_hw *hw);
 int mt7915_mcu_init(struct mt7915_dev *dev);
 int mt7915_mcu_init_firmware(struct mt7915_dev *dev);
