@@ -584,6 +584,7 @@ static void mt7915_mmio_wed_update_rx_stats(struct mtk_wed_device *wed,
 	int idx = le16_to_cpu(stats->wlan_idx);
 	struct mt7915_dev *dev;
 	struct mt76_wcid *wcid;
+	struct mt76_phy *mphy;
 
 	dev = container_of(wed, struct mt7915_dev, mt76.mmio.wed);
 
@@ -591,6 +592,10 @@ static void mt7915_mmio_wed_update_rx_stats(struct mtk_wed_device *wed,
 
 	wcid = mt76_wcid_ptr(dev, idx);
 	if (wcid) {
+		mphy = mt76_dev_phy(&dev->mt76, wcid->phy_idx);
+		ieee80211_tpt_led_trig_rx(mphy->hw,
+					  le32_to_cpu(stats->rx_byte_cnt));
+
 		wcid->stats.rx_bytes += le32_to_cpu(stats->rx_byte_cnt);
 		wcid->stats.rx_packets += le32_to_cpu(stats->rx_pkt_cnt);
 		wcid->stats.rx_errors += le32_to_cpu(stats->rx_err_cnt);
