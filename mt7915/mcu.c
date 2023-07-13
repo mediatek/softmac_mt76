@@ -3336,8 +3336,7 @@ int mt7915_mcu_set_thermal_protect(struct mt7915_phy *phy)
 
 	/* set high-temperature trigger threshold */
 	req.ctrl.ctrl_id = THERMAL_PROTECT_ENABLE;
-	/* add a safety margin ~10 */
-	req.restore_temp = cpu_to_le32(phy->throttle_temp[0] - 10);
+	req.restore_temp = cpu_to_le32(phy->throttle_temp[0]);
 	req.trigger_temp = cpu_to_le32(phy->throttle_temp[1]);
 	req.sustain_time = cpu_to_le16(10);
 
