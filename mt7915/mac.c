@@ -1002,6 +1002,7 @@ static void mt7915_mac_add_txs(struct mt7915_dev *dev, void *data)
 	struct mt7915_phy *phy;
 	struct mt76_wcid *wcid;
 	__le32 *txs_data = data;
+	u64 last_bytes;
 	u16 wcidx;
 	u8 pid;
 
@@ -1017,6 +1018,7 @@ static void mt7915_mac_add_txs(struct mt7915_dev *dev, void *data)
 	if (!wcid)
 		goto out;
 
+	last_bytes = wcid->stats.tx_bytes;
 	msta = container_of(wcid, struct mt7915_sta, wcid);
 
 	if (le32_get_bits(txs_data[0], MT_TXS0_TXS_FORMAT) == MT_TXS_PPDU_FMT)
@@ -1026,6 +1028,24 @@ static void mt7915_mac_add_txs(struct mt7915_dev *dev, void *data)
 
 	if (!wcid->sta)
 		goto out;
+
+	if (wiphy_ext_feature_isset(dev->mphy.hw->wiphy,
+				    NL80211_EXT_FEATURE_STAS_COUNT)) {
+		struct ieee80211_vif *vif;
+		struct wireless_dev *wdev;
+
+		vif = container_of((void *)msta->vif, struct ieee80211_vif,
+				   drv_priv);
+		if (!vif)
+			goto out;
+
+		wdev = ieee80211_vif_to_wdev(vif);
+
+		if (vif->type == NL80211_IFTYPE_MONITOR)
+			goto out;
+
+		dev_sw_netstats_tx_add(wdev->netdev, 0, (wcid->stats.tx_bytes - last_bytes));
+	}
 
 	mt76_wcid_add_poll(&dev->mt76, &msta->wcid);
 
@@ -2029,6 +2049,7 @@ static void mt7915_mac_sta_stats_work(struct mt7915_phy *phy)
 		spin_unlock_bh(&phy->stats_lock);
 
 		mt7915_mcu_get_tx_rate(phy, sta->wcid.idx);
+		mt7915_mcu_wed_wa_tx_stats(phy->dev, sta->wcid.idx, sta);
 
 		spin_lock_bh(&phy->stats_lock);
 	}

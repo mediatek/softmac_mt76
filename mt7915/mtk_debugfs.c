@@ -3893,7 +3893,7 @@ static int mt7915_reset_counter(void *data, u64 val)
 	}
 
 	/* Clear the firmware counters */
-	mt7915_mcu_wed_wa_tx_stats(dev, dev->wlan_idx);
+	mt7915_mcu_wed_wa_tx_stats(dev, dev->wlan_idx, NULL);
 	mt7915_get_tx_stat(phy, dev->wlan_idx);
 
 	rcu_read_lock();

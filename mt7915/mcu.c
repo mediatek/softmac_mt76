@@ -4849,7 +4849,8 @@ int mt7915_mcu_twt_agrt_update(struct mt7915_dev *dev,
 				 &req, sizeof(req), true);
 }
 
-int mt7915_mcu_wed_wa_tx_stats(struct mt7915_dev *dev, u16 wlan_idx)
+int mt7915_mcu_wed_wa_tx_stats(struct mt7915_dev *dev, u16 wlan_idx,
+			       struct mt7915_sta *sta)
 {
 	struct {
 		__le32 cmd;
@@ -4905,11 +4906,34 @@ int mt7915_mcu_wed_wa_tx_stats(struct mt7915_dev *dev, u16 wlan_idx)
 	rcu_read_lock();
 
 	wcid = mt76_wcid_ptr(dev, wlan_idx);
-	if (wcid)
-		wcid->stats.tx_packets += le32_to_cpu(res->tx_packets);
-	else
-		ret = -EINVAL;
+	if (wcid) {
+		struct ieee80211_vif *vif;
+		struct wireless_dev *wdev;
 
+		wcid->stats.tx_packets += le32_to_cpu(res->tx_packets);
+
+		if (!wiphy_ext_feature_isset(dev->mphy.hw->wiphy,
+					     NL80211_EXT_FEATURE_STAS_COUNT) ||
+		    !sta)
+			 goto unlock;
+
+		vif = container_of((void *)sta->vif,
+				   struct ieee80211_vif,
+				   drv_priv);
+		if (!vif)
+			goto unlock;
+
+		wdev = ieee80211_vif_to_wdev(vif);
+
+		if (vif->type == NL80211_IFTYPE_MONITOR)
+			goto unlock;
+
+		dev_sw_netstats_tx_add(wdev->netdev, le32_to_cpu(res->tx_packets), 0);
+	} else {
+		ret = -EINVAL;
+	}
+
+unlock:
 	rcu_read_unlock();
 out:
 	dev_kfree_skb(skb);

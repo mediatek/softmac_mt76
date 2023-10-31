@@ -600,8 +600,32 @@ static void mt7915_mmio_wed_update_rx_stats(struct mtk_wed_device *wed,
 		wcid->stats.rx_packets += le32_to_cpu(stats->rx_pkt_cnt);
 		wcid->stats.rx_errors += le32_to_cpu(stats->rx_err_cnt);
 		wcid->stats.rx_drops += le32_to_cpu(stats->rx_drop_cnt);
+
+		if (wiphy_ext_feature_isset(dev->mphy.hw->wiphy,
+					    NL80211_EXT_FEATURE_STAS_COUNT)) {
+			struct mt7915_sta *msta;
+			struct ieee80211_vif *vif;
+			struct wireless_dev *wdev;
+
+			msta = container_of(wcid, struct mt7915_sta, wcid);
+
+			vif = container_of((void *)msta->vif,
+					   struct ieee80211_vif,
+					   drv_priv);
+			if (!vif)
+				goto unlock;
+
+			wdev = ieee80211_vif_to_wdev(vif);
+
+			if (vif->type == NL80211_IFTYPE_MONITOR)
+				goto unlock;
+
+			__dev_sw_netstats_rx_add(wdev->netdev, le32_to_cpu(stats->rx_pkt_cnt),
+						 le32_to_cpu(stats->rx_byte_cnt));
+		}
 	}
 
+unlock:
 	rcu_read_unlock();
 }
 

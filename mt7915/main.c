@@ -1315,6 +1315,9 @@ static void mt7915_sta_statistics(struct ieee80211_hw *hw,
 	struct rate_info *txrate = &msta->wcid.rate;
 	struct rate_info rxrate = {};
 
+	if (msta->wcid.idx == 0)
+		return;
+
 	if (!mt7915_mcu_get_rx_rate(phy, vif, sta, &rxrate)) {
 		sinfo->rxrate = rxrate;
 		sinfo->filled |= BIT_ULL(NL80211_STA_INFO_RX_BITRATE);
@@ -1342,7 +1345,7 @@ static void mt7915_sta_statistics(struct ieee80211_hw *hw,
 		sinfo->tx_bytes = msta->wcid.stats.tx_bytes;
 		sinfo->filled |= BIT_ULL(NL80211_STA_INFO_TX_BYTES64);
 
-		if (!mt7915_mcu_wed_wa_tx_stats(phy->dev, msta->wcid.idx)) {
+		if (!mt7915_mcu_wed_wa_tx_stats(phy->dev, msta->wcid.idx, msta)) {
 			sinfo->tx_packets = msta->wcid.stats.tx_packets;
 			sinfo->filled |= BIT_ULL(NL80211_STA_INFO_TX_PACKETS);
 		}
