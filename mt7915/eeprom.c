@@ -156,6 +156,21 @@ static int mt7915_eeprom_load(struct mt7915_dev *dev)
 	return mt7915_check_eeprom(dev);
 }
 
+static int mt7915_eeprom_parse_efuse_hw_cap(struct mt7915_dev *dev)
+{
+#define WTBL_SIZE_GROUP		GENMASK(1, 0)
+	u32 buf;
+	int ret;
+
+	ret = mt76_get_of_data_from_nvmem(&dev->mt76, &buf, "variant", 4);
+	if (ret)
+		return ret;
+
+	dev->limited_wtbl_size = buf & WTBL_SIZE_GROUP;
+
+	return 0;
+}
+
 static void mt7915_eeprom_parse_band_config(struct mt7915_phy *phy)
 {
 	struct mt7915_dev *dev = phy->dev;
@@ -218,6 +233,13 @@ void mt7915_eeprom_parse_hw_cap(struct mt7915_dev *dev,
 	u8 path, nss, nss_max = 4, *eeprom = dev->mt76.eeprom.data;
 	struct mt76_phy *mphy = phy->mt76;
 	u8 band = phy->mt76->band_idx;
+	int ret;
+
+	if (is_mt7981(&dev->mt76)) {
+		ret = mt7915_eeprom_parse_efuse_hw_cap(dev);
+		if (ret)
+			dev->limited_wtbl_size = true;
+	}
 
 	mt7915_eeprom_parse_band_config(phy);
 
