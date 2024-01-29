@@ -362,6 +362,8 @@ struct mt7915_dev {
 	void __iomem *dcm;
 	void __iomem *sku;
 
+	bool wmm_pbc_enable;
+	struct work_struct wmm_pbc_work;
 	u32 adie_type;
 };
 
@@ -604,6 +606,7 @@ int mt7915_mcu_fw_log_2_host(struct mt7915_dev *dev, u8 type, u8 ctrl);
 int mt7915_mcu_fw_dbg_ctrl(struct mt7915_dev *dev, u32 module, u8 level);
 void mt7915_mcu_rx_event(struct mt7915_dev *dev, struct sk_buff *skb);
 void mt7915_mcu_exit(struct mt7915_dev *dev);
+void mt7915_mcu_wmm_pbc_work(struct work_struct *work);
 
 static inline u16 mt7915_wtbl_size(struct mt7915_dev *dev)
 {
