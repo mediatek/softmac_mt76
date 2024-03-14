@@ -340,6 +340,8 @@ struct mt7915_dev {
 	struct reset_control *rstc;
 	void __iomem *dcm;
 	void __iomem *sku;
+
+	u32 adie_type;
 };
 
 enum {
