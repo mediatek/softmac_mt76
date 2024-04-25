@@ -209,7 +209,7 @@ static int mt7915_add_interface(struct ieee80211_hw *hw,
 	struct mt7915_phy *phy = mt7915_hw_phy(hw);
 	struct mt76_txq *mtxq;
 	bool ext_phy = phy != &dev->phy;
-	int idx, ret = 0;
+	int idx, i, ret = 0;
 
 	mutex_lock(&dev->mt76.mutex);
 
@@ -256,6 +256,12 @@ static int mt7915_add_interface(struct ieee80211_hw *hw,
 	mvif->sta.wcid.idx = idx;
 	mvif->sta.wcid.tx_info |= MT_WCID_TX_INFO_SET;
 	mt76_wcid_init(&mvif->sta.wcid, phy->mt76->band_idx);
+
+	/* init Default QoS map, defined in section 2.3 of RFC8325.
+	 * Three most significant bits of DSCP are used as UP.
+	 */
+	for (i = 0; i < IP_DSCP_NUM; ++i)
+		mvif->qos_map[i] = i >> 3;
 
 	mt7915_mac_wtbl_update(dev, idx,
 			       MT_WTBL_UPDATE_ADM_COUNT_CLEAR);
@@ -1819,6 +1825,57 @@ mt7915_set_frag_threshold(struct ieee80211_hw *hw, int radio_idx, u32 val)
 }
 
 static int
+mt7915_set_qos_map(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+		   struct cfg80211_qos_map *qos_map)
+{
+	struct mt7915_vif *mvif = (struct mt7915_vif *)vif->drv_priv;
+	struct {
+		u8 bss_idx;
+		u8 qos_map_enable;
+		u8 __rsv[2];
+		s8 qos_map[IP_DSCP_NUM];
+	} __packed req = {
+		.bss_idx = mvif->mt76.idx,
+		.qos_map_enable = qos_map ? true : false,
+	};
+
+	/* Prevent access to members of mt7915_vif before its initialization. */
+	if (!mvif->phy)
+		return -EPERM;
+
+	if (qos_map) {
+		struct cfg80211_dscp_exception *exception = qos_map->dscp_exception;
+		struct cfg80211_dscp_range *range = qos_map->up;
+		s8 i;
+
+		/* Default QoS map, defined in section 2.3 of RFC8325.
+		 * Three most significant bits of DSCP are used as UP.
+		 */
+		for (i = 0; i < IP_DSCP_NUM; ++i)
+			req.qos_map[i] = i >> 3;
+
+		/* User-defined QoS map */
+		for (i = 0; i < IEEE80211_NUM_UPS; ++i) {
+			u8 low = range[i].low, high = range[i].high;
+
+			if (low < IP_DSCP_NUM && high < IP_DSCP_NUM && low <= high)
+				memset(req.qos_map + low, i, high - low + 1);
+		}
+
+		for (i = 0; i < qos_map->num_des; ++i) {
+			u8 dscp = exception[i].dscp, up = exception[i].up;
+
+			if (dscp < IP_DSCP_NUM && up < IEEE80211_NUM_UPS)
+				req.qos_map[dscp] = up;
+		}
+		memcpy(mvif->qos_map, req.qos_map, IP_DSCP_NUM);
+	}
+
+	return mt76_mcu_send_msg(&mvif->phy->dev->mt76, MCU_WA_EXT_CMD(SET_QOS_MAP),
+				 &req, sizeof(req), true);
+}
+
+static int
 mt7915_set_radar_background(struct ieee80211_hw *hw,
 			    struct cfg80211_chan_def *chandef)
 {
@@ -1966,6 +2023,7 @@ const struct ieee80211_ops mt7915_ops = {
 	.add_twt_setup = mt7915_mac_add_twt_setup,
 	.twt_teardown_request = mt7915_twt_teardown_request,
 	.set_frag_threshold = mt7915_set_frag_threshold,
+	.set_qos_map = mt7915_set_qos_map,
 	CFG80211_TESTMODE_CMD(mt76_testmode_cmd)
 	CFG80211_TESTMODE_DUMP(mt76_testmode_dump)
 #ifdef CONFIG_MAC80211_DEBUGFS
