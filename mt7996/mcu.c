@@ -6644,6 +6644,61 @@ int mt7996_mcu_set_vow_feature_ctrl(struct mt7996_phy *phy)
 	                         &req, sizeof(req), true);
 }
 
+int mt7996_mcu_set_eml_omn(struct ieee80211_vif *vif,
+			   u8 link_id,
+			   struct ieee80211_sta *sta,
+			   struct mt7996_dev *dev,
+			   struct mt7996_eml_omn *eml_omn)
+{
+#define EML_OMN_CONTROL_EMLSR_MODE	0x01
+	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
+	struct mt7996_sta_link *msta_link;
+	struct mt7996_vif_link *mconf, *mconf_link;
+	struct sta_rec_eml_op *eml_op;
+	struct sk_buff *skb;
+	struct tlv *tlv;
+
+	msta_link = mt76_dereference(msta->link[link_id], &dev->mt76);
+	mconf = mt7996_vif_link(dev, vif, link_id);
+
+	if (!msta_link || !mconf)
+		return -EINVAL;
+
+	skb = __mt76_connac_mcu_alloc_sta_req(&dev->mt76,
+					      &mconf->mt76,
+					      &msta_link->wcid,
+					      MT7996_STA_UPDATE_MAX_SIZE);
+
+	if (IS_ERR(skb))
+		return PTR_ERR(skb);
+
+	tlv = mt76_connac_mcu_add_tlv(skb, STA_REC_EML_OP, sizeof(*eml_op));
+	eml_op = (struct sta_rec_eml_op *) tlv;
+	eml_op->bitmap = 0;
+
+	if (eml_omn->control & EML_OMN_CONTROL_EMLSR_MODE) {
+		unsigned long bitmap = (unsigned long) le16_to_cpu(eml_omn->bitmap);
+		unsigned int linkid;
+
+		for_each_set_bit(linkid, &bitmap, IEEE80211_MLD_MAX_NUM_LINKS) {
+			mconf_link = mt7996_vif_link(dev, vif, linkid);
+
+			if (!mconf_link)
+				continue;
+
+			eml_op->bitmap |= BIT(mconf_link->phy->mt76->band_idx);
+		}
+	}
+
+	mlo_dbg(mconf->phy, "link:%u, wcid:%d, control:%x, mode:%d, bmp:%x\n",
+		msta_link->wcid.link_id, msta_link->wcid.idx, eml_omn->control,
+		!!(eml_omn->control & EML_OMN_CONTROL_EMLSR_MODE),
+		eml_op->bitmap);
+
+	return mt76_mcu_skb_send_msg(&dev->mt76, skb,
+			MCU_WMWA_UNI_CMD(STA_REC_UPDATE), true);
+}
+
 #ifdef CONFIG_MTK_VENDOR
 void mt7996_set_wireless_vif(void *data, u8 *mac, struct ieee80211_vif *vif)
 {
