@@ -2666,6 +2666,7 @@ int mt7996_mcu_set_fixed_field(struct mt7996_dev *dev, struct mt7996_sta *msta,
 	case RATE_PARAM_FIXED_MCS:
 	case RATE_PARAM_FIXED_GI:
 	case RATE_PARAM_FIXED_HE_LTF:
+	case RATE_PARAM_FIXED_ENCODING:
 		if (phy)
 			ra->phy = *phy;
 		break;
@@ -2960,6 +2961,11 @@ int mt7996_mcu_add_rate_ctrl(struct mt7996_dev *dev, struct mt7996_sta *msta,
 		ret = PTR_ERR(skb);
 		goto error_unlock;
 	}
+
+#ifdef CONFIG_MTK_VENDOR
+	if (changed && dev->cert_mode == 2)
+		return mt7996_mcu_add_rate_ctrl_fixed(dev, msta, vif, link_id);
+#endif
 
 	/* firmware rc algorithm refers to sta_rec_he for HE control.
 	 * once dev->rc_work changes the settings driver should also

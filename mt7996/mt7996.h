@@ -552,6 +552,8 @@ struct csi_data {
 
 	struct list_head node;
 };
+
+int mt7996_set_coding_type(struct ieee80211_hw *hw, u8 coding_type, u8 link_id);
 #endif
 
 struct mt7996_rro_ba_session {
@@ -814,7 +816,8 @@ struct mt7996_dev {
 	bool red_enable:1;
 #endif
 #ifdef CONFIG_MTK_VENDOR
-	bool cert_mode;
+	u8 cert_mode;
+	u8 coding_type;
 #endif
 
 #if defined CONFIG_NL80211_TESTMODE || defined CONFIG_MTK_DEBUG
@@ -1248,8 +1251,8 @@ int mt7996_vendor_amnt_sta_remove(struct mt7996_phy *phy,
 				  struct ieee80211_sta *sta);
 void mt7996_set_wireless_amsdu(struct ieee80211_hw *hw, u8 en);
 void mt7996_mcu_set_mimo(struct mt7996_phy *phy);
-int mt7996_set_muru_cfg(struct mt7996_phy *phy, u8 action, u8 val);
-int mt7996_mcu_set_muru_cfg(struct mt7996_phy *phy, void *data);
+int mt7996_set_muru_cfg(struct mt7996_dev *dev, u8 action, u8 val);
+int mt7996_mcu_set_muru_cfg(struct mt7996_dev *dev, void *data);
 void mt7996_set_beacon_vif(struct ieee80211_vif *vif, u8 val);
 int mt7996_mcu_set_csi(struct mt7996_phy *phy, u8 mode,
 		       u8 cfg, u8 v1, u32 v2, u8 *mac_addr);
@@ -1277,14 +1280,15 @@ int mt7996_mcu_set_txbf_internal(struct mt7996_phy *phy, u8 action, int idx, boo
 void mt7996_mcu_rx_bf_event(struct mt7996_dev *dev, struct sk_buff *skb);
 int mt7996_mcu_set_muru_fixed_rate_enable(struct mt7996_dev *dev, u8 action, int val);
 int mt7996_mcu_set_muru_fixed_rate_parameter(struct mt7996_dev *dev, u8 action, void *para);
-int mt7996_mcu_set_txbf_snd_info(struct mt7996_phy *phy, void *para);
+int mt7996_mcu_set_txbf_snd_info(struct mt7996_dev *dev, void *para);
 int mt7996_mcu_set_muru_cmd(struct mt7996_dev *dev, u16 action, int val);
 int mt7996_mcu_muru_set_prot_frame_thr(struct mt7996_dev *dev, u32 val);
-int mt7996_mcu_set_bypass_smthint(struct mt7996_phy *phy, u8 val);
-int mt7996_mcu_set_rfeature_trig_type(struct mt7996_phy *phy, u8 enable, u8 trig_type);
-void mt7996_mcu_set_ppdu_tx_type(struct mt7996_phy *phy, u8 ppdu_type);
-void mt7996_mcu_set_nusers_ofdma(struct mt7996_phy *phy, u8 type, u8 ofdma_user_cnt);
-void mt7996_mcu_set_cert(struct mt7996_phy *phy, u8 type);
+int mt7996_mcu_set_bypass_smthint(struct mt7996_dev *dev, u8 band_idx, u8 val);
+int mt7996_mcu_set_rfeature_trig_type(struct mt7996_dev *dev, u8 band_idx,
+				      u8 enable, u8 trig_type);
+void mt7996_mcu_set_ppdu_tx_type(struct mt7996_dev *dev, u8 ppdu_type);
+void mt7996_mcu_set_nusers_ofdma(struct mt7996_dev *dev, u8 band_idx, u8 ofdma_user_cnt);
+void mt7996_mcu_set_cert(struct mt7996_dev *dev);
 void mt7996_tm_update_channel(struct mt7996_phy *phy);
 
 int mt7996_mcu_set_vow_drr_dbg(struct mt7996_dev *dev, u32 val);
