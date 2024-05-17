@@ -555,7 +555,7 @@ mt7996_tm_dpd_prek_send_req(struct mt7996_phy *phy, struct mt7996_tm_req *req,
 
 		/* set channel switch reason */
 		mphy->hw->conf.flags |= IEEE80211_CONF_OFFCHANNEL;
-		mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_SWITCH);
+		mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_SWITCH, false);
 
 		ret = mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(TESTMODE_CTRL), req,
 					sizeof(*req), false);
@@ -569,7 +569,7 @@ out:
 	mphy->hw->conf.flags &= ~IEEE80211_CONF_OFFCHANNEL;
 	memcpy(chandef, &chandef_backup, sizeof(struct cfg80211_chan_def));
 	memcpy(chandef->chan, &chan_backup, sizeof(struct ieee80211_channel));
-	mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_SWITCH);
+	mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_SWITCH, false);
 
 	return ret;
 }
