@@ -29,12 +29,12 @@ int mt7996_run(struct mt7996_phy *phy)
 	if (ret)
 		return ret;
 
-	ret = mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_RX_PATH);
+	ret = mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_RX_PATH, false);
 	if (ret)
 		return ret;
 
 	/* set a parking channel */
-	ret = mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_SWITCH);
+	ret = mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_SWITCH, false);
 	if (ret)
 		return ret;
 
@@ -739,11 +739,11 @@ int mt7996_set_channel(struct mt76_phy *mphy)
 		return 0;
 	}
 
-	ret = mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_SWITCH);
+	ret = mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_SWITCH, false);
 	if (ret)
 		goto out;
 
-	ret = mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_RX_PATH);
+	ret = mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_RX_PATH, false);
 	if (ret)
 		goto out;
 
@@ -2867,6 +2867,13 @@ mt7996_event_callback(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 				next_time = min(next_time,
 						MT7996_MAX_BEACON_LOSS *
 						conf->beacon_int);
+
+				/* trigger calibration for DFS link */
+				if (!cfg80211_reg_can_beacon(hw->wiphy,
+							     &phy->mt76->chandef,
+							     NL80211_IFTYPE_AP))
+					mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_SWITCH,
+								 true);
 			}
 
 			ieee80211_queue_delayed_work(hw, &mvif->beacon_mon_work,
