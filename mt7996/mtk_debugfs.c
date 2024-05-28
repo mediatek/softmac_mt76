@@ -4389,6 +4389,18 @@ static const struct file_operations fops_muru_dbg_info = {
 	.llseek = default_llseek,
 };
 
+static int mt7996_pp_alg_show(struct seq_file *s, void *data)
+{
+	struct mt7996_phy *phy = s->private;
+	struct mt7996_dev *dev = phy->dev;
+
+	dev_info(dev->mt76.dev, "pp_mode = %d\n", phy->pp_mode);
+	mt7996_mcu_set_pp_alg_ctrl(phy, PP_ALG_GET_STATISTICS);
+
+	return 0;
+}
+DEFINE_SHOW_ATTRIBUTE(mt7996_pp_alg);
+
 void mt7996_mtk_init_band_debugfs(struct mt7996_phy *phy, struct dentry *dir)
 {
 	/* agg */
@@ -4411,6 +4423,8 @@ void mt7996_mtk_init_band_debugfs(struct mt7996_phy *phy, struct dentry *dir)
 
 	debugfs_create_file("thermal_enable", 0600, dir, phy, &fops_thermal_enable);
 	debugfs_create_file("scs_enable", 0200, dir, phy, &fops_scs_enable);
+
+	debugfs_create_file("pp_alg", 0200, dir, phy, &mt7996_pp_alg_fops);
 }
 
 void mt7996_mtk_init_dev_debugfs(struct mt7996_dev *dev, struct dentry *dir)

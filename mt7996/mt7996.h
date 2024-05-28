@@ -1228,6 +1228,7 @@ int mt7996_mcu_cp_support(struct mt7996_dev *dev, u8 mode);
 int mt7996_mcu_set_pp_en(struct mt7996_phy *phy, u8 mode, u16 bitmap);
 int mt7996_mcu_set_pp_sta_dscb(struct mt7996_phy *phy, struct cfg80211_chan_def *chandef,
 			       u8 omac_idx);
+int mt7996_mcu_set_pp_alg_ctrl(struct mt7996_phy *phy, u8 action);
 int mt7996_mcu_set_eml_omn(struct ieee80211_vif *vif, u8 link_id,
 			   struct ieee80211_sta *sta, struct mt7996_dev *dev,
 			   struct mt7996_eml_omn *eml_omn);
@@ -1258,6 +1259,7 @@ int mt7996_mcu_set_muru_cfg(struct mt7996_dev *dev, void *data);
 void mt7996_set_beacon_vif(struct ieee80211_vif *vif, u8 val);
 int mt7996_mcu_set_csi(struct mt7996_phy *phy, u8 mode,
 		       u8 cfg, u8 v1, u32 v2, u8 *mac_addr);
+int mt7996_vendor_pp_bitmap_update(struct mt7996_phy *phy, u16 bitmap);
 #endif
 
 int mt7996_mcu_edcca_enable(struct mt7996_phy *phy, bool enable);
