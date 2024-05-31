@@ -381,6 +381,7 @@ struct mt7996_sta {
 
 	struct mt7996_vif *vif;
 	u8 sec_link;
+	u16 valid_links;
 };
 
 struct mt7996_vif_link {
@@ -1011,7 +1012,7 @@ int mt7996_mcu_add_bss_info(struct mt7996_phy *phy, struct ieee80211_vif *vif,
 			    struct ieee80211_bss_conf *link_conf,
 			    struct mt76_vif_link *mlink,
 			    struct mt7996_sta_link *msta_link, int enable);
-int mt7996_mcu_add_sta(struct mt7996_dev *dev,
+int mt7996_mcu_add_sta(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 		       struct ieee80211_bss_conf *link_conf,
 		       struct ieee80211_link_sta *link_sta,
 		       struct mt7996_vif_link *link,
@@ -1108,6 +1109,11 @@ int mt7996_mcu_set_vow_drr_ctrl(struct mt7996_phy *phy,
 				enum vow_drr_ctrl_id id);
 int mt7996_mcu_set_vow_feature_ctrl(struct mt7996_phy *phy);
 void mt7996_mcu_wmm_pbc_work(struct work_struct *work);
+int mt7996_mcu_mld_reconf_stop_link(struct mt7996_dev *dev,
+				    struct ieee80211_vif *vif, u16 removed_links);
+int mt7996_mcu_mld_link_oper(struct mt7996_phy *phy,
+			     struct ieee80211_bss_conf *conf,
+			     struct mt7996_bss_conf *mconf, bool add);
 
 static inline u8 mt7996_max_interface_num(struct mt7996_dev *dev)
 {

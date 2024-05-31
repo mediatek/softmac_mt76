@@ -1081,6 +1081,7 @@ enum {
 	MCU_UNI_EVENT_PP = 0x5a,
 	MCU_UNI_EVENT_PER_STA_INFO = 0x6d,
 	MCU_UNI_EVENT_ALL_STA_INFO = 0x6e,
+	MCU_UNI_EVENT_MLD = 0x81,
 	MCU_UNI_EVENT_SDO = 0x83,
 };
 
@@ -1334,6 +1335,7 @@ enum {
 	MCU_UNI_CMD_ASSERT_DUMP = 0x6f,
 	MCU_UNI_CMD_PTA_3WIRE_CTRL = 0x78,
 	MCU_UNI_CMD_RADIO_STATUS = 0x80,
+	MCU_UNI_CMD_MLD = 0x82,
 	MCU_UNI_CMD_SDO = 0x88,
 };
 
@@ -1409,7 +1411,9 @@ enum {
 	UNI_BSS_INFO_PM_DISABLE = 27,
 	UNI_BSS_INFO_EHT = 30,
 	UNI_BSS_INFO_BCN_CRIT_UPDATE = 32,
+	UNI_BSS_INFO_MLD_LINK_OP = 36,
 	UNI_BSS_INFO_BCN_STA_PROF_CSA = 37,
+	UNI_BSS_INFO_BCN_ML_RECONF = 38,
 };
 
 enum {
@@ -1963,6 +1967,7 @@ mt76_connac_mcu_add_tlv(struct sk_buff *skb, int tag, int len)
 int mt76_connac_mcu_set_channel_domain(struct mt76_phy *phy);
 int mt76_connac_mcu_set_vif_ps(struct mt76_dev *dev, struct ieee80211_vif *vif);
 void mt76_connac_mcu_sta_basic_tlv(struct mt76_dev *dev, struct sk_buff *skb,
+				   struct ieee80211_vif *vif,
 				   struct ieee80211_bss_conf *link_conf,
 				   struct ieee80211_link_sta *link_sta,
 				   int state, bool newly);

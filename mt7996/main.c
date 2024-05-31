@@ -920,7 +920,7 @@ mt7996_vif_cfg_changed(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 			mt7996_mcu_add_bss_info(link->phy, vif, link_conf,
 						&link->mt76, &link->msta_link,
 						true);
-			mt7996_mcu_add_sta(dev, link_conf, NULL, link, NULL,
+			mt7996_mcu_add_sta(dev, vif, link_conf, NULL, link, NULL,
 					   CONN_STATE_PORT_SECURE,
 					   !!(changed & BSS_CHANGED_BSSID));
 		}
@@ -1092,55 +1092,73 @@ static int
 mt7996_mac_sta_init_link(struct mt7996_dev *dev,
 			 struct ieee80211_bss_conf *link_conf,
 			 struct ieee80211_link_sta *link_sta,
-			 struct mt7996_vif_link *link, unsigned int link_id)
+			 struct mt7996_vif_link *link, bool assoc)
 {
 	struct ieee80211_sta *sta = link_sta->sta;
+	struct mt7996_vif *mvif = (struct mt7996_vif *)link_conf->vif->drv_priv;
 	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
-	struct mt7996_phy *phy = link->phy;
-	struct mt7996_sta_link *msta_link;
-	int idx;
+	u8 link_id = link_sta->link_id;
+	struct mt7996_sta_link *msta_link = NULL;
+	int idx, ret, i;
 
-	idx = mt76_wcid_alloc(dev->mt76.wcid_mask, MT7996_WTBL_STA);
-	if (idx < 0)
-		return -ENOSPC;
+	if (!rcu_access_pointer(msta->link[link_id])) {
+		idx = mt76_wcid_alloc(dev->mt76.wcid_mask, MT7996_WTBL_STA);
+		if (idx < 0)
+			return -ENOSPC;
 
-	if (msta->deflink_id == IEEE80211_LINK_UNSPECIFIED) {
-		int i;
-
-		msta_link = &msta->deflink;
-		msta->deflink_id = link_id;
-
-		for (i = 0; i < ARRAY_SIZE(sta->txq); i++) {
-			struct mt76_txq *mtxq;
-
-			if (!sta->txq[i])
-				continue;
-
-			mtxq = (struct mt76_txq *)sta->txq[i]->drv_priv;
-			mtxq->wcid = idx;
+		if (sta->mlo) {
+			msta_link = kzalloc(sizeof(*msta_link), GFP_KERNEL);
+			if (!msta_link)
+				return -ENOMEM;
+		} else {
+			msta_link = &msta->deflink;
 		}
-	} else {
-		msta_link = kzalloc(sizeof(*msta_link), GFP_KERNEL);
-		if (!msta_link)
-			return -ENOMEM;
+
+		INIT_LIST_HEAD(&msta_link->rc_list);
+		msta->vif = mvif;
+		msta->valid_links |= BIT(link_id);
+		msta_link->wcid.sta = 1;
+		msta_link->wcid.idx = idx;
+		rcu_assign_pointer(msta_link->wcid.def_wcid, &msta->deflink.wcid);
+		msta_link->sta = msta;
+		if (sta->valid_links) {
+			msta_link->wcid.link_valid = true;
+			msta_link->wcid.link_id = link_id;
+			if (sta->valid_links & ~(BIT(msta->deflink_id)))
+				msta->sec_link = __ffs(sta->valid_links &
+						       ~(BIT(msta->deflink_id)));
+			else
+				msta->sec_link = msta->deflink_id;
+		}
+
+		rcu_assign_pointer(msta->link[link_id], msta_link);
+
+		ewma_signal_init(&msta_link->wcid.rssi);
+		rcu_assign_pointer(dev->mt76.wcid[idx], &msta_link->wcid);
+		mt76_wcid_init(&msta_link->wcid, link->phy->mt76->band_idx);
+
+		mt76_dbg(&dev->mt76, MT76_DBG_STA,
+			 "%s: STA %pM, wcid=%u, link_id=%u (%pM), pri_link=%u, sec_link=%u\n",
+			 __func__, sta->addr, msta_link->wcid.idx, link_id,
+			 link_sta->addr, msta->deflink_id, msta->sec_link);
 	}
 
-	INIT_LIST_HEAD(&msta_link->rc_list);
-	INIT_LIST_HEAD(&msta_link->wcid.poll_list);
-	msta_link->sta = msta;
-	msta_link->wcid.sta = 1;
-	msta_link->wcid.idx = idx;
-	msta_link->wcid.link_id = link_id;
-	msta_link->wcid.def_wcid = &msta->deflink.wcid;
+	if (!assoc)
+		return 0;
 
-	ewma_avg_signal_init(&msta_link->avg_ack_signal);
-	ewma_signal_init(&msta_link->wcid.rssi);
+	if (!msta_link)
+		msta_link = mt76_dereference(msta->link[link_id], &dev->mt76);
+	mt7996_mac_wtbl_update(dev, msta_link->wcid.idx,
+			       MT_WTBL_UPDATE_ADM_COUNT_CLEAR);
 
-	rcu_assign_pointer(msta->link[link_id], msta_link);
+	ret = mt7996_mcu_add_sta(dev, link_conf->vif, link_conf, link_sta, link, msta_link,
+				 CONN_STATE_CONNECT, true);
+	if (ret)
+		goto error;
 
-	mt7996_mac_wtbl_update(dev, idx, MT_WTBL_UPDATE_ADM_COUNT_CLEAR);
-	mt7996_mcu_add_sta(dev, link_conf, link_sta, link, msta_link,
-			   CONN_STATE_DISCONNECT, true);
+	ret = mt7996_mcu_add_rate_ctrl(dev, msta_link->sta, link_conf->vif, link_id, false);
+	if (ret)
+		goto error;
 
 	if (link_sta->eht_cap.has_eht && link_conf->vif->type == NL80211_IFTYPE_STATION) {
 		ret = mt7996_mcu_set_pp_sta_dscb(link->phy, &link_conf->chanreq.oper, link->mt76.omac_idx);
@@ -1148,18 +1166,48 @@ mt7996_mac_sta_init_link(struct mt7996_dev *dev,
 			goto error;
 	}
 
-	rcu_assign_pointer(dev->mt76.wcid[idx], &msta_link->wcid);
-	mt76_wcid_init(&msta_link->wcid, phy->mt76->band_idx);
+	for (i = 0; i < IEEE80211_MAX_CHAINS; ++i)
+		ewma_avg_signal_init(msta_link->chain_signal_avg + i);
+	ewma_avg_signal_init(&msta_link->signal_avg);
+	ewma_avg_signal_init(&msta_link->avg_ack_signal);
 
-	return 0;
+#ifdef CONFIG_MTK_VENDOR
+	mt7996_vendor_amnt_sta_remove(link->phy, sta);
+#endif
+
+error:
+	return ret;
 }
 
 static void
-mt7996_mac_sta_deinit_link(struct mt7996_dev *dev,
-			   struct mt7996_sta_link *msta_link)
+mt7996_mac_sta_deinit_link(struct mt7996_dev *dev, struct ieee80211_vif *vif,
+			   struct ieee80211_bss_conf *conf,
+			   struct mt7996_vif_link *mconf,
+			   struct ieee80211_sta *sta,
+			   struct ieee80211_link_sta *link_sta,
+			   struct mt7996_sta_link *msta_link,
+			   bool last_link)
 {
+	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
+	int i;
+
+	if (!msta_link)
+		return;
+
+	if (!sta->mlo)
+		mt7996_mcu_add_sta(dev, vif, conf, link_sta, mconf, msta_link,
+				   CONN_STATE_DISCONNECT, false);
+	else if (sta->mlo && last_link)
+		mt7996_mcu_teardown_mld_sta(dev, mconf, msta_link);
+
 	mt7996_mac_wtbl_update(dev, msta_link->wcid.idx,
 			       MT_WTBL_UPDATE_ADM_COUNT_CLEAR);
+
+	for (i = 0; i < ARRAY_SIZE(msta_link->twt.flow); i++)
+		mt7996_mac_twt_teardown_flow(dev, mconf, msta_link, i);
+
+	rcu_assign_pointer(msta_link->sta->link[msta_link->wcid.link_id], NULL);
+	msta_link->sta->valid_links &= ~BIT(msta_link->wcid.link_id);
 
 	spin_lock_bh(&dev->mt76.sta_poll_lock);
 	if (!list_empty(&msta_link->wcid.poll_list))
@@ -1170,6 +1218,9 @@ mt7996_mac_sta_deinit_link(struct mt7996_dev *dev,
 
 	mt76_wcid_cleanup(&dev->mt76, &msta_link->wcid);
 	mt76_wcid_mask_clear(dev->mt76.wcid_mask, msta_link->wcid.idx);
+
+	if (msta_link != &msta->deflink)
+		kfree_rcu(msta_link, rcu_head);
 }
 
 static void
@@ -1177,92 +1228,79 @@ mt7996_mac_sta_remove_links(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 			    struct ieee80211_sta *sta, unsigned long links)
 {
 	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
-	struct mt76_dev *mdev = &dev->mt76;
 	unsigned int link_id;
 
+	mt76_dbg(&dev->mt76, MT76_DBG_STA, "%s: removed_links=0x%lx\n", __func__, links);
 	for_each_set_bit(link_id, &links, IEEE80211_MLD_MAX_NUM_LINKS) {
-		struct mt7996_sta_link *msta_link = NULL;
-		struct mt7996_vif_link *link;
-		struct mt76_phy *mphy;
+		struct mt7996_vif_link *mconf =
+			mt7996_vif_link(dev, vif, link_id);
+		struct mt7996_sta_link *msta_link =
+			mt76_dereference(msta->link[link_id], &dev->mt76);
+		struct ieee80211_bss_conf *conf =
+			link_conf_dereference_protected(vif, link_id);
+		struct ieee80211_link_sta *link_sta =
+			link_sta_dereference_protected(sta, link_id);
+		struct mt7996_phy *phy;
 
-		msta_link = rcu_replace_pointer(msta->link[link_id], msta_link,
-						lockdep_is_held(&mdev->mutex));
-		if (!msta_link)
+		if (!mconf || !msta_link)
 			continue;
 
-		mt7996_mac_sta_deinit_link(dev, msta_link);
-		link = mt7996_vif_link(dev, vif, link_id);
-		if (!link)
-			continue;
-
-		mphy = mt76_vif_link_phy(&link->mt76);
-		if (!mphy)
-			continue;
-
-		mphy->num_sta--;
-		if (msta->deflink_id == link_id) {
-			msta->deflink_id = IEEE80211_LINK_UNSPECIFIED;
-			continue;
-		}
-
-		kfree_rcu(msta_link, rcu_head);
+		phy = mconf->phy;
+		mt7996_mac_sta_deinit_link(dev, vif, conf, mconf, sta, link_sta,
+					   msta_link, msta->valid_links == BIT(link_id));
+		if (phy->mt76->num_sta > 0)
+			phy->mt76->num_sta--;
 	}
 }
 
 static int
 mt7996_mac_sta_add_links(struct mt7996_dev *dev, struct ieee80211_vif *vif,
-			 struct ieee80211_sta *sta, unsigned long new_links)
+			 struct ieee80211_sta *sta, unsigned long add,
+			 bool assoc)
 {
 	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
+	struct mt7996_sta_link *msta_link;
 	unsigned int link_id;
-	int err = 0;
+	int i, ret;
 
-	for_each_set_bit(link_id, &new_links, IEEE80211_MLD_MAX_NUM_LINKS) {
-		struct ieee80211_bss_conf *link_conf;
-		struct ieee80211_link_sta *link_sta;
-		struct mt7996_vif_link *link;
-		struct mt76_phy *mphy;
+	mt76_dbg(&dev->mt76, MT76_DBG_STA,
+		 "%s: added_links=0x%lx, assoc=%d\n", __func__, add, assoc);
+	for_each_set_bit(link_id, &add, IEEE80211_MLD_MAX_NUM_LINKS) {
+		struct mt7996_vif_link *mconf =
+			mt7996_vif_link(dev, vif, link_id);
+		struct ieee80211_bss_conf *conf =
+			link_conf_dereference_protected(vif, link_id);
+		struct ieee80211_link_sta *link_sta =
+			link_sta_dereference_protected(sta, link_id);
 
-		if (rcu_access_pointer(msta->link[link_id]))
+		if (!mconf || !conf || !link_sta)
 			continue;
 
-		link_conf = link_conf_dereference_protected(vif, link_id);
-		if (!link_conf) {
-			err = -EINVAL;
-			goto error_unlink;
-		}
+		ret = mt7996_mac_sta_init_link(dev, conf, link_sta, mconf, assoc);
+		if (ret)
+			goto error;
 
-		link = mt7996_vif_link(dev, vif, link_id);
-		if (!link) {
-			err = -EINVAL;
-			goto error_unlink;
-		}
+		if (assoc)
+			mconf->phy->mt76->num_sta++;
+	}
 
-		link_sta = link_sta_dereference_protected(sta, link_id);
-		if (!link_sta) {
-			err = -EINVAL;
-			goto error_unlink;
-		}
+	if (!assoc)
+		return 0;
 
-		err = mt7996_mac_sta_init_link(dev, link_conf, link_sta, link,
-					       link_id);
-		if (err)
-			goto error_unlink;
+	msta_link = mt76_dereference(msta->link[msta->deflink_id], &dev->mt76);
+	for (i = 0; i < ARRAY_SIZE(sta->txq); i++) {
+		struct mt76_txq *mtxq;
 
-		mphy = mt76_vif_link_phy(&link->mt76);
-		if (!mphy) {
-			err = -EINVAL;
-			goto error_unlink;
-		}
-		mphy->num_sta++;
+		if (!sta->txq[i])
+			continue;
+		mtxq = (struct mt76_txq *)sta->txq[i]->drv_priv;
+		mtxq->wcid = msta_link->wcid.idx;
 	}
 
 	return 0;
-
-error_unlink:
-	mt7996_mac_sta_remove_links(dev, vif, sta, new_links);
-
-	return err;
+error:
+	mt7996_mac_sta_remove_links(dev, vif, sta, add);
+	return ret;
 }
 
 static int
@@ -1271,17 +1309,53 @@ mt7996_mac_sta_change_links(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 			    u16 new_links)
 {
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
+	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
 	unsigned long add = new_links & ~old_links;
 	unsigned long rem = old_links & ~new_links;
-	int ret;
+	int ret = 0, link_id;
+	bool assoc;
 
+	mt76_dbg(&dev->mt76, MT76_DBG_STA, "%s: STA %pM old=0x%x, new=0x%x\n",
+		 __func__, sta->addr, old_links, new_links);
 	mutex_lock(&dev->mt76.mutex);
 
-	mt7996_mac_sta_remove_links(dev, vif, sta, rem);
-	ret = mt7996_mac_sta_add_links(dev, vif, sta, add);
+	for_each_set_bit(link_id, &rem, IEEE80211_MLD_MAX_NUM_LINKS) {
+		struct mt7996_sta_link *msta_link =
+			mt76_dereference(msta->link[link_id], &dev->mt76);
+		struct mt7996_sta_link *msta_link_new;
+		int i;
 
+		if (!msta_link)
+			continue;
+
+		msta_link->wcid.sta_disabled = 1;
+
+		if (link_id != msta->deflink_id)
+			continue;
+
+		msta->deflink_id = msta->sec_link;
+		msta_link_new = msta_link = mt76_dereference(msta->link[msta->deflink_id], &dev->mt76);
+		msta_link_new->wcid.ampdu_state = msta_link->wcid.ampdu_state;
+
+		for (i = 0; i < ARRAY_SIZE(sta->txq); i++) {
+			struct mt76_txq *mtxq;
+			if (!sta->txq[i])
+				continue;
+			mtxq = (struct mt76_txq *)sta->txq[i]->drv_priv;
+			mtxq->wcid = msta_link_new->wcid.idx;
+		}
+	}
+
+	assoc = vif->type == NL80211_IFTYPE_STATION ? vif->cfg.assoc : false;
+	ret = mt7996_mac_sta_add_links(dev, vif, sta, add, assoc);
+	if (ret)
+		goto remove;
+
+	goto out;
+remove:
+	mt7996_mac_sta_remove_links(dev, vif, sta, add);
+out:
 	mutex_unlock(&dev->mt76.mutex);
-
 	return ret;
 }
 
@@ -1291,18 +1365,29 @@ mt7996_mac_sta_add(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 {
 	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
 	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
-	unsigned long links = sta->valid_links ? sta->valid_links : BIT(0);
+	u8 link_id = sta->valid_links ? __ffs(sta->valid_links) : 0;
+	unsigned long add = BIT(link_id);
 	int err;
 
 	mutex_lock(&dev->mt76.mutex);
 
-	msta->deflink_id = IEEE80211_LINK_UNSPECIFIED;
+	msta->deflink_id = link_id;
 	msta->vif = mvif;
-	err = mt7996_mac_sta_add_links(dev, vif, sta, links);
+	err = mt7996_mac_sta_add_links(dev, vif, sta, add, false);
 
 	mutex_unlock(&dev->mt76.mutex);
 
 	return err;
+}
+
+static void mt7996_check_mld_sta(void *data, struct ieee80211_sta *sta)
+{
+	bool *has_mld_sta = data;
+
+	if (*has_mld_sta)
+		return;
+	if (sta->mlo)
+		*has_mld_sta = true;
 }
 
 static int
@@ -1310,70 +1395,66 @@ mt7996_mac_sta_event(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 		     struct ieee80211_sta *sta, enum mt76_sta_event ev)
 {
 	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
-	unsigned long links = sta->valid_links;
-	struct ieee80211_link_sta *link_sta;
-	unsigned int link_id;
+	unsigned long add = sta->valid_links ?: BIT(0);
+	int ret = 0, link_id;
+	bool has_mld_sta = false;
 
-	for_each_sta_active_link(vif, sta, link_sta, link_id) {
-		struct ieee80211_bss_conf *link_conf;
-		struct mt7996_sta_link *msta_link;
-		struct mt7996_vif_link *link;
-		int i, err;
+#ifdef CONFIG_MTK_VENDOR
+	struct mt7996_vif_link *mconf;
+#endif
 
-		link_conf = link_conf_dereference_protected(vif, link_id);
-		if (!link_conf)
-			continue;
+	mutex_lock(&dev->mt76.mutex);
 
-		link = mt7996_vif_link(dev, vif, link_id);
-		if (!link)
-			continue;
+	switch (ev) {
+	case MT76_STA_EVENT_ASSOC:
+		ret = mt7996_mac_sta_add_links(dev, vif, sta, add, true);
+		if (!ret && sta->mlo)
+			mt7996_set_pse_drop(dev, 0);
 
-		msta_link = mt76_dereference(msta->link[link_id], &dev->mt76);
-		if (!msta_link)
-			continue;
+#ifdef CONFIG_MTK_VENDOR
+		link_id = sta->valid_links ? __ffs(sta->valid_links) : 0;
+		mconf = mt7996_vif_link(dev, vif, link_id);
+		if (mconf && mconf->phy && mconf->phy->muru_onoff & MUMIMO_DL_CERT)
+			mt7996_mcu_set_mimo(mconf->phy);
+#endif
 
-		switch (ev) {
-		case MT76_STA_EVENT_ASSOC:
-			err = mt7996_mcu_add_sta(dev, link_conf, link_sta,
-						 link, msta_link,
-						 CONN_STATE_CONNECT, true);
-			if (err)
-				return err;
+		break;
+	case MT76_STA_EVENT_AUTHORIZE:
+		for_each_set_bit(link_id, &add, IEEE80211_MLD_MAX_NUM_LINKS) {
+			struct mt7996_vif_link *mconf =
+				mt7996_vif_link(dev, vif, link_id);
+			struct mt7996_sta_link *msta_link =
+				mt76_dereference(msta->link[link_id], &dev->mt76);
+			struct ieee80211_bss_conf *conf =
+				link_conf_dereference_protected(vif, link_id);
+			struct ieee80211_link_sta *link_sta =
+				link_sta_dereference_protected(sta, link_id);
 
-			err = mt7996_mcu_add_rate_ctrl(dev, msta_link->sta, vif,
-						       link_id, false);
-			if (err)
-				return err;
+			if (!mconf || !msta_link || !conf || !link_sta)
+				continue;
+
+			ret = mt7996_mcu_add_sta(dev, vif, conf, link_sta, mconf, msta_link,
+						 CONN_STATE_PORT_SECURE, false);
+			if (ret)
+				goto out;
 
 			msta_link->wcid.tx_info |= MT_WCID_TX_INFO_SET;
-			break;
-		case MT76_STA_EVENT_AUTHORIZE:
-			err = mt7996_mcu_add_sta(dev, link_conf, link_sta,
-						 link, msta_link,
-						 CONN_STATE_PORT_SECURE, false);
-			if (err)
-				return err;
-			break;
-		case MT76_STA_EVENT_DISASSOC:
-			for (i = 0; i < ARRAY_SIZE(msta_link->twt.flow); i++)
-				mt7996_mac_twt_teardown_flow(dev, link,
-							     msta_link, i);
-
-			if (sta->mlo && links == BIT(link_id)) /* last link */
-				mt7996_mcu_teardown_mld_sta(dev, link,
-							    msta_link);
-			else
-				mt7996_mcu_add_sta(dev, link_conf, link_sta,
-						   link, msta_link,
-						   CONN_STATE_DISCONNECT, false);
-			msta_link->wcid.sta_disabled = 1;
-			msta_link->wcid.sta = 0;
-			links = links & ~BIT(link_id);
-			break;
 		}
+		break;
+	case MT76_STA_EVENT_DISASSOC:
+		ieee80211_iterate_stations_atomic(dev->mt76.hw, mt7996_check_mld_sta,
+						  &has_mld_sta);
+		if (!has_mld_sta)
+			mt7996_set_pse_drop(dev, 1);
+		break;
+	default:
+		break;
 	}
 
-	return 0;
+out:
+	mutex_unlock(&dev->mt76.mutex);
+
+	return ret;
 }
 
 static void
@@ -1431,7 +1512,7 @@ mt7996_sta_pre_rcu_remove(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 {
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
 	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
-	unsigned long rem = sta->valid_links ?: BIT(0);
+	unsigned long rem = msta->valid_links ?: BIT(0);
 	unsigned int link_id;
 
 	mutex_lock(&dev->mt76.mutex);
@@ -2554,11 +2635,12 @@ mt7996_change_vif_links(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 			struct ieee80211_bss_conf *old[IEEE80211_MLD_MAX_NUM_LINKS])
 {
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
-	struct mt7996_phy *phy = &dev->phy;
 	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
-	unsigned long rem = old_links & ~new_links;
-	unsigned int link_id;
-	int ret = 0;
+	struct mt7996_phy *phy = mvif->deflink.phy;
+	struct mt7996_vif_link *mconf;
+	unsigned long rem = old_links & ~new_links & ~vif->dormant_links;
+	unsigned long add = new_links & ~old_links;
+	int link_id, ret = 0;
 
 	if (old_links == new_links)
 		return 0;
@@ -2566,19 +2648,42 @@ mt7996_change_vif_links(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	mutex_lock(&dev->mt76.mutex);
 
 	/* remove first */
-	for_each_set_bit(link_id, &rem, IEEE80211_MLD_MAX_NUM_LINKS) {
-		struct mt7996_vif_link *mconf =
-			mt7996_vif_link(dev, vif, link_id);
+	if (rem && vif->type == NL80211_IFTYPE_AP) {
+		ret = mt7996_mcu_mld_reconf_stop_link(dev, vif, rem);
+		if (ret)
+			goto out;
 
+		for_each_set_bit(link_id, &rem, IEEE80211_MLD_MAX_NUM_LINKS) {
+			mconf = mt7996_vif_link(dev, vif, link_id);
+			if (!mconf)
+				continue;
+
+			ret = mt7996_mcu_mld_link_oper(mconf->phy, old[link_id],
+						       mconf, false);
+			if (ret)
+				goto out;
+		}
+	}
+
+	for_each_set_bit(link_id, &add, IEEE80211_MLD_MAX_NUM_LINKS) {
+		struct ieee80211_bss_conf *conf =
+			link_conf_dereference_protected(vif, link_id);
+
+		mconf =	mt7996_vif_link(dev, vif, link_id);
 		if (!mconf)
 			continue;
+
+		ret = mt7996_mcu_mld_link_oper(mconf->phy, conf, mconf, true);
+		if (ret)
+			goto out;
 	}
 
 	if (!old_links) {
-		struct mt7996_vif_link *mconf =
-			mt7996_vif_link(dev, vif, link_id);
 		int idx;
 
+		mconf = mt7996_vif_link(dev, vif, 0);
+
+		/* switch from non-MLD vif to MLD vif, remove default bss conf */
 		if (ieee80211_vif_is_mld(vif) && mconf == &mvif->deflink)
 			mt7996_vif_link_remove(mconf->phy->mt76, vif, NULL, &mconf->mt76);
 
@@ -2599,13 +2704,24 @@ mt7996_change_vif_links(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 		dev->mld_remap_idx_mask |= BIT_ULL(mvif->mld_remap_idx);
 	}
 
-	/* fallback to non-MLO interface */
-	if (!new_links) {
-		ret = mt7996_vif_link_add(phy->mt76, vif, &vif->bss_conf, NULL);
-		dev->mld_id_mask &= ~BIT_ULL(mvif->mld_group_idx);
-		dev->mld_remap_id_mask &= ~BIT_ULL(mvif->mld_remap_idx);
+	if (new_links)
+		goto out;
+
+	/* remove all links and fallback to non-MLO interface */
+	rem = mvif->mt76.valid_links;
+	for_each_set_bit(link_id, &rem, IEEE80211_MLD_MAX_NUM_LINKS) {
+		mconf = mt7996_vif_link(dev, vif, link_id);
+		if (!mconf)
+			continue;
+
+		mt7996_vif_link_remove(phy->mt76, vif, NULL, &mconf->mt76);
 	}
 
+	ret = mt7996_vif_link_add(phy->mt76, vif, &vif->bss_conf, NULL);
+	dev->mld_idx_mask &= ~BIT_ULL(mvif->mld_group_idx);
+	dev->mld_remap_idx_mask &= ~BIT_ULL(mvif->mld_remap_idx);
+
+out:
 	mutex_unlock(&dev->mt76.mutex);
 
 	return ret;

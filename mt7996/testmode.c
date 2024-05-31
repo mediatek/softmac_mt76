@@ -246,7 +246,7 @@ mt7996_tm_init(struct mt7996_phy *phy, bool en)
 	mt7996_mcu_add_bss_info(phy, vif, &vif->bss_conf, &mvif->deflink,
 				&mvif->sta.deflink, en);
 	state = en ? CONN_STATE_PORT_SECURE : CONN_STATE_DISCONNECT;
-	mt7996_mcu_add_sta(dev, &vif->bss_conf, &mvif->deflink,
+	mt7996_mcu_add_sta(dev, vif, &vif->bss_conf, &mvif->deflink,
 			   NULL, &mvif->sta.deflink, state, false);
 
 	mt7996_tm_set(dev, SET_ID(BAND_IDX), phy->mt76->band_idx);

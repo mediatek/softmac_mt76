@@ -98,6 +98,33 @@ static struct mt76_wcid *mt7996_rx_get_wcid(struct mt7996_dev *dev,
 	return &msta_link->wcid;
 }
 
+static struct mt76_wcid *mt7996_get_active_link_wcid(struct mt7996_dev *dev,
+						     struct mt76_wcid *old_wcid)
+{
+	struct mt7996_sta_link *old_msta_link = container_of(old_wcid, struct mt7996_sta_link, wcid);
+	struct mt7996_sta_link *msta_link = NULL;
+	struct mt7996_sta *msta = old_msta_link->sta;
+	int i;
+
+	if (old_wcid->link_id != msta->deflink_id)
+		msta_link = rcu_dereference(msta->link[msta->deflink_id]);
+	else if (old_wcid->link_id != msta->sec_link)
+		msta_link = rcu_dereference(msta->link[msta->sec_link]);
+
+	if (msta_link)
+		return &msta_link->wcid;
+
+	for (i = MT_BAND0; i <= MT_BAND2; i++) {
+		struct mt76_wcid *tmp =
+			mt7996_rx_get_wcid(dev, old_wcid->idx, i);
+
+		if (tmp && !tmp->sta_disabled)
+			return tmp;
+	}
+
+	return old_wcid;
+}
+
 bool mt7996_mac_wtbl_update(struct mt7996_dev *dev, int idx, u32 mask)
 {
 	mt76_rmw(dev, MT_WTBL_UPDATE, MT_WTBL_UPDATE_WLAN_IDX,
@@ -405,6 +432,10 @@ mt7996_mac_fill_rx(struct mt7996_dev *dev, enum mt76_rxq_id q,
 					 wcid);
 		msta = msta_link->sta;
 		mt76_wcid_add_poll(&dev->mt76, &msta_link->wcid);
+
+		if (status->wcid->sta_disabled)
+			status->wcid = mt7996_get_active_link_wcid(dev,
+								   status->wcid);
 	}
 
 	status->freq = mphy->chandef.chan->center_freq;
@@ -728,8 +759,6 @@ mt7996_mac_write_txwi_80211(struct mt7996_dev *dev, __le32 *txwi,
 			    struct ieee80211_key_conf *key,
 			    struct mt76_wcid *wcid)
 {
-	struct mt76_phy *mphy =
-		mt76_dev_phy(&dev->mt76, le32_get_bits(txwi[1], MT_TXD1_TGID));
 	struct ieee80211_hdr *hdr = (struct ieee80211_hdr *)skb->data;
 	struct ieee80211_mgmt *mgmt = (struct ieee80211_mgmt *)skb->data;
 	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
@@ -740,7 +769,7 @@ mt7996_mac_write_txwi_80211(struct mt7996_dev *dev, __le32 *txwi,
 	u8 fc_type, fc_stype;
 	u32 val;
 
-	if (ieee80211_is_cert_mode(mphy->hw) && ieee80211_is_deauth(fc)) {
+	if (ieee80211_is_deauth(fc)) {
 		/* In WPA3 cert TC-4.8.1, the deauth must be transmitted without
 		 * considering PSM bit
 		 */
