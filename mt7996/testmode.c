@@ -263,9 +263,11 @@ mt7996_tm_update_channel(struct mt7996_phy *phy)
 {
 #define CHAN_FREQ_BW_80P80_TAG		(SET_ID(CHAN_FREQ) | BIT(16))
 	struct mt7996_dev *dev = phy->dev;
+	struct mt76_testmode_data *td = &phy->mt76->test;
 	struct cfg80211_chan_def *chandef = &phy->mt76->chandef;
 	struct ieee80211_channel *chan = chandef->chan;
-	u8 width = chandef->width;
+	u8 dbw, width = chandef->width, pri_sel = 0;
+	int width_mhz;
 	static const u8 ch_band[] = {
 		[NL80211_BAND_2GHZ] = 0,
 		[NL80211_BAND_5GHZ] = 1,
@@ -285,18 +287,37 @@ mt7996_tm_update_channel(struct mt7996_phy *phy)
 		mt7996_tm_set(dev, CHAN_FREQ_BW_80P80_TAG, chandef->center_freq2 * 1000);
 	}
 
-	/* TODO: define per-packet bw */
-	/* per-packet bw */
-	mt7996_tm_set(dev, SET_ID(DBW), mt7996_tm_bw_mapping(width, BW_MAP_NL_TO_FW));
+	width_mhz = mt7996_tm_bw_mapping(width, BW_MAP_NL_TO_MHZ);
+
+	/* data (per-packet) bw */
+	dbw = width;
+	if (mt76_testmode_param_present(td, MT76_TM_ATTR_TX_PKT_BW)) {
+		int pkt_bw_mhz = mt7996_tm_bw_mapping(td->tx_pkt_bw, BW_MAP_NL_TO_MHZ);
+
+		if (pkt_bw_mhz > width_mhz) {
+			dev_info(dev->mt76.dev,
+				 "per-packet bw cannot exceed system bw, use %d MHz instead\n",
+				 width_mhz);
+			td->tx_pkt_bw = width;
+		}
+		dbw = td->tx_pkt_bw;
+	}
+	mt7996_tm_set(dev, SET_ID(DBW), mt7996_tm_bw_mapping(dbw, BW_MAP_NL_TO_FW));
 
 	/* control channel selection index */
-	mt7996_tm_set(dev, SET_ID(PRIMARY_CH), 0);
+	if (mt76_testmode_param_present(td, MT76_TM_ATTR_TX_PRI_SEL)) {
+		if (td->tx_pri_sel > width_mhz / 20 - 1) {
+			dev_info(dev->mt76.dev,
+				 "Invalid primary channel selection index, use 0 instead\n");
+			td->tx_pri_sel = 0;
+		}
+		pri_sel = td->tx_pri_sel;
+	}
+	mt7996_tm_set(dev, SET_ID(PRIMARY_CH), pri_sel);
 	mt7996_tm_set(dev, SET_ID(BAND), ch_band[chan->band]);
 
 	/* trigger switch channel calibration */
 	mt7996_tm_set(dev, SET_ID(CHAN_FREQ), chandef->center_freq1 * 1000);
-
-	// TODO: update power limit table
 }
 
 static void
@@ -1191,14 +1212,9 @@ mt7996_tm_txbf_init(struct mt7996_phy *phy, u16 *val)
 	mt7996_tm_set_mac_addr(dev, td->addr[1], SET_ID(SA));
 	mt7996_tm_set_mac_addr(dev, td->addr[2], SET_ID(BSSID));
 
-	/* bss idx & omac idx should be set to band idx for ibf cal */
-	mvif->deflink.mt76.idx = band_idx;
-	dev->mt76.vif_mask |= BIT_ULL(mvif->deflink.mt76.idx);
-	mvif->deflink.mt76.omac_idx = band_idx;
-	phy->omac_mask |= BIT_ULL(mvif->deflink.mt76.omac_idx);
-
 	mt7996_mcu_add_dev_info(phy, phy->mt76->monitor_vif, &phy->mt76->monitor_vif->bss_conf, &mvif->deflink.mt76, true);
-	mt7996_mcu_add_bss_info(phy, vif, &vif->bss_conf, &mvif->deflink, &mvif->sta.deflink, true);
+	mt7996_mcu_add_bss_info(phy, vif, &vif->bss_conf, &mvif->deflink,
+				&mvif->sta.deflink, true);
 
 	if (td->ibf) {
 		if (td->is_txbf_dut) {
@@ -1373,7 +1389,8 @@ mt7996_tm_add_txbf_sta(struct mt7996_phy *phy, u8 pfmu_idx, u8 nr, u8 nc, bool e
 			.tx_mode = mt7996_tm_rate_mapping(td->tx_rate_mode, RATE_MODE_TO_PHY),
 		},
 	};
-	u8 ndp_rate, ndpa_rate, rept_poll_rate, bf_bw;
+	u8 ndp_rate, ndpa_rate, rept_poll_rate;
+	u8 bf_bw = phy->mt76->chandef.width;
 
 	if ((td->tx_rate_mode == MT76_TM_TX_MODE_HE_SU ||
 	     td->tx_rate_mode == MT76_TM_TX_MODE_EHT_SU) && !td->ibf) {
@@ -1403,11 +1420,12 @@ mt7996_tm_add_txbf_sta(struct mt7996_phy *phy, u8 pfmu_idx, u8 nr, u8 nc, bool e
 		}
 	}
 
-	bf_bw = mt7996_tm_bw_mapping(phy->mt76->chandef.width, BW_MAP_NL_TO_BF);
 	req.bf.ndp_rate = ndp_rate;
 	req.bf.ndpa_rate = ndpa_rate;
 	req.bf.rept_poll_rate = rept_poll_rate;
-	req.bf.bw = bf_bw;
+	if (mt76_testmode_param_present(td, MT76_TM_ATTR_TX_PKT_BW))
+		bf_bw = td->tx_pkt_bw;
+	req.bf.bw = mt7996_tm_bw_mapping(bf_bw, BW_MAP_NL_TO_BF);
 	req.bf.tx_mode = (td->tx_rate_mode == MT76_TM_TX_MODE_EHT_SU) ? 0xf : req.bf.tx_mode;
 
 	if (ebf) {
@@ -1434,6 +1452,7 @@ mt7996_tm_txbf_profile_update(struct mt7996_phy *phy, u16 *val, bool ebf)
 	struct mt7996_dev *dev = phy->dev;
 	struct mt7996_pfmu_tag *tag = dev->test.txbf_pfmu_tag;
 	u8 rate, pfmu_idx = val[0], nc = val[2], nr;
+	u8 dbw = phy->mt76->chandef.width;
 	int ret;
 	bool is_atenl = val[5];
 
@@ -1452,7 +1471,9 @@ mt7996_tm_txbf_profile_update(struct mt7996_phy *phy, u16 *val, bool ebf)
 	tag->t1.nr = nr;
 	tag->t1.nc = nc;
 	tag->t1.invalid_prof = true;
-	tag->t1.data_bw = mt7996_tm_bw_mapping(phy->mt76->chandef.width, BW_MAP_NL_TO_BF);
+	if (mt76_testmode_param_present(td, MT76_TM_ATTR_TX_PKT_BW))
+		dbw = td->tx_pkt_bw;
+	tag->t1.data_bw = mt7996_tm_bw_mapping(dbw, BW_MAP_NL_TO_BF);
 	tag->t2.se_idx = td->tx_spe_idx;
 
 	if (ebf) {

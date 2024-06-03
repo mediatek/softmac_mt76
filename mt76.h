@@ -847,6 +847,9 @@ struct mt76_testmode_data {
 	bool ibf;
 	bool ebf;
 
+	u8 tx_pkt_bw;
+	u8 tx_pri_sel;
+
 	u32 freq_offset;
 
 	u8 tx_power[4];

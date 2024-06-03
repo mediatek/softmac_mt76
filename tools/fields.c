@@ -35,13 +35,21 @@ static const char * const testmode_tx_mode[] = {
 	[MT76_TM_TX_MODE_EHT_MU] = "eht_mu",
 };
 
-static const char * const testmode_offchan_bw[] = {
+static const char * const testmode_bw[] = {
 	[NL80211_CHAN_WIDTH_20_NOHT] = "NOHT",
 	[NL80211_CHAN_WIDTH_20] = "20",
 	[NL80211_CHAN_WIDTH_40] = "40",
 	[NL80211_CHAN_WIDTH_80] = "80",
 	[NL80211_CHAN_WIDTH_80P80] = "80p80",
 	[NL80211_CHAN_WIDTH_160] = "160",
+	[NL80211_CHAN_WIDTH_5] = "5",
+	[NL80211_CHAN_WIDTH_10] = "10",
+	[NL80211_CHAN_WIDTH_1] = "1",
+	[NL80211_CHAN_WIDTH_2] = "2",
+	[NL80211_CHAN_WIDTH_4] = "4",
+	[NL80211_CHAN_WIDTH_8] = "8",
+	[NL80211_CHAN_WIDTH_16] = "16",
+	[NL80211_CHAN_WIDTH_320] = "320",
 };
 
 static const char * const testmode_txbf_act[] = {
@@ -430,6 +438,8 @@ static const struct tm_field testdata_fields[NUM_MT76_TM_ATTRS] = {
 	FIELD(u8, TX_POWER_CONTROL, "tx_power_control"),
 	FIELD_ARRAY(u8, TX_POWER, "tx_power"),
 	FIELD(u8, TX_ANTENNA, "tx_antenna"),
+	FIELD_ENUM(TX_PKT_BW, "tx_pkt_bw", testmode_bw),
+	FIELD(u8, TX_PRI_SEL, "tx_pri_sel"),
 	FIELD(u32, FREQ_OFFSET, "freq_offset"),
 	FIELD(u8, AID, "aid"),
 	FIELD(u8, RU_ALLOC, "ru_alloc"),
@@ -438,7 +448,7 @@ static const struct tm_field testdata_fields[NUM_MT76_TM_ATTRS] = {
 	FIELD_ARRAY(u16_hex, TXBF_PARAM, "txbf_param"),
 	FIELD(u8, OFF_CH_SCAN_CH, "offchan_ch"),
 	FIELD(u8, OFF_CH_SCAN_CENTER_CH, "offchan_center_ch"),
-	FIELD_ENUM(OFF_CH_SCAN_BW, "offchan_bw", testmode_offchan_bw),
+	FIELD_ENUM(OFF_CH_SCAN_BW, "offchan_bw", testmode_bw),
 	FIELD(u8, IPI_THRESHOLD, "ipi_threshold"),
 	FIELD(u32, IPI_PERIOD, "ipi_period"),
 	FIELD(u8, IPI_RESET, "ipi_reset"),
@@ -469,6 +479,8 @@ static struct nla_policy testdata_policy[NUM_MT76_TM_ATTRS] = {
 	[MT76_TM_ATTR_TX_POWER_CONTROL] = { .type = NLA_U8 },
 	[MT76_TM_ATTR_TX_ANTENNA] = { .type = NLA_U8 },
 	[MT76_TM_ATTR_TX_SPE_IDX] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_TX_PKT_BW] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_TX_PRI_SEL] = { .type = NLA_U8 },
 	[MT76_TM_ATTR_FREQ_OFFSET] = { .type = NLA_U32 },
 	[MT76_TM_ATTR_AID] = { .type = NLA_U8 },
 	[MT76_TM_ATTR_RU_ALLOC] = { .type = NLA_U8 },
