@@ -2710,17 +2710,20 @@ mt7996_net_fill_forward_path(struct ieee80211_hw *hw,
 			     struct net_device_path *path)
 {
 #ifdef CONFIG_NET_MEDIATEK_SOC_WED
+	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
 	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
 	struct mtk_wed_device *wed = &dev->mt76.mmio.wed;
 	struct mt7996_sta_link *msta_link;
 	struct mt7996_vif_link *link;
+	u8 tid = mvif->qos_map[path->mtk_wdma.tid >> 2];
+	u8 link_id = (sta->mlo && tid % 2) ? msta->seclink_id : msta->deflink_id;
 
 	link = mt7996_vif_link(dev, vif, msta->deflink_id);
 	if (!link)
 		return -EIO;
 
-	msta_link = mt7996_sta_link(msta, msta->deflink_id);
+	msta_link = mt7996_sta_link(msta, link_id);
 	if (!msta_link)
 		return -EIO;
 
@@ -2759,6 +2762,7 @@ mt7996_net_fill_forward_path(struct ieee80211_hw *hw,
 	path->mtk_wdma.bss = link->mt76.idx;
 	path->mtk_wdma.queue = 0;
 	path->mtk_wdma.wcid = msta_link->wcid.idx;
+	path->mtk_wdma.tid = tid;
 
 	if (ieee80211_hw_check(hw, SUPPORTS_AMSDU_IN_AMPDU) &&
 	    mtk_wed_is_amsdu_supported(wed))
@@ -2915,7 +2919,26 @@ static int
 mt7996_set_qos_map(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 		   struct cfg80211_qos_map *qos_map)
 {
-	return 0;
+	struct mt7996_dev *dev = mt7996_hw_dev(hw);
+	unsigned long valid_links = vif->valid_links ?: BIT(0);
+	unsigned int link_id;
+	int ret = 0;
+
+	mutex_lock(&dev->mt76.mutex);
+	for_each_set_bit(link_id, &valid_links, IEEE80211_MLD_MAX_NUM_LINKS) {
+		struct mt7996_vif_link *mconf =
+			mt7996_vif_link(dev, vif, link_id);
+
+		if (!mconf)
+			continue;
+
+		ret = mt7996_mcu_set_qos_map(dev, vif, mconf, qos_map);
+		if(ret)
+			break;
+	}
+	mutex_unlock(&dev->mt76.mutex);
+
+	return ret;
 }
 
 const struct ieee80211_ops mt7996_ops = {

@@ -172,6 +172,8 @@
 #define MT7996_MAX_PROBE_TIMEOUT	500
 #define MT7996_MAX_PROBE_TRIES		2
 
+#define IP_DSCP_NUM			64
+
 #define MT7996_HW_DROP_STAT	4
 #define MT7996_HW_DROP_REASON	0x20
 
@@ -479,6 +481,9 @@ struct mt7996_vif {
 	void *probe[__MT_MAX_BAND];
 	unsigned long probe_send_time[__MT_MAX_BAND];
 	int probe_send_count[__MT_MAX_BAND];
+
+	/* QoS map support */
+	u8 qos_map[IP_DSCP_NUM];
 };
 
 /* crash-dump */
