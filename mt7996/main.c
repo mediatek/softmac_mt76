@@ -1833,32 +1833,17 @@ static void mt7996_sta_statistics(struct ieee80211_hw *hw,
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
 	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
 	struct mt7996_sta_link *msta_link;
-	struct rate_info *txrate;
 
-	/* TODO: support per-link rate report */
 	mutex_lock(&dev->mt76.mutex);
 	msta_link = mt76_dereference(msta->link[msta->deflink_id], &dev->mt76);
 	if (!msta_link)
 		goto out;
 
-	txrate = &msta_link->wcid.rate;
-	if (txrate->legacy || txrate->flags) {
-		if (txrate->legacy) {
-			sinfo->txrate.legacy = txrate->legacy;
-		} else {
-			sinfo->txrate.mcs = txrate->mcs;
-			sinfo->txrate.nss = txrate->nss;
-			sinfo->txrate.bw = txrate->bw;
-			sinfo->txrate.he_gi = txrate->he_gi;
-			sinfo->txrate.he_dcm = txrate->he_dcm;
-			sinfo->txrate.he_ru_alloc = txrate->he_ru_alloc;
-			sinfo->txrate.eht_gi = txrate->eht_gi;
-		}
-		sinfo->txrate.flags = txrate->flags;
-		sinfo->filled |= BIT_ULL(NL80211_STA_INFO_TX_BITRATE);
-	}
-	sinfo->txrate.flags = txrate->flags;
+	sinfo->txrate = msta_link->wcid.rate;
 	sinfo->filled |= BIT_ULL(NL80211_STA_INFO_TX_BITRATE);
+
+	sinfo->rxrate = msta_link->wcid.rx_rate;
+	sinfo->filled |= BIT_ULL(NL80211_STA_INFO_RX_BITRATE);
 
 	sinfo->tx_failed = msta_link->wcid.stats.tx_failed;
 	sinfo->filled |= BIT_ULL(NL80211_STA_INFO_TX_FAILED);

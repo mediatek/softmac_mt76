@@ -526,6 +526,13 @@ mt7996_mac_fill_rx(struct mt7996_dev *dev, enum mt76_rxq_id q,
 		status->chain_signal[2] = to_rssi(MT_PRXV_RCPI2, v3);
 		status->chain_signal[3] = to_rssi(MT_PRXV_RCPI3, v3);
 
+		if (msta_link) {
+			memcpy(msta_link->chain_signal, status->chain_signal,
+			       IEEE80211_MAX_CHAINS);
+			msta_link->signal = mt76_rx_signal(mphy->antenna_mask,
+							   msta_link->chain_signal);
+		}
+
 		/* RXD Group 5 - C-RXV */
 		if (rxd1 & MT_RXD1_NORMAL_GROUP_5) {
 			rxd += 24;
@@ -1376,25 +1383,24 @@ next:
 
 static bool
 mt7996_mac_add_txs_skb(struct mt7996_dev *dev, struct mt76_wcid *wcid,
-		       int pid, __le32 *txs_data)
+		       struct mt76_wcid *link_wcid, int pid, __le32 *txs_data)
 {
-	struct mt76_sta_stats *stats = &wcid->stats;
-	struct ieee80211_supported_band *sband;
+	u8 fmt = le32_get_bits(txs_data[0], MT_TXS0_TXS_FORMAT);
+	struct mt76_sta_stats *stats = &link_wcid->stats;
 	struct mt76_dev *mdev = &dev->mt76;
-	struct mt76_phy *mphy;
 	struct ieee80211_tx_info *info;
 	struct sk_buff_head list;
-	struct rate_info rate = {};
 	struct sk_buff *skb = NULL;
-	bool cck = false;
-	u32 txrate, txs, mode, stbc;
+	u32 txrate, txs;
+	u8 mode, bw, mcs, nss;
 
 	txs = le32_to_cpu(txs_data[0]);
 
 	mt76_tx_status_lock(mdev, &list);
 
-	/* only report MPDU TXS */
-	if (le32_get_bits(txs_data[0], MT_TXS0_TXS_FORMAT) == 0) {
+	switch (fmt) {
+	case MT_TXS_MPDU_FMT:
+		/* Only report MPDU TXS to mac80211. */
 		skb = mt76_tx_status_skb_get(mdev, wcid, pid, &list);
 		if (skb) {
 			struct ieee80211_hdr *hdr = (struct ieee80211_hdr *)skb->data;
@@ -1424,6 +1430,10 @@ mt7996_mac_add_txs_skb(struct mt7996_dev *dev, struct mt76_wcid *wcid,
 				mvif->probe_send_count[wcid->phy_idx] = 0;
 			}
 		}
+		break;
+	default:
+		dev_err(mdev->dev, "Unknown TXS format: %hhu\n", fmt);
+		goto unlock;
 	}
 
 	if (mtk_wed_device_active(&dev->mt76.mmio.wed) && wcid->sta &&
@@ -1446,107 +1456,26 @@ mt7996_mac_add_txs_skb(struct mt7996_dev *dev, struct mt76_wcid *wcid,
 	}
 
 	txrate = FIELD_GET(MT_TXS0_TX_RATE, txs);
-
-	rate.mcs = FIELD_GET(MT_TX_RATE_IDX, txrate);
-	rate.nss = FIELD_GET(MT_TX_RATE_NSS, txrate) + 1;
-	stbc = le32_get_bits(txs_data[3], MT_TXS3_RATE_STBC);
-
-	if (stbc && rate.nss > 1)
-		rate.nss >>= 1;
-
-	if (rate.nss - 1 < ARRAY_SIZE(stats->tx_nss))
-		stats->tx_nss[rate.nss - 1]++;
-	if (rate.mcs < ARRAY_SIZE(stats->tx_mcs))
-		stats->tx_mcs[rate.mcs]++;
+	bw = FIELD_GET(MT_TXS0_BW, txs);
 
 	mode = FIELD_GET(MT_TX_RATE_MODE, txrate);
-	switch (mode) {
-	case MT_PHY_TYPE_CCK:
-		cck = true;
-		fallthrough;
-	case MT_PHY_TYPE_OFDM:
-		mphy = mt76_dev_phy(mdev, wcid->phy_idx);
+	mcs = FIELD_GET(MT_TX_RATE_IDX, txrate);
+	nss = FIELD_GET(MT_TX_RATE_NSS, txrate) + 1;
+	if (le32_get_bits(txs_data[3], MT_TXS3_RATE_STBC) && nss > 1)
+		nss >>= 1;
 
-		if (mphy->chandef.chan->band == NL80211_BAND_5GHZ)
-			sband = &mphy->sband_5g.sband;
-		else if (mphy->chandef.chan->band == NL80211_BAND_6GHZ)
-			sband = &mphy->sband_6g.sband;
-		else
-			sband = &mphy->sband_2g.sband;
+	if (nss - 1 < ARRAY_SIZE(stats->tx_nss))
+		stats->tx_nss[nss - 1]++;
+	if (mcs < ARRAY_SIZE(stats->tx_mcs))
+		stats->tx_mcs[mcs]++;
+	if (mode < ARRAY_SIZE(stats->tx_mode))
+		stats->tx_mode[mode]++;
+	if (bw < ARRAY_SIZE(stats->tx_bw))
+		stats->tx_bw[bw]++;
 
-		rate.mcs = mt76_get_rate(mphy->dev, sband, rate.mcs, cck);
-		rate.legacy = sband->bitrates[rate.mcs].bitrate;
-		break;
-	case MT_PHY_TYPE_HT:
-	case MT_PHY_TYPE_HT_GF:
-		if (rate.mcs > 31)
-			goto out;
-
-		rate.flags = RATE_INFO_FLAGS_MCS;
-		if (wcid->rate.flags & RATE_INFO_FLAGS_SHORT_GI)
-			rate.flags |= RATE_INFO_FLAGS_SHORT_GI;
-		break;
-	case MT_PHY_TYPE_VHT:
-		if (rate.mcs > 9)
-			goto out;
-
-		rate.flags = RATE_INFO_FLAGS_VHT_MCS;
-		if (wcid->rate.flags & RATE_INFO_FLAGS_SHORT_GI)
-			rate.flags |= RATE_INFO_FLAGS_SHORT_GI;
-		break;
-	case MT_PHY_TYPE_HE_SU:
-	case MT_PHY_TYPE_HE_EXT_SU:
-	case MT_PHY_TYPE_HE_TB:
-	case MT_PHY_TYPE_HE_MU:
-		if (rate.mcs > 11)
-			goto out;
-
-		rate.he_gi = wcid->rate.he_gi;
-		rate.he_dcm = FIELD_GET(MT_TX_RATE_DCM, txrate);
-		rate.flags = RATE_INFO_FLAGS_HE_MCS;
-		break;
-	case MT_PHY_TYPE_EHT_SU:
-	case MT_PHY_TYPE_EHT_TRIG:
-	case MT_PHY_TYPE_EHT_MU:
-		if (rate.mcs > 13)
-			goto out;
-
-		rate.eht_gi = wcid->rate.eht_gi;
-		rate.flags = RATE_INFO_FLAGS_EHT_MCS;
-		break;
-	default:
-		goto out;
-	}
-
-	stats->tx_mode[mode]++;
-
-	switch (FIELD_GET(MT_TXS0_BW, txs)) {
-	case IEEE80211_STA_RX_BW_320:
-		rate.bw = RATE_INFO_BW_320;
-		stats->tx_bw[4]++;
-		break;
-	case IEEE80211_STA_RX_BW_160:
-		rate.bw = RATE_INFO_BW_160;
-		stats->tx_bw[3]++;
-		break;
-	case IEEE80211_STA_RX_BW_80:
-		rate.bw = RATE_INFO_BW_80;
-		stats->tx_bw[2]++;
-		break;
-	case IEEE80211_STA_RX_BW_40:
-		rate.bw = RATE_INFO_BW_40;
-		stats->tx_bw[1]++;
-		break;
-	default:
-		rate.bw = RATE_INFO_BW_20;
-		stats->tx_bw[0]++;
-		break;
-	}
-	wcid->rate = rate;
-
-out:
 	if (skb)
 		mt76_tx_status_skb_done(mdev, skb, &list);
+unlock:
 	mt76_tx_status_unlock(mdev, &list);
 
 	return !!skb;
@@ -1554,13 +1483,13 @@ out:
 
 static void mt7996_mac_add_txs(struct mt7996_dev *dev, void *data)
 {
-	struct mt7996_sta_link *msta_link;
-	struct mt76_wcid *wcid;
+	struct mt76_wcid *wcid, *link_wcid;
 	__le32 *txs_data = data;
 	u16 wcidx;
-	u8 pid;
+	u8 band, pid;
 
 	wcidx = le32_get_bits(txs_data[2], MT_TXS2_WCID);
+	band = le32_get_bits(txs_data[2], MT_TXS2_BAND);
 	pid = le32_get_bits(txs_data[3], MT_TXS3_PID);
 
 	if (pid < MT_PACKET_ID_NO_SKB)
@@ -1572,14 +1501,16 @@ static void mt7996_mac_add_txs(struct mt7996_dev *dev, void *data)
 	if (!wcid)
 		goto out;
 
-	mt7996_mac_add_txs_skb(dev, wcid, pid, txs_data);
-
-	if (!wcid->sta)
+	link_wcid = mt7996_rx_get_wcid(dev, wcidx, band);
+	if (!link_wcid)
 		goto out;
 
-	msta_link = container_of(wcid, struct mt7996_sta_link, wcid);
-	mt76_wcid_add_poll(&dev->mt76, &msta_link->wcid);
+	mt7996_mac_add_txs_skb(dev, wcid, link_wcid, pid, txs_data);
 
+	if (!link_wcid->sta)
+		goto out;
+
+	mt76_wcid_add_poll(&dev->mt76, link_wcid);
 out:
 	rcu_read_unlock();
 }
@@ -2607,6 +2538,39 @@ void mt7996_mac_sta_rc_work(struct work_struct *work)
 	spin_unlock_bh(&dev->mt76.sta_poll_lock);
 }
 
+static int mt7996_mac_sta_poll(struct mt76_dev *dev)
+{
+	u16 sta_list[PER_STA_INFO_MAX_NUM];
+	struct mt7996_sta_link *msta_link;
+	int i, ret;
+
+	spin_lock_bh(&dev->sta_poll_lock);
+	for (i = 0; i < PER_STA_INFO_MAX_NUM; ++i) {
+		if (list_empty(&dev->sta_poll_list))
+			break;
+
+		msta_link = list_first_entry(&dev->sta_poll_list,
+					 struct mt7996_sta_link,
+					 wcid.poll_list);
+		list_del_init(&msta_link->wcid.poll_list);
+		sta_list[i] = msta_link->wcid.idx;
+	}
+	spin_unlock_bh(&dev->sta_poll_lock);
+
+	if (i == 0)
+		return 0;
+
+	ret = mt7996_mcu_get_per_sta_info(dev, UNI_PER_STA_RSSI, i, sta_list);
+	if (ret)
+		return ret;
+
+	ret = mt7996_mcu_get_per_sta_info(dev, UNI_PER_STA_SNR, i, sta_list);
+	if (ret)
+		return ret;
+
+	return mt7996_mcu_get_per_sta_info(dev, UNI_PER_STA_PKT_CNT, i, sta_list);
+}
+
 void mt7996_mac_work(struct work_struct *work)
 {
 	struct mt7996_phy *phy;
@@ -2633,11 +2597,14 @@ void mt7996_mac_work(struct work_struct *work)
 			if (i == mphy->band_idx) {
 				mt7996_mcu_get_all_sta_info(mdev, UNI_ALL_STA_TXRX_RATE);
 				mt7996_mcu_get_all_sta_info(mdev, UNI_ALL_STA_TXRX_AIR_TIME);
-				mt7996_mcu_get_rssi(mdev);
+				mt7996_mac_sta_poll(mdev);
 				// if (mtk_wed_device_active(&mdev->mmio.wed)) {
 					mt7996_mcu_get_all_sta_info(mdev, UNI_ALL_STA_TXRX_ADM_STAT);
 					mt7996_mcu_get_all_sta_info(mdev, UNI_ALL_STA_TXRX_MSDU_COUNT);
 				// }
+				mt7996_mcu_get_all_sta_info(mdev, UNI_ALL_STA_RX_MPDU_COUNT);
+				mt7996_mcu_get_all_sta_info(mdev, UNI_ALL_STA_TX_STAT);
+				mt7996_mcu_get_all_sta_info(mdev, UNI_ALL_STA_DATA_TX_RETRY_COUNT);
 
 				if (mt7996_mcu_wa_cmd(phy->dev, MCU_WA_PARAM_CMD(QUERY), MCU_WA_PARAM_BSS_ACQ_PKT_CNT,
 				                      BSS_ACQ_PKT_CNT_BSS_BITMAP_ALL | BSS_ACQ_PKT_CNT_READ_CLR, 0))

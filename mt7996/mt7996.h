@@ -352,8 +352,14 @@ struct mt7996_sta_link {
 
 	struct list_head rc_list;
 
+	s8 chain_signal[IEEE80211_MAX_CHAINS];
+	int signal;
+
+	s8 chain_ack_signal[IEEE80211_MAX_CHAINS];
 	int ack_signal;
 	struct ewma_avg_signal avg_ack_signal;
+
+	s8 chain_ack_snr[IEEE80211_MAX_CHAINS];
 
 	unsigned long changed;
 
@@ -1080,7 +1086,6 @@ void mt7996_mcu_rx_event(struct mt7996_dev *dev, struct sk_buff *skb);
 void mt7996_mcu_exit(struct mt7996_dev *dev);
 int mt7996_mcu_get_per_sta_info(struct mt76_dev *dev, u16 tag,
 	                        u16 sta_num, u16 *sta_list);
-int mt7996_mcu_get_rssi(struct mt76_dev *dev);
 int mt7996_mcu_get_all_sta_info(struct mt76_dev *dev, u16 tag);
 int mt7996_mcu_wed_rro_reset_sessions(struct mt7996_dev *dev, u16 id);
 int mt7996_mcu_set_sniffer_mode(struct mt7996_phy *phy, bool enabled);

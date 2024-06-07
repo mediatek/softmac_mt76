@@ -559,40 +559,166 @@ mt7996_mcu_ie_countdown(struct mt7996_dev *dev, struct sk_buff *skb)
 }
 
 static int
-mt7996_mcu_update_tx_gi(struct rate_info *rate, struct all_sta_trx_rate *mcu_rate)
+mt7996_mcu_update_rate(struct rate_info *rate, struct ieee80211_supported_band *sband,
+		       u8 mode, u8 bw, u8 mcs, u8 nss, u8 stbc, u8 gi)
 {
-	switch (mcu_rate->tx_mode) {
+	struct rate_info tmp_rate = {};
+
+	tmp_rate.mcs = mcs;
+	tmp_rate.nss = (stbc && nss > 1) ? nss / 2 : nss;
+
+	switch (mode) {
 	case MT_PHY_TYPE_CCK:
 	case MT_PHY_TYPE_OFDM:
+		if (mcs >= sband->n_bitrates)
+			return -EINVAL;
+
+		tmp_rate.legacy = sband->bitrates[mcs].bitrate;
 		break;
 	case MT_PHY_TYPE_HT:
 	case MT_PHY_TYPE_HT_GF:
+		if (mcs > 31)
+			return -EINVAL;
+
+		tmp_rate.flags |= RATE_INFO_FLAGS_MCS;
+		if (gi)
+			tmp_rate.flags |= RATE_INFO_FLAGS_SHORT_GI;
+		break;
 	case MT_PHY_TYPE_VHT:
-		if (mcu_rate->tx_gi)
-			rate->flags |= RATE_INFO_FLAGS_SHORT_GI;
-		else
-			rate->flags &= ~RATE_INFO_FLAGS_SHORT_GI;
+		if (mcs > 9)
+			return -EINVAL;
+
+		tmp_rate.flags |= RATE_INFO_FLAGS_VHT_MCS;
+		if (gi)
+			tmp_rate.flags |= RATE_INFO_FLAGS_SHORT_GI;
+		break;
+	case MT_PHY_TYPE_PLR:
 		break;
 	case MT_PHY_TYPE_HE_SU:
 	case MT_PHY_TYPE_HE_EXT_SU:
 	case MT_PHY_TYPE_HE_TB:
 	case MT_PHY_TYPE_HE_MU:
-		if (mcu_rate->tx_gi > NL80211_RATE_INFO_HE_GI_3_2)
+		tmp_rate.mcs = mcs & GENMASK(3, 0);
+		if (tmp_rate.mcs > 13 || gi > NL80211_RATE_INFO_HE_GI_3_2)
 			return -EINVAL;
-		rate->he_gi = mcu_rate->tx_gi;
+
+		tmp_rate.flags |= RATE_INFO_FLAGS_HE_MCS;
+		tmp_rate.he_gi = gi;
+		tmp_rate.he_dcm = mcs & MT_PRXV_TX_DCM;
 		break;
 	case MT_PHY_TYPE_EHT_SU:
 	case MT_PHY_TYPE_EHT_TRIG:
 	case MT_PHY_TYPE_EHT_MU:
-		if (mcu_rate->tx_gi > NL80211_RATE_INFO_EHT_GI_3_2)
+		tmp_rate.mcs = mcs & GENMASK(3, 0);
+		if (tmp_rate.mcs > 15 || gi > NL80211_RATE_INFO_EHT_GI_3_2)
 			return -EINVAL;
-		rate->eht_gi = mcu_rate->tx_gi;
+
+		tmp_rate.flags |= RATE_INFO_FLAGS_EHT_MCS;
+		tmp_rate.eht_gi = gi;
+		break;
+	case MT_PHY_TYPE_UNKNOWN:
+		return 0;
+	default:
+		return -EINVAL;
+	}
+
+	switch (bw) {
+	case IEEE80211_STA_RX_BW_20:
+		tmp_rate.bw = RATE_INFO_BW_20;
+		break;
+	case IEEE80211_STA_RX_BW_40:
+		tmp_rate.bw = RATE_INFO_BW_40;
+		break;
+	case IEEE80211_STA_RX_BW_80:
+		tmp_rate.bw = RATE_INFO_BW_80;
+		break;
+	case IEEE80211_STA_RX_BW_160:
+		tmp_rate.bw = RATE_INFO_BW_160;
+		break;
+	case IEEE80211_STA_RX_BW_320:
+		tmp_rate.bw = RATE_INFO_BW_320;
 		break;
 	default:
 		return -EINVAL;
 	}
 
+	if (mode == MT_PHY_TYPE_HE_EXT_SU && mcs & MT_PRXV_TX_ER_SU_106T) {
+		tmp_rate.bw = RATE_INFO_BW_HE_RU;
+		tmp_rate.he_ru_alloc = NL80211_RATE_INFO_HE_RU_ALLOC_106;
+	}
+	*rate = tmp_rate;
+
 	return 0;
+}
+
+static int
+mt7996_mcu_update_trx_rates(struct mt76_wcid *wcid, struct all_sta_trx_rate *mcu_rate)
+{
+	struct mt7996_sta_link *msta_link = container_of(wcid, struct mt7996_sta_link, wcid);
+	struct mt76_dev *dev = &msta_link->sta->vif->dev->mt76;
+	struct mt76_phy *phy = mt76_dev_phy(dev, wcid->phy_idx);
+	struct ieee80211_supported_band *sband = NULL;
+	bool cck;
+	int ret;
+
+	/* TX rate */
+	cck = false;
+
+	switch (mcu_rate->tx_mode) {
+	case MT_PHY_TYPE_CCK:
+		cck = true;
+		fallthrough;
+	case MT_PHY_TYPE_OFDM:
+		if (phy->chandef.chan->band == NL80211_BAND_2GHZ) {
+			sband = &phy->sband_2g.sband;
+			if (!cck)
+				mcu_rate->tx_mcs += 4;
+		} else if (phy->chandef.chan->band == NL80211_BAND_5GHZ)
+			sband = &phy->sband_5g.sband;
+		else
+			sband = &phy->sband_6g.sband;
+		break;
+	case MT_PHY_TYPE_HT:
+	case MT_PHY_TYPE_HT_GF:
+		mcu_rate->tx_mcs += ((mcu_rate->tx_nss - 1) << 3);
+		break;
+	default:
+		break;
+	}
+
+	ret = mt7996_mcu_update_rate(&wcid->rate, sband, mcu_rate->tx_mode,
+				     mcu_rate->tx_bw, mcu_rate->tx_mcs,
+				     mcu_rate->tx_nss, mcu_rate->tx_stbc,
+				     mcu_rate->tx_gi);
+	if (ret)
+		return ret;
+
+	/* RX rate */
+	cck = false;
+
+	switch (mcu_rate->rx_mode) {
+	case MT_PHY_TYPE_CCK:
+		cck = true;
+		fallthrough;
+	case MT_PHY_TYPE_OFDM:
+		if (phy->chandef.chan->band == NL80211_BAND_2GHZ)
+			sband = &phy->sband_2g.sband;
+		else if (phy->chandef.chan->band == NL80211_BAND_5GHZ)
+			sband = &phy->sband_5g.sband;
+		else
+			sband = &phy->sband_6g.sband;
+
+		mcu_rate->rx_rate = mt76_get_rate(dev, sband, mcu_rate->rx_rate, cck);
+		break;
+	default:
+		break;
+	}
+
+	ret = mt7996_mcu_update_rate(&wcid->rx_rate, sband, mcu_rate->rx_mode,
+				     mcu_rate->rx_bw, mcu_rate->rx_rate,
+				     mcu_rate->rx_nsts + 1, mcu_rate->rx_stbc,
+				     mcu_rate->rx_gi);
+	return ret;
 }
 
 static inline void __mt7996_stat_to_netdev(struct mt76_phy *mphy,
@@ -647,8 +773,8 @@ mt7996_mcu_rx_all_sta_info_event(struct mt7996_dev *dev, struct sk_buff *skb)
 			if (!wcid)
 				break;
 
-			if (mt7996_mcu_update_tx_gi(&wcid->rate, &res->rate[i]))
-				dev_err(dev->mt76.dev, "Failed to update TX GI\n");
+			if (mt7996_mcu_update_trx_rates(wcid, &res->rate[i]))
+				dev_err(dev->mt76.dev, "Failed to update TX/RX rates.\n");
 			break;
 		case UNI_ALL_STA_TXRX_ADM_STAT:
 			v1 = le16_to_cpu(res->len) == UNI_EVENT_SIZE_ADM_STAT_V1;
@@ -723,6 +849,34 @@ mt7996_mcu_rx_all_sta_info_event(struct mt7996_dev *dev, struct sk_buff *skb)
 				ieee80211_sta_register_airtime(sta, mt76_ac_to_tid(ac),
 				                               tx_airtime, rx_airtime);
 			}
+			break;
+		case UNI_ALL_STA_RX_MPDU_COUNT:
+			wlan_idx = le16_to_cpu(res->rx_mpdu_cnt[i].wlan_idx);
+			wcid = rcu_dereference(dev->mt76.wcid[wlan_idx]);
+			if (!wcid)
+				break;
+
+			wcid->stats.rx_mpdus += le32_to_cpu(res->rx_mpdu_cnt[i].total);
+			wcid->stats.rx_fcs_err += le32_to_cpu(res->rx_mpdu_cnt[i].total) -
+						  le32_to_cpu(res->rx_mpdu_cnt[i].success);
+			break;
+		case UNI_ALL_STA_TX_STAT:
+			wlan_idx = le16_to_cpu(res->tx_mpdu_stat[i].wlan_idx);
+			wcid = rcu_dereference(dev->mt76.wcid[wlan_idx]);
+			if (!wcid)
+				break;
+
+			wcid->stats.tx_mpdus += le32_to_cpu(res->tx_mpdu_stat[i].total);
+			wcid->stats.tx_failed += le32_to_cpu(res->tx_mpdu_stat[i].fails);
+			break;
+		/* Multiple retries of a single MPDU only increase the counter by 1 */
+		case UNI_ALL_STA_DATA_TX_RETRY_COUNT:
+			wlan_idx = le16_to_cpu(res->tx_mpdu_retry_cnt[i].wlan_idx);
+			wcid = rcu_dereference(dev->mt76.wcid[wlan_idx]);
+			if (!wcid)
+				break;
+
+			wcid->stats.tx_retries += le16_to_cpu(res->tx_mpdu_retry_cnt[i].val);
 			break;
 		default:
 			break;
@@ -5896,14 +6050,14 @@ int mt7996_mcu_set_rro(struct mt7996_dev *dev, u16 tag, u16 val)
 }
 
 int mt7996_mcu_get_per_sta_info(struct mt76_dev *dev, u16 tag,
-	                        u16 sta_num, u16 *sta_list)
+				u16 sta_num, u16 *sta_list)
 {
-#define PER_STA_INFO_MAX_NUM	90
 	struct mt7996_mcu_per_sta_info_event *res;
+	struct mt7996_sta_link *msta_link;
 	struct mt76_wcid *wcid;
 	struct sk_buff *skb;
+	int i, j, ret;
 	u16 wlan_idx;
-	int i, ret;
 	struct {
 		u8 __rsv1;
 		u8 unsolicit;
@@ -5942,24 +6096,49 @@ int mt7996_mcu_get_per_sta_info(struct mt76_dev *dev, u16 tag,
 	switch (tag) {
 	case UNI_PER_STA_RSSI:
 		for (i = 0; i < sta_num; ++i) {
-			struct mt7996_sta_link *msta_link;
-			struct mt76_phy *phy;
-			s8 rssi[4];
-			u8 *rcpi;
-
 			wlan_idx = le16_to_cpu(res->rssi[i].wlan_idx);
 			wcid = rcu_dereference(dev->wcid[wlan_idx]);
-			if (wcid) {
-				rcpi = res->rssi[i].rcpi;
-				rssi[0] = to_rssi(MT_PRXV_RCPI0, rcpi[0]);
-				rssi[1] = to_rssi(MT_PRXV_RCPI0, rcpi[1]);
-				rssi[2] = to_rssi(MT_PRXV_RCPI0, rcpi[2]);
-				rssi[3] = to_rssi(MT_PRXV_RCPI0, rcpi[3]);
+			msta_link = container_of(wcid, struct mt7996_sta_link, wcid);
+			if (msta_link) {
+				struct mt76_phy *phy = dev->phys[wcid->phy_idx];
+				u8 *rcpi = res->rssi[i].rcpi;
 
-				msta_link = container_of(wcid, struct mt7996_sta_link, wcid);
-				phy = dev->phys[wcid->phy_idx];
-				msta_link->ack_signal = mt76_rx_signal(phy->antenna_mask, rssi);
+				for (j = 0; j < IEEE80211_MAX_CHAINS; ++j)
+					msta_link->chain_ack_signal[j] = to_rssi(MT_PRXV_RCPI0, rcpi[j]);
+
+				msta_link->ack_signal = mt76_rx_signal(phy->antenna_mask,
+								       msta_link->chain_ack_signal);
 				ewma_avg_signal_add(&msta_link->avg_ack_signal, -msta_link->ack_signal);
+			}
+		}
+		break;
+	case UNI_PER_STA_SNR:
+		for (i = 0; i < sta_num; ++i) {
+			wlan_idx = le16_to_cpu(res->snr[i].wlan_idx);
+			wcid = rcu_dereference(dev->wcid[wlan_idx]);
+			msta_link = container_of(wcid, struct mt7996_sta_link, wcid);
+			if (msta_link)
+				memcpy(msta_link->chain_ack_snr, res->snr[i].val,
+				       IEEE80211_MAX_CHAINS);
+		}
+		break;
+	case UNI_PER_STA_PKT_CNT:
+		for (i = 0; i < sta_num; ++i) {
+			wlan_idx = le16_to_cpu(res->msdu_cnt[i].wlan_idx);
+			wcid = rcu_dereference(dev->wcid[wlan_idx]);
+			if (wcid) {
+				u32 retries = le32_to_cpu(res->msdu_cnt[i].tx_retries),
+				    drops = le32_to_cpu(res->msdu_cnt[i].tx_drops);
+
+				/* Retry counter is increased by 1 when an MSDU is
+				 * successfully transmitted after one or more retries
+				 */
+				wcid->stats.tx_packets_retried += retries;
+
+				/* Drop counter is increased by 1 when an MSDU is
+				 * dropped due to retry limit or exceeded TXOP
+				 */
+				wcid->stats.tx_packets_failed += drops;
 			}
 		}
 		break;
@@ -5970,55 +6149,6 @@ int mt7996_mcu_get_per_sta_info(struct mt76_dev *dev, u16 tag,
 	rcu_read_unlock();
 out:
 	dev_kfree_skb(skb);
-	return ret;
-}
-
-int mt7996_mcu_get_rssi(struct mt76_dev *dev)
-{
-	u16 sta_list[PER_STA_INFO_MAX_NUM];
-	LIST_HEAD(sta_poll_list);
-	struct mt7996_sta_link *msta_link;
-	int i, ret;
-	bool empty = false;
-
-	spin_lock_bh(&dev->sta_poll_lock);
-	list_splice_init(&dev->sta_poll_list, &sta_poll_list);
-	spin_unlock_bh(&dev->sta_poll_lock);
-
-	while (!empty) {
-		for (i = 0; i < PER_STA_INFO_MAX_NUM; ++i) {
-			spin_lock_bh(&dev->sta_poll_lock);
-			if (list_empty(&sta_poll_list)) {
-				spin_unlock_bh(&dev->sta_poll_lock);
-
-				if (i == 0)
-					return 0;
-
-				empty = true;
-				break;
-			}
-			msta_link = list_first_entry(&sta_poll_list,
-			                        struct mt7996_sta_link,
-			                        wcid.poll_list);
-			list_del_init(&msta_link->wcid.poll_list);
-			spin_unlock_bh(&dev->sta_poll_lock);
-
-			sta_list[i] = msta_link->wcid.idx;
-		}
-
-		ret = mt7996_mcu_get_per_sta_info(dev, UNI_PER_STA_RSSI,
-		                                  i, sta_list);
-		if (ret) {
-			/* Add STAs, whose RSSI has not been updated,
-			 * back to polling list.
-			 */
-			spin_lock_bh(&dev->sta_poll_lock);
-			list_splice(&sta_poll_list, &dev->sta_poll_list);
-			spin_unlock_bh(&dev->sta_poll_lock);
-			break;
-		}
-	}
-
 	return ret;
 }
 

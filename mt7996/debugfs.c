@@ -1465,10 +1465,10 @@ mt7996_sta_links_info_show(struct seq_file *s, void *data)
 	 * are updated at different times.
 	 */
 	seq_printf(s, "TX MSDU Count: %llu\n", tx_cnt);
-	seq_printf(s, "TX MSDU Fails: %llu (PER: %llu.%llu%%)\n", tx_fails,
+	seq_printf(s, "TX MSDU Drops: %llu (PER: %llu.%llu%%)\n", tx_fails,
 		   tx_cnt ? tx_fails * 1000 / tx_cnt / 10 : 0,
 		   tx_cnt ? tx_fails * 1000 / tx_cnt % 10 : 0);
-	seq_printf(s, "TX MSDU Retries: %llu\n", tx_retries);
+	seq_printf(s, "TX MSDU Successful Retries: %llu\n", tx_retries);
 	seq_printf(s, "RX MSDU Count: %llu\n", rx_cnt);
 
 	return 0;
