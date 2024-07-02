@@ -555,6 +555,9 @@ struct csi_data {
 };
 
 int mt7996_set_coding_type(struct ieee80211_hw *hw, u8 coding_type, u8 link_id);
+
+int mt7996_mcu_set_muru_qos_cfg(struct mt7996_dev *dev, u16 wlan_idx, u8 dir,
+				u8 scs_id, u8 req_type, u8 *qos_ie, u8 qos_ie_len);
 #endif
 
 struct mt7996_rro_ba_session {

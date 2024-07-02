@@ -134,6 +134,7 @@ enum {
 	UNI_CMD_MURU_PROT_FRAME_THR = 0xCC,
 	UNI_CMD_MURU_SET_CERT_MU_EDCA_OVERRIDE,
 	UNI_CMD_MURU_SET_TRIG_VARIANT = 0xD5,
+	UNI_CMD_MURU_SET_QOS_CFG = 0xFE,
 };
 
 struct bf_pfmu_tag {
@@ -1164,5 +1165,11 @@ enum {
 			  VOW_DRR_DBG_DUMP_CR |		\
 			  VOW_DRR_DBG_PRN)
 #endif
+
+enum {
+	SCS_REQ_TYPE_ADD,
+	SCS_REQ_TYPE_REMOVE,
+	SCS_REQ_TYPE_CHANGE,
+};
 
 #endif
