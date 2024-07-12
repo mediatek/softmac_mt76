@@ -1070,7 +1070,7 @@ int mt7996_mcu_get_temperature(struct mt7996_phy *phy);
 int mt7996_mcu_set_thermal_throttling(struct mt7996_phy *phy, u8 state);
 int mt7996_mcu_set_thermal_protect(struct mt7996_phy *phy, bool enable);
 int mt7996_mcu_set_txpower_sku(struct mt7996_phy *phy,
-			       struct ieee80211_bss_conf *conf);
+			       int txpower_setting);
 int mt7996_mcu_rdd_cmd(struct mt7996_dev *dev, int cmd, u8 rdd_idx, u8 val);
 int mt7996_mcu_rdd_background_disable_timer(struct mt7996_dev *dev,
 					    bool disable_timer);
@@ -1271,6 +1271,7 @@ void mt7996_set_beacon_vif(struct ieee80211_vif *vif, u8 val);
 int mt7996_mcu_set_csi(struct mt7996_phy *phy, u8 mode,
 		       u8 cfg, u8 v1, u32 v2, u8 *mac_addr);
 int mt7996_vendor_pp_bitmap_update(struct mt7996_phy *phy, u16 bitmap);
+int mt7996_mcu_set_lpi_psd(struct mt7996_phy *phy, u8 enable);
 #endif
 
 int mt7996_mcu_edcca_enable(struct mt7996_phy *phy, bool enable);

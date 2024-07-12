@@ -146,6 +146,14 @@ csi_ctrl_policy[NUM_MTK_VENDOR_ATTRS_CSI_CTRL] = {
 	[MTK_VENDOR_ATTR_CSI_CTRL_DATA] = { .type = NLA_NESTED },
 };
 
+static struct nla_policy
+txpower_ctrl_policy[NUM_MTK_VENDOR_ATTRS_TXPOWER_CTRL] = {
+	[MTK_VENDOR_ATTR_TXPOWER_CTRL_LPI_PSD] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_IDX] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_TXPOWER_CTRL_LPI_BCN_ENHANCE] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_TXPOWER_CTRL_LINK_ID] = { .type = NLA_U8 },
+};
+
 struct mt7996_amnt_data {
 	u8 idx;
 	u8 addr[ETH_ALEN];
@@ -1403,6 +1411,103 @@ out:
 	return err;
 }
 
+static int mt7996_vendor_txpower_ctrl(struct wiphy *wiphy,
+				      struct wireless_dev *wdev,
+				      const void *data,
+				      int data_len)
+{
+#define FR_RATE_IDX_OFDM_6M 0x004b
+	struct mt7996_dev *dev;
+	struct mt7996_phy *phy;
+	struct mt76_phy *mphy;
+	struct ieee80211_vif *vif = wdev_to_ieee80211_vif(wdev);
+	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
+	struct mt7996_vif_link *mconf;
+	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_TXPOWER_CTRL];
+	struct mt76_power_limits la = {};
+	struct mt76_power_path_limits la_path = {};
+	int err, current_txpower, delta;
+	u8 val, link_id = 0, idx;
+
+	err = nla_parse(tb, MTK_VENDOR_ATTR_TXPOWER_CTRL_MAX, data, data_len,
+			txpower_ctrl_policy, NULL);
+	if (err)
+		return err;
+
+
+	if (ieee80211_vif_is_mld(vif) && tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_LINK_ID]) {
+		link_id = nla_get_u8(tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_LINK_ID]);
+
+		if (link_id >= IEEE80211_LINK_UNSPECIFIED)
+			return -EINVAL;
+	}
+
+	rcu_read_lock();
+	mconf = (struct mt7996_vif_link *)rcu_dereference(mvif->mt76.link[link_id]);
+	if (!mconf || !mconf->phy) {
+		rcu_read_unlock();
+		return -EINVAL;
+	}
+
+	phy = mconf->phy;
+	rcu_read_unlock();
+
+	mphy = phy->mt76;
+
+	if (mphy->cap.has_6ghz &&
+	    tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_LPI_PSD]) {
+		val = nla_get_u8(tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_LPI_PSD]);
+		mphy->dev->lpi_psd = val;
+
+		err = mt7996_mcu_set_lpi_psd(phy, val);
+		if (err)
+			return err;
+	}
+
+	if (tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_IDX]) {
+		mphy->sku_idx = nla_get_u8(tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_IDX]);
+
+		if (mt76_find_power_limits_node(mphy) == NULL)
+			mphy->sku_idx = 0;
+
+		phy->sku_limit_en = true;
+		phy->sku_path_en = true;
+		mt76_get_rate_power_limits(mphy, mphy->chandef.chan, &la, &la_path, 127);
+		if (!la_path.ofdm[0])
+			phy->sku_path_en = false;
+
+		dev = phy->dev;
+		err = mt7996_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_SKU_POWER_LIMIT_CTRL,
+						   dev->dbg.sku_disable ? 0 : phy->sku_limit_en);
+		if (err)
+			return err;
+		err = mt7996_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_BACKOFF_POWER_LIMIT_CTRL,
+						   dev->dbg.sku_disable ? 0 : phy->sku_path_en);
+		if (err)
+			return err;
+	}
+
+	if (mphy->cap.has_6ghz &&
+	    tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_LPI_BCN_ENHANCE]) {
+		val = nla_get_u8(tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_LPI_BCN_ENHANCE]);
+		mphy->dev->lpi_bcn_enhance = val;
+		idx = MT7996_BEACON_RATES_TBL + 2 * phy->mt76->band_idx;
+
+		err = mt7996_mcu_set_fixed_rate_table(phy, idx, FR_RATE_IDX_OFDM_6M, true);
+		if (err)
+			return err;
+	}
+
+	delta = mt76_tx_power_nss_delta(hweight16(mphy->chainmask));
+	current_txpower = DIV_ROUND_UP(mphy->txpower_cur + delta, 2);
+
+	err = mt7996_mcu_set_txpower_sku(phy, current_txpower);
+	if (err)
+		return err;
+
+	return 0;
+}
+
 static const struct wiphy_vendor_command mt7996_vendor_commands[] = {
 	{
 		.info = {
@@ -1552,6 +1657,17 @@ static const struct wiphy_vendor_command mt7996_vendor_commands[] = {
 		.doit = mt7996_vendor_eml_ctrl,
 		.policy = eml_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_EML_CTRL_MAX,
+	},
+	{
+		.info = {
+			.vendor_id = MTK_NL80211_VENDOR_ID,
+			.subcmd = MTK_NL80211_VENDOR_SUBCMD_TXPOWER_CTRL,
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
+			 WIPHY_VENDOR_CMD_NEED_RUNNING,
+		.doit = mt7996_vendor_txpower_ctrl,
+		.policy = txpower_ctrl_policy,
+		.maxattr = MTK_VENDOR_ATTR_TXPOWER_CTRL_MAX,
 	},
 };
 

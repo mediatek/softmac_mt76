@@ -2515,7 +2515,7 @@ mt7996_get_txpower_info(struct file *file, char __user *user_buf,
 	len += scnprintf(buf + len, size - len,
 			 "    Theraml Compensation Value: %d\n",
 			 basic_info->thermal_compensate_value);
-	np = mt76_find_power_limits_node(phy->mt76->dev);
+	np = mt76_find_power_limits_node(phy->mt76);
 	len += scnprintf(buf + len, size - len,
 			 "    RegDB:  %s\n",
 			 !np ? "enable" : "disable");
@@ -4526,6 +4526,7 @@ void mt7996_mtk_init_dev_debugfs(struct mt7996_dev *dev, struct dentry *dir)
 	debugfs_create_file("rx_drop_stats", 0400, dir, dev, &mt7996_rx_drop_fops);
 
 	debugfs_create_file("muru_dbg", 0200, dir, dev, &fops_muru_dbg_info);
+	debugfs_create_bool("mgmt_pwr_enhance", 0600, dir, &dev->mt76.mgmt_pwr_enhance);
 }
 
 #endif

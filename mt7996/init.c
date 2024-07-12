@@ -383,7 +383,7 @@ static void __mt7996_init_txpower(struct mt7996_phy *phy,
 
 	phy->sku_limit_en = true;
 	phy->sku_path_en = true;
-	np = mt76_find_power_limits_node(&dev->mt76);
+	np = mt76_find_power_limits_node(phy->mt76);
 	for (i = 0; i < sband->n_channels; i++) {
 		struct ieee80211_channel *chan = &sband->channels[i];
 		int target_power = mt7996_eeprom_get_target_power(dev, chan);

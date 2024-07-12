@@ -1861,7 +1861,7 @@ mt7996_tm_update_params(struct mt7996_phy *phy, u32 changed)
 		mt7996_tm_update_channel(phy);
 		mt7996_mcu_set_tx_power_ctrl(phy, POWER_CTRL(SKU_POWER_LIMIT), td->sku_en);
 		mt7996_mcu_set_tx_power_ctrl(phy, POWER_CTRL(BACKOFF_POWER_LIMIT), td->sku_en);
-		mt7996_mcu_set_txpower_sku(phy, &phy->mt76->monitor_vif->bss_conf);
+		mt7996_mcu_set_txpower_sku(phy, phy->mt76->monitor_vif->bss_conf.txpower);
 	}
 	if (changed & BIT(TM_CHANGED_TX_LENGTH)) {
 		mt7996_tm_set(dev, SET_ID(TX_LEN), td->tx_mpdu_len);

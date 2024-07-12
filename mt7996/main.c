@@ -847,6 +847,7 @@ static u8
 mt7996_get_rates_table(struct mt7996_phy *phy, struct ieee80211_bss_conf *conf,
 		       bool beacon, bool mcast)
 {
+#define FR_RATE_IDX_OFDM_6M 0x004b
 	struct mt7996_dev *dev = phy->dev;
 	struct mt76_vif_link *mvif = mt76_vif_conf_link(&dev->mt76, conf->vif, conf);
 	u16 rate;
@@ -859,6 +860,8 @@ mt7996_get_rates_table(struct mt7996_phy *phy, struct ieee80211_bss_conf *conf,
 		if (dev->cert_mode && phy->mt76->band_idx == MT_BAND2 &&
 		    conf->he_support && !conf->eht_support)
 			rate = 0x0200;
+		else if (dev->mt76.lpi_bcn_enhance)
+			rate = FR_RATE_IDX_OFDM_6M;
 
 		/* odd index for driver, even index for firmware */
 		idx = MT7996_BEACON_RATES_TBL + 2 * phy->mt76->band_idx;
@@ -1014,7 +1017,7 @@ mt7996_link_info_changed(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 		mt7996_update_mu_group(hw, link, info);
 
 	if (changed & BSS_CHANGED_TXPOWER)
-		mt7996_mcu_set_txpower_sku(phy, info);
+		mt7996_mcu_set_txpower_sku(phy, info->txpower);
 
 out:
 	mutex_unlock(&dev->mt76.mutex);
