@@ -603,6 +603,9 @@ mt7996_mac_init_band(struct mt7996_dev *dev, u8 band)
 {
 	u32 mask, set;
 
+	if (!mt7996_band_valid(dev, band))
+		return;
+
 	/* clear estimated value of EIFS for Rx duration & OBSS time */
 	mt76_wr(dev, MT_WF_RMAC_RSVD0(band), MT_WF_RMAC_RSVD0_EIFS_CLR);
 
@@ -629,6 +632,9 @@ mt7996_mac_init_band(struct mt7996_dev *dev, u8 band)
 	set = FIELD_PREP(MT_WTBLOFF_RSCR_RCPI_MODE, 0) |
 	      FIELD_PREP(MT_WTBLOFF_RSCR_RCPI_PARAM, 0x3);
 	mt76_rmw(dev, MT_WTBLOFF_RSCR(band), mask, set);
+
+	if (!is_mt7996(&dev->mt76))
+		mt7996_mcu_set_bssid_mapping_addr(&dev->mt76, band);
 }
 
 static void mt7996_mac_init_basic_rates(struct mt7996_dev *dev)
