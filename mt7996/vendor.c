@@ -157,6 +157,8 @@ txpower_ctrl_policy[NUM_MTK_VENDOR_ATTRS_TXPOWER_CTRL] = {
 	[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_IDX] = { .type = NLA_U8 },
 	[MTK_VENDOR_ATTR_TXPOWER_CTRL_LPI_BCN_ENHANCE] = { .type = NLA_U8 },
 	[MTK_VENDOR_ATTR_TXPOWER_CTRL_LINK_ID] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_TXPOWER_CTRL_AFC_TABLE] = { .type = NLA_BINARY },
+	[MTK_VENDOR_ATTR_TXPOWER_CTRL_AFC_LPI] = { .type = NLA_U8 },
 };
 
 static const struct nla_policy
@@ -1483,6 +1485,34 @@ out:
 	return err;
 }
 
+static int mt7996_parse_afc_table(struct mt7996_dev *dev, struct nlattr *tb, int delta)
+{
+	int ch, bw, err = 0;
+	struct mt76_dev *mdev = &dev->mt76;
+	s8 *table;
+
+	if (!mdev->afc_power_table)
+		err = mt7996_alloc_afc_table(dev);
+
+	if (err) {
+		mt7996_free_afc_table(dev);
+		return err;
+	}
+
+	table = nla_data(tb);
+
+	for (ch = 0; ch < MAX_CHANNEL_NUM_6G; ch++) {
+		memcpy(mdev->afc_power_table[ch], table + ch * afc_power_table_num,
+		       afc_power_table_num * sizeof(s8));
+		for (bw = 0; bw < afc_power_table_num; bw++)
+			if (mdev->afc_power_table[ch][bw] != AFC_INVALID_POWER)
+				mdev->afc_power_table[ch][bw] -= delta;
+	}
+
+	return 0;
+}
+
+
 static int mt7996_vendor_txpower_ctrl(struct wiphy *wiphy,
 				      struct wireless_dev *wdev,
 				      const void *data,
@@ -1495,10 +1525,7 @@ static int mt7996_vendor_txpower_ctrl(struct wiphy *wiphy,
 	struct ieee80211_vif *vif = wdev_to_ieee80211_vif(wdev);
 	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
 	struct mt7996_vif_link *mconf;
-	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_TXPOWER_CTRL];
-	struct mt76_power_limits la = {};
-	struct mt76_power_path_limits la_path = {};
-	u8 orig_sku_idx = mphy->sku_idx;
+	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_TXPOWER_CTRL], *table;
 	int err, current_txpower, delta;
 	u8 val, link_id = 0, idx;
 	s8 new_power_limit = 127;
@@ -1527,6 +1554,14 @@ static int mt7996_vendor_txpower_ctrl(struct wiphy *wiphy,
 	rcu_read_unlock();
 
 	mphy = phy->mt76;
+	dev = phy->dev;
+	delta = mt76_tx_power_path_delta(hweight16(mphy->chainmask));
+
+	if (mphy->cap.has_6ghz &&
+	    tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_AFC_LPI]) {
+		val = nla_get_u8(tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_AFC_LPI]);
+		mphy->dev->lpi_mode = !!val;
+	}
 
 	if (mphy->cap.has_6ghz &&
 	    tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_LPI_PSD]) {
@@ -1539,7 +1574,9 @@ static int mt7996_vendor_txpower_ctrl(struct wiphy *wiphy,
 	}
 
 	if (tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_IDX]) {
+		struct mt76_power_limits *la = NULL;
 		struct ieee80211_channel *chan = mphy->main_chandef.chan;
+		u8 orig_sku_idx = mphy->sku_idx;
 
 		mphy->sku_idx = nla_get_u8(tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_IDX]);
 
@@ -1552,20 +1589,32 @@ static int mt7996_vendor_txpower_ctrl(struct wiphy *wiphy,
 
 		phy->sku_limit_en = true;
 		phy->sku_path_en = true;
+		la = kzalloc(sizeof(*la), GFP_KERNEL);
+		if (!la)
+			return -ENOMEM;
+
 		mt76_get_rate_power_limits(mphy, chan, la, 127);
-		if (!la_path.ofdm[0])
+		if (!la->path.ofdm[0])
 			phy->sku_path_en = false;
 
-		dev = phy->dev;
-		err = mt7996_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_SKU_POWER_LIMIT_CTRL,
-						   dev->dbg.sku_disable ? 0 : phy->sku_limit_en);
-		if (err)
-			return err;
-		err = mt7996_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_BACKOFF_POWER_LIMIT_CTRL,
-						   dev->dbg.sku_disable ? 0 : phy->sku_path_en);
-		if (err)
-			return err;
+#ifdef CONFIG_MTK_DEBUG
+		/* To make sure the sku is still enabled when we restart AP. */
+		dev->dbg.sku_disable = false;
+#endif
+		kfree(la);
+	} else {
+		phy->sku_limit_en = false;
+		phy->sku_path_en = false;
 	}
+
+	err = mt7996_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_SKU_POWER_LIMIT_CTRL,
+					   phy->sku_limit_en);
+	if (err)
+		return err;
+	err = mt7996_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_BACKOFF_POWER_LIMIT_CTRL,
+					   phy->sku_path_en);
+	if (err)
+		return err;
 
 	if (mphy->cap.has_6ghz &&
 	    tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_LPI_BCN_ENHANCE]) {
@@ -1573,19 +1622,28 @@ static int mt7996_vendor_txpower_ctrl(struct wiphy *wiphy,
 		mphy->dev->lpi_bcn_enhance = val;
 		idx = MT7996_BEACON_RATES_TBL + 2 * phy->mt76->band_idx;
 
-		err = mt7996_mcu_set_fixed_rate_table(phy, idx, FR_RATE_IDX_OFDM_6M, true);
+		err = mt7996_mcu_set_fixed_rate_table(phy, idx, FR_RATE_IDX_OFDM_6M,
+						      true);
 		if (err)
 			return err;
+	}
+
+	if (mphy->cap.has_6ghz) {
+		table = tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_AFC_TABLE];
+		if (table) {
+			err = mt7996_parse_afc_table(dev, table, delta);
+			if (err)
+				return err;
+		} else
+			mt7996_free_afc_table(dev);
 	}
 
 	current_txpower = DIV_ROUND_UP(mphy->txpower_cur + delta, 2);
 	new_power_limit = min_t(s8, current_txpower, new_power_limit);
 
 	err = mt7996_mcu_set_txpower_sku(phy, new_power_limit);
-	if (err)
-		return err;
 
-	return 0;
+	return err;
 }
 
 static int mt7996_vendor_dfs_tx_mode_ctrl(struct wiphy *wiphy,

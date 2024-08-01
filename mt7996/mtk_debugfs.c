@@ -2720,6 +2720,11 @@ mt7996_get_txpower_info(struct file *file, char __user *user_buf,
 	len += scnprintf(buf + len, size - len,
 			 "    RegDB:  %s\n",
 			 !np ? "enable" : "disable");
+	len += scnprintf(buf + len, size - len,
+			 "    sku_index:  %d\n", phy->mt76->sku_idx);
+	len += scnprintf(buf + len, size - len,
+			 "    lpi:  %s\n",
+			 phy->mt76->dev->lpi_mode ? "enable" : "disable");
 	ret = simple_read_from_buffer(user_buf, count, ppos, buf, len);
 
 out:
@@ -4640,6 +4645,37 @@ static int mt7996_pp_alg_show(struct seq_file *s, void *data)
 }
 DEFINE_SHOW_ATTRIBUTE(mt7996_pp_alg);
 
+static int mt7996_afc_table_show(struct seq_file *s, void *data)
+{
+	struct mt7996_dev *dev = s->private;
+
+	char str[200] = {0}, *pos;
+	char *end = str + sizeof(str);
+	int i, j;
+
+	if (!dev->mt76.afc_power_table || !dev->mt76.afc_power_table[0]) {
+		seq_printf(s, "afc table doesn't exist.\n");
+		return 0;
+	}
+
+	seq_printf(s, "bw/ru :    20    40    80   160  320-1 320-2   26    52    78   "
+		   "106   132   726  1480  1772  2476  2988  3472\n");
+	for(i = 0; i < MAX_CHANNEL_NUM_6G; i ++) {
+		pos = str;
+		for (j = 0; j < afc_power_table_num; j ++) {
+			pos += snprintf(pos, end - pos, "%5d ",
+					dev->mt76.afc_power_table[i][j]);
+		}
+		seq_printf(s, "ch %3d: %s\n", i * 4 + 1, str);
+		memset(str, 0, sizeof(str));
+	}
+	seq_printf(s, "Unit : 0.5 dBm\n");
+	seq_printf(s, "NOTE : power of the table is translated to single path.\n");
+
+	return 0;
+}
+DEFINE_SHOW_ATTRIBUTE(mt7996_afc_table);
+
 #define info_or_seq_printf(seq, fmt, ...)	do {	\
 	if (seq)					\
 		seq_printf(seq, fmt, ##__VA_ARGS__);	\
@@ -5794,6 +5830,7 @@ void mt7996_mtk_init_dev_debugfs(struct mt7996_dev *dev, struct dentry *dir)
 
 	debugfs_create_file("muru_dbg", 0200, dir, dev, &fops_muru_dbg_info);
 	debugfs_create_bool("mgmt_pwr_enhance", 0600, dir, &dev->mt76.mgmt_pwr_enhance);
+	debugfs_create_file("afc_table", 0200, dir, dev, &mt7996_afc_table_fops);
 
 	debugfs_create_devm_seqfile(dev->mt76.dev, "token_txd", dir,
 				    mt7996_token_txd_read);
