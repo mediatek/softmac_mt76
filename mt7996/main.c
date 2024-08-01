@@ -922,7 +922,7 @@ mt7996_get_rates_table(struct mt7996_phy *phy, struct ieee80211_bss_conf *conf,
 		if (dev->cert_mode && phy->mt76->band_idx == MT_BAND2 &&
 		    conf->he_support && !conf->eht_support)
 			rate = 0x0200;
-		else if (dev->mt76.lpi_bcn_enhance)
+		else if (dev->mt76.lpi_mode && dev->mt76.lpi_bcn_enhance)
 			rate = FR_RATE_IDX_OFDM_6M;
 
 		/* odd index for driver, even index for firmware */

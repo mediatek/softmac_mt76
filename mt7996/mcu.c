@@ -6494,7 +6494,8 @@ int mt7996_mcu_set_fixed_rate_table(struct mt7996_phy *phy, u8 table_idx,
 
 	if (beacon) {
 		req.spe_idx_sel = SPE_IXD_SELECT_TXD;
-		req.spe_idx = dev->mt76.mgmt_pwr_enhance ? 0 : 24 + band_idx;
+		req.spe_idx = dev->mt76.lpi_mode && dev->mt76.mgmt_pwr_enhance ?
+			0 : 24 + band_idx;
 		phy->beacon_rate = rate_idx;
 	} else {
 		req.spe_idx_sel = SPE_IXD_SELECT_BMC_WTBL;
@@ -6806,6 +6807,125 @@ mt7996_update_max_txpower_cur(struct mt7996_phy *phy, int tx_power)
 		mphy->txpower_cur = e2p_power_limit;
 }
 
+static int mt7996_afc_update_power_limit(struct mt7996_dev *dev,
+					 struct ieee80211_channel *chan,
+					 struct mt76_power_limits *la,
+					 int *tx_power,
+					 struct cfg80211_chan_def *chandef)
+{
+	s8 *power_list, bw320_offset, target_power;
+	int table_idx, i, bw, mcs, ru, eht, path;
+	s8 bf_offset_ofdm[] = {6, 10, 12, 14};
+	s8 bf_offset[] = {0, 6, 10, 12, 14, 0, 4, 6, 8, 0, 3, 5, 0, 2, 0};
+
+	table_idx = chan->hw_value / 4;
+	if (table_idx < 0 || table_idx > MAX_CHANNEL_NUM_6G ||
+	    !dev->mt76.afc_power_table[table_idx])
+		return -EINVAL;
+
+	power_list = dev->mt76.afc_power_table[table_idx];
+
+	switch (chandef->center_freq1) {
+	case 6105:
+	case 6425:
+	case 6745:
+		bw320_offset = 1;
+		break;
+	case 6265:
+	case 6585:
+	case 6905:
+		bw320_offset = 2;
+		break;
+	default:
+		bw320_offset = 0;
+		break;
+	}
+
+	if (chandef) {
+		switch (chandef->width) {
+		case NL80211_CHAN_WIDTH_20:
+			target_power = power_list[afc_power_bw20];
+			break;
+		case NL80211_CHAN_WIDTH_40:
+			target_power = power_list[afc_power_bw40];
+			break;
+		case NL80211_CHAN_WIDTH_80:
+			target_power = power_list[afc_power_bw80];
+			break;
+		case NL80211_CHAN_WIDTH_160:
+			target_power = power_list[afc_power_bw160];
+			break;
+		case NL80211_CHAN_WIDTH_320:
+			if (bw320_offset == 1)
+				target_power = power_list[afc_power_bw320_1];
+			else
+				target_power = power_list[afc_power_bw320_2];
+			break;
+		default:
+			break;
+		}
+		*tx_power = min_t(int, *tx_power, target_power);
+	}
+
+	target_power = min_t(s8, (s8)*tx_power, power_list[afc_power_bw20]);
+	for (i = 0; i < sizeof(la->cck); i++)
+		la->cck[i] = min_t(s8, la->cck[i], power_list[afc_power_bw20]);
+	for (i = 0; i < sizeof(la->ofdm); i++)
+		la->ofdm[i] = min_t(s8, la->ofdm[i], target_power);
+
+	for (i = 0; i < sizeof(la->path.cck); i++)
+		la->path.cck[i] = min_t(s8, la->path.cck[i], power_list[afc_power_bw20]);
+	for (i = 0; i < sizeof(la->path.ofdm); i++)
+		la->path.ofdm[i] = min_t(s8, la->path.ofdm[i], target_power);
+	for (i = 0; i < sizeof(la->path.ofdm_bf); i++) {
+		la->path.ofdm_bf[i] =
+			min_t(s8, la->path.ofdm_bf[i],
+			      target_power - bf_offset_ofdm[i]);
+	}
+
+	for (bw = afc_power_bw20; bw < afc_power_table_num; bw++) {
+		if ((bw == afc_power_bw320_1 && bw320_offset == 2) ||
+		    (bw == afc_power_bw320_2 && bw320_offset == 1))
+			continue;
+
+		if (power_list[bw] == AFC_INVALID_POWER)
+			continue;
+
+		/* Negative index means doesn't need to update powers of the type. */
+		if (mt7996_get_bw_power_table_idx(bw, &mcs, &ru, &eht, &path))
+			return -EINVAL;
+
+		if (mcs >= 0) {
+			for (i = 0; i < sizeof(la->mcs[0]); i++)
+				la->mcs[mcs][i] =
+					min_t(s8, la->mcs[mcs][i], power_list[bw]);
+		}
+
+		if (ru >= 0) {
+			for (i = 0; i < sizeof(la->ru[0]); i++)
+				la->ru[ru][i] = min_t(s8, la->ru[ru][i], power_list[bw]);
+		}
+
+		if (eht >= 0) {
+			for (i = 0; i < sizeof(la->eht[0]); i++)
+				la->eht[eht][i] =
+					min_t(s8, la->eht[eht][i], power_list[bw]);
+		}
+
+		if (path >= 0) {
+			for (i = 0; i < sizeof(la->path.ru[0]); i++) {
+				la->path.ru[path][i] =
+					min_t(s8, la->path.ru[path][i], power_list[bw]);
+				la->path.ru_bf[path][i] =
+					min_t(s8, la->path.ru_bf[path][i],
+					      power_list[bw] - bf_offset[i]);
+			}
+		}
+	}
+
+	return 0;
+}
+
 static bool mt7996_is_psd_country(char *country)
 {
 	char psd_country_list[][3] = {"US", "KR", "BR", "CL", "MY", ""};
@@ -6863,18 +6983,25 @@ int mt7996_mcu_set_txpower_sku(struct mt7996_phy *phy,
 		txpower_setting = 127;
 	txpower_limit = mt7996_get_power_bound(phy, txpower_setting);
 
-	if (phy->sku_limit_en) {
-		la = kzalloc(sizeof(*la), GFP_KERNEL);
-		if (!la)
-			return -ENOMEM;
-
-		txpower_limit = mt76_get_rate_power_limits(mphy, mphy->chandef.chan,
-							   la, txpower_limit);
-		mt7996_update_max_txpower_cur(phy, txpower_limit);
-	} else {
+	if (!phy->sku_limit_en) {
 		mt7996_update_max_txpower_cur(phy, txpower_limit);
 		return 0;
 	}
+
+	la = kzalloc(sizeof(*la), GFP_KERNEL);
+	if (!la)
+		return -ENOMEM;
+
+	txpower_limit = mt76_get_rate_power_limits(mphy, mphy->main_chandef.chan,
+						   la, txpower_limit);
+	if(phy->mt76->cap.has_6ghz && dev->mt76.afc_power_table) {
+		ret = mt7996_afc_update_power_limit(dev, mphy->main_chandef.chan, la,
+						    &txpower_limit, &mphy->main_chandef);
+		if (ret)
+			return ret;
+	}
+
+	mt7996_update_max_txpower_cur(phy, txpower_limit);
 
 	skb = mt76_mcu_msg_alloc(&dev->mt76, NULL,
 				 sizeof(req) + MT7996_SKU_PATH_NUM);
@@ -6889,9 +7016,9 @@ int mt7996_mcu_set_txpower_sku(struct mt7996_phy *phy,
 	/* FW would compensate for PSD countries
 	 * driver doesn't need to do it
 	 */
-	if (phy->mt76->cap.has_6ghz && mphy->dev->lpi_psd &&
+	if (phy->mt76->cap.has_6ghz && mphy->dev->lpi_mode && mphy->dev->lpi_psd &&
 	    !mt7996_is_psd_country(dev->mt76.alpha2)) {
-		switch (mphy->chandef.width) {
+		switch (mphy->main_chandef.width) {
 		case NL80211_CHAN_WIDTH_20:
 			skb_put_data(skb, &la->eht[3], 8);
 			break;
@@ -6957,8 +7084,8 @@ int mt7996_mcu_set_txpower_sku(struct mt7996_phy *phy,
 	/* FW would NOT compensate in the case of BF backoff table
 	 * driver needs to compensate for LPI PSD
 	 */
-	if (phy->mt76->cap.has_6ghz && mphy->dev->lpi_psd) {
-		switch (mphy->chandef.width) {
+	if (phy->mt76->cap.has_6ghz && mphy->dev->lpi_mode && mphy->dev->lpi_psd) {
+		switch (mphy->main_chandef.width) {
 		case NL80211_CHAN_WIDTH_20:
 			skb_put_data(skb, &la->path.ru[5], 5);
 			skb_put_data(skb, &la->path.ru_bf[5], 4);
@@ -7022,11 +7149,51 @@ int mt7996_mcu_set_lpi_psd(struct mt7996_phy *phy, u8 enable)
 		.tag = cpu_to_le16(UNI_BAND_CONFIG_LPI_CTRL),
 		.len = cpu_to_le16(sizeof(req) - 4),
 		.lpi_enable = enable,
-		.psd_limit = enable ? mt7996_is_psd_country(dev->mt76.alpha2) : 0,
+		.psd_limit = enable && dev->mt76.lpi_mode ?
+				mt7996_is_psd_country(dev->mt76.alpha2) : 0,
 	};
 
 	return mt76_mcu_send_msg(&phy->dev->mt76, MCU_WM_UNI_CMD(BAND_CONFIG),
 				 &req, sizeof(req), false);
+}
+
+int mt7996_alloc_afc_table(struct mt7996_dev *dev)
+{
+	struct mt76_dev *mdev = &dev->mt76;
+	int i;
+
+	mdev->afc_power_table =
+		(s8**)devm_kzalloc(dev->mt76.dev,
+				   MAX_CHANNEL_NUM_6G * sizeof(s8*),
+				   GFP_KERNEL);
+
+	if (!mdev->afc_power_table)
+		return -ENOMEM;
+
+	for (i = 0; i < MAX_CHANNEL_NUM_6G; i++) {
+		mdev->afc_power_table[i] =
+			(s8*)devm_kzalloc(dev->mt76.dev,
+					  afc_power_table_num * sizeof(s8),
+					  GFP_KERNEL);
+		if (!mdev->afc_power_table[i]) {
+			mt7996_free_afc_table(dev);
+			return -ENOMEM;
+		}
+	}
+	return 0;
+}
+
+void mt7996_free_afc_table(struct mt7996_dev *dev)
+{
+	struct mt76_dev *mdev = &dev->mt76;
+	int i;
+
+	if (mdev->afc_power_table) {
+		for (i = 0; i < MAX_CHANNEL_NUM_6G; i++)
+			devm_kfree(mdev->dev, mdev->afc_power_table[i]);
+		devm_kfree(mdev->dev, mdev->afc_power_table);
+	}
+	mdev->afc_power_table = NULL;
 }
 
 int mt7996_mcu_cp_support(struct mt7996_dev *dev, u8 mode)
