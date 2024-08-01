@@ -1126,6 +1126,8 @@ int mt7996_mcu_set_thermal_protect(struct mt7996_phy *phy, bool enable);
 int mt7996_mcu_set_txpower_sku(struct mt7996_phy *phy,
 			       int txpower_setting);
 int mt7996_mcu_rdd_cmd(struct mt7996_dev *dev, int cmd, u8 rdd_idx, u8 val);
+int mt7996_alloc_afc_table(struct mt7996_dev *dev);
+void mt7996_free_afc_table(struct mt7996_dev *dev);
 int mt7996_mcu_rdd_background_disable_timer(struct mt7996_dev *dev,
 					    bool disable_timer);
 int mt7996_mcu_rdd_background_enable(struct mt7996_phy *phy,

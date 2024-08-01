@@ -1310,6 +1310,145 @@ enum {
 	UNI_TXPOWER_SHOW_INFO = 7,
 };
 
+#define MAX_CHANNEL_NUM_6G 59
+#define AFC_INVALID_POWER 127
+enum afc_table_info {
+	afc_power_bw20,
+	afc_power_bw40,
+	afc_power_bw80,
+	afc_power_bw160,
+	afc_power_bw320_1,
+	afc_power_bw320_2,
+	afc_power_ru26,
+	afc_power_ru52,
+	afc_power_ru78,
+	afc_power_ru106,
+	afc_power_ru132,
+	afc_power_ru726,
+	afc_power_ru1480,
+	afc_power_ru1772,
+	afc_power_ru2476,
+	afc_power_ru2988,
+	afc_power_ru3472,
+	afc_power_table_num,
+};
+
+static inline int mt7996_get_bw_power_table_idx(int bw, int *mcs, int *ru, int *eht,
+						int *path)
+{
+	switch (bw) {
+	case afc_power_bw20:
+		*mcs = 0;
+		*ru = 3;
+		*eht = 3;
+		*path = 5;
+		break;
+	case afc_power_bw40:
+		*mcs = 1;
+		*ru = 4;
+		*eht = 4;
+		*path = 6;
+		break;
+	case afc_power_bw80:
+		*mcs = 2;
+		*ru = 5;
+		*eht = 5;
+		*path = 8;
+		break;
+	case afc_power_bw160:
+		*mcs = 3;
+		*ru = 6;
+		*eht = 6;
+		*path = 11;
+		break;
+	case afc_power_bw320_1:
+		*mcs = -1;
+		*ru = -1;
+		*eht = 7;
+		*path = 15;
+		break;
+	case afc_power_bw320_2:
+		*mcs = -1;
+		*ru = -1;
+		*eht = 7;
+		*path = 15;
+		break;
+	case afc_power_ru26:
+		*mcs = -1;
+		*ru = 0;
+		*eht = 0;
+		*path = 0;
+		break;
+	case afc_power_ru52:
+		*mcs = -1;
+		*ru = 1;
+		*eht = 1;
+		*path = 1;
+		break;
+	case afc_power_ru78:
+		*mcs = -1;
+		*ru = -1;
+		*eht = 8;
+		*path = 2;
+		break;
+	case afc_power_ru106:
+		*mcs = -1;
+		*ru = 2;
+		*eht = 2;
+		*path = 3;
+		break;
+	case afc_power_ru132:
+		*mcs = -1;
+		*ru = -1;
+		*eht = 9;
+		*path = 4;
+		break;
+	case afc_power_ru726:
+		*mcs = -1;
+		*ru = -1;
+		*eht = 10;
+		*path = 7;
+		break;
+	case afc_power_ru1480:
+		*mcs = -1;
+		*ru = -1;
+		*eht = 11;
+		*path = 9;
+		break;
+	case afc_power_ru1772:
+		*mcs = -1;
+		*ru = -1;
+		*eht = 12;
+		*path = 10;
+		break;
+	case afc_power_ru2476:
+		*mcs = -1;
+		*ru = -1;
+		*eht = 13;
+		*path = 12;
+		break;
+	case afc_power_ru2988:
+		*mcs = -1;
+		*ru = -1;
+		*eht = 14;
+		*path = 13;
+		break;
+	case afc_power_ru3472:
+		*mcs = -1;
+		*ru = -1;
+		*eht = 15;
+		*path = 14;
+		break;
+	default:
+		*mcs = -1;
+		*ru = -1;
+		*eht = -1;
+		*path = -1;
+		return -EINVAL;
+	}
+	return 0;
+}
+
 enum {
 	UNI_CMD_ACCESS_REG_BASIC = 0x0,
 	UNI_CMD_ACCESS_RF_REG_BASIC,

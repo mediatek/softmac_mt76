@@ -1135,6 +1135,8 @@ struct mt76_dev {
 	bool lpi_psd;
 	bool lpi_bcn_enhance;
 	bool mgmt_pwr_enhance;
+	bool lpi_mode;
+	s8 **afc_power_table;
 
 #ifdef CONFIG_NL80211_TESTMODE
 	const struct mt76_testmode_ops *test_ops;

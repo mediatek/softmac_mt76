@@ -163,6 +163,8 @@ txpower_ctrl_policy[NUM_MTK_VENDOR_ATTRS_TXPOWER_CTRL] = {
 	[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_IDX] = { .type = NLA_U8 },
 	[MTK_VENDOR_ATTR_TXPOWER_CTRL_LPI_BCN_ENHANCE] = { .type = NLA_U8 },
 	[MTK_VENDOR_ATTR_TXPOWER_CTRL_LINK_ID] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_TXPOWER_CTRL_AFC_TABLE] = { .type = NLA_BINARY },
+	[MTK_VENDOR_ATTR_TXPOWER_CTRL_AFC_LPI] = { .type = NLA_U8 },
 };
 
 struct mt7996_amnt_data {
@@ -1486,6 +1488,34 @@ out:
 	return err;
 }
 
+static int mt7996_parse_afc_table(struct mt7996_dev *dev, struct nlattr *tb, int delta)
+{
+	int ch, bw, err = 0;
+	struct mt76_dev *mdev = &dev->mt76;
+	s8 **table;
+
+	if (!mdev->afc_power_table)
+		err = mt7996_alloc_afc_table(dev);
+
+	if (err) {
+		mt7996_free_afc_table(dev);
+		return err;
+	}
+
+	table = nla_data(tb);
+
+	for (ch = 0; ch < MAX_CHANNEL_NUM_6G; ch++) {
+		memcpy(mdev->afc_power_table[ch], table[ch],
+			afc_power_table_num * sizeof(s8));
+		for (bw = 0; bw < afc_power_table_num; bw++)
+			if (mdev->afc_power_table[ch][bw] != AFC_INVALID_POWER)
+				mdev->afc_power_table[ch][bw] -= delta;
+	}
+
+	return 0;
+}
+
+
 static int mt7996_vendor_txpower_ctrl(struct wiphy *wiphy,
 				      struct wireless_dev *wdev,
 				      const void *data,
@@ -1495,12 +1525,13 @@ static int mt7996_vendor_txpower_ctrl(struct wiphy *wiphy,
 	struct mt7996_dev *dev;
 	struct mt7996_phy *phy;
 	struct mt76_phy *mphy;
+	struct mt76_dev *mdev;
 	struct ieee80211_vif *vif = wdev_to_ieee80211_vif(wdev);
 	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
 	struct mt7996_vif_link *mconf;
-	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_TXPOWER_CTRL];
-	struct mt76_power_limits la = {};
-	struct mt76_power_path_limits la_path = {};
+	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_TXPOWER_CTRL], *table;
+	struct mt76_power_limits *la;
+	struct mt76_power_path_limits *la_path;
 	int err, current_txpower, delta;
 	u8 val, link_id = 0, idx;
 
@@ -1528,6 +1559,14 @@ static int mt7996_vendor_txpower_ctrl(struct wiphy *wiphy,
 	rcu_read_unlock();
 
 	mphy = phy->mt76;
+	mdev = mphy->dev;
+	delta = mt76_tx_power_path_delta(hweight16(mphy->chainmask));
+
+	if (mphy->cap.has_6ghz &&
+	    tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_AFC_LPI]) {
+		val = nla_get_u8(tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_AFC_LPI]);
+		mphy->dev->lpi_mode = !!val;
+	}
 
 	if (mphy->cap.has_6ghz &&
 	    tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_LPI_PSD]) {
@@ -1536,7 +1575,7 @@ static int mt7996_vendor_txpower_ctrl(struct wiphy *wiphy,
 
 		err = mt7996_mcu_set_lpi_psd(phy, val);
 		if (err)
-			return err;
+			goto out;
 	}
 
 	if (tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_IDX]) {
@@ -1547,19 +1586,22 @@ static int mt7996_vendor_txpower_ctrl(struct wiphy *wiphy,
 
 		phy->sku_limit_en = true;
 		phy->sku_path_en = true;
-		mt76_get_rate_power_limits(mphy, mphy->chandef.chan, &la, &la_path, 127);
-		if (!la_path.ofdm[0])
+		la = kzalloc(sizeof(struct mt76_power_limits), GFP_KERNEL);
+		la_path = kzalloc(sizeof(struct mt76_power_path_limits), GFP_KERNEL);
+
+		mt76_get_rate_power_limits(mphy, mphy->chandef.chan, la, la_path, 127);
+		if (!la_path->ofdm[0])
 			phy->sku_path_en = false;
 
 		dev = phy->dev;
 		err = mt7996_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_SKU_POWER_LIMIT_CTRL,
 						   dev->dbg.sku_disable ? 0 : phy->sku_limit_en);
 		if (err)
-			return err;
+			goto out;
 		err = mt7996_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_BACKOFF_POWER_LIMIT_CTRL,
 						   dev->dbg.sku_disable ? 0 : phy->sku_path_en);
 		if (err)
-			return err;
+			goto out;
 	}
 
 	if (mphy->cap.has_6ghz &&
@@ -1568,19 +1610,30 @@ static int mt7996_vendor_txpower_ctrl(struct wiphy *wiphy,
 		mphy->dev->lpi_bcn_enhance = val;
 		idx = MT7996_BEACON_RATES_TBL + 2 * phy->mt76->band_idx;
 
-		err = mt7996_mcu_set_fixed_rate_table(phy, idx, FR_RATE_IDX_OFDM_6M, true);
+		err = mt7996_mcu_set_fixed_rate_table(phy, idx, FR_RATE_IDX_OFDM_6M,
+						      true);
 		if (err)
-			return err;
+			goto out;
 	}
 
-	delta = mt76_tx_power_nss_delta(hweight16(mphy->chainmask));
+	if (mphy->cap.has_6ghz) {
+		table = tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_AFC_TABLE];
+		if (table) {
+			err = mt7996_parse_afc_table(dev, table, delta);
+			if (err)
+				goto out;
+		} else
+			mt7996_free_afc_table(dev);
+	}
+
 	current_txpower = DIV_ROUND_UP(mphy->txpower_cur + delta, 2);
 
 	err = mt7996_mcu_set_txpower_sku(phy, current_txpower);
-	if (err)
-		return err;
 
-	return 0;
+out:
+	kfree(la);
+	kfree(la_path);
+	return err;
 }
 
 static const struct wiphy_vendor_command mt7996_vendor_commands[] = {
