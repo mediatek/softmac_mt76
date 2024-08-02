@@ -622,7 +622,7 @@ void mt76_connac2_mac_write_txwi(struct mt76_dev *dev, __le32 *txwi,
 EXPORT_SYMBOL_GPL(mt76_connac2_mac_write_txwi);
 
 bool mt76_connac2_mac_fill_txs(struct mt76_dev *dev, struct mt76_wcid *wcid,
-			       __le32 *txs_data)
+			       int pid, __le32 *txs_data)
 {
 	struct mt76_sta_stats *stats = &wcid->stats;
 	struct ieee80211_supported_band *sband;
@@ -634,8 +634,7 @@ bool mt76_connac2_mac_fill_txs(struct mt76_dev *dev, struct mt76_wcid *wcid,
 	txs = le32_to_cpu(txs_data[0]);
 
 	/* PPDU based reporting */
-	if (mtk_wed_device_active(&dev->mmio.wed) &&
-	    FIELD_GET(MT_TXS0_TXS_FORMAT, txs) > 1) {
+	if (FIELD_GET(MT_TXS0_TXS_FORMAT, txs) > 1) {
 		stats->tx_bytes +=
 			le32_get_bits(txs_data[5], MT_TXS5_MPDU_TX_BYTE) -
 			le32_get_bits(txs_data[7], MT_TXS7_MPDU_RETRY_BYTE);
@@ -655,6 +654,9 @@ bool mt76_connac2_mac_fill_txs(struct mt76_dev *dev, struct mt76_wcid *wcid,
 			ieee80211_refresh_tx_agg_session_timer(sta, tid);
 		}
 	}
+
+	if (pid != MT_PACKET_ID_WED)
+		return true;
 
 	txrate = FIELD_GET(MT_TXS0_TX_RATE, txs);
 
@@ -765,7 +767,7 @@ bool mt76_connac2_mac_add_txs_skb(struct mt76_dev *dev, struct mt76_wcid *wcid,
 			!!(info->flags & IEEE80211_TX_STAT_ACK);
 		info->status.rates[0].idx = -1;
 
-		mt76_connac2_mac_fill_txs(dev, wcid, txs_data);
+		mt76_connac2_mac_fill_txs(dev, wcid, pid, txs_data);
 		mt76_tx_status_skb_done(dev, skb, &list);
 	}
 	mt76_tx_status_unlock(dev, &list);

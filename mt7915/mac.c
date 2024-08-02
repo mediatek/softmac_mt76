@@ -729,17 +729,6 @@ int mt7915_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
 	if (!wcid)
 		wcid = &dev->mt76.global_wcid;
 
-	if (sta) {
-		struct mt7915_sta *msta;
-
-		msta = (struct mt7915_sta *)sta->drv_priv;
-
-		if (time_after(jiffies, msta->jiffies + HZ / 4)) {
-			info->flags |= IEEE80211_TX_CTL_REQ_TX_STATUS;
-			msta->jiffies = jiffies;
-		}
-	}
-
 	t = (struct mt76_txwi_cache *)(txwi + mdev->drv->txwi_size);
 	t->skb = tx_info->skb;
 
@@ -995,8 +984,8 @@ static void mt7915_mac_add_txs(struct mt7915_dev *dev, void *data)
 
 	msta = container_of(wcid, struct mt7915_sta, wcid);
 
-	if (pid == MT_PACKET_ID_WED)
-		mt76_connac2_mac_fill_txs(&dev->mt76, wcid, txs_data);
+	if (le32_get_bits(txs_data[0], MT_TXS0_TXS_FORMAT) == MT_TXS_PPDU_FMT)
+		mt76_connac2_mac_fill_txs(&dev->mt76, wcid, pid, txs_data);
 	else
 		mt76_connac2_mac_add_txs_skb(&dev->mt76, wcid, pid, txs_data);
 

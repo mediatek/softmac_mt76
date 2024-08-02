@@ -562,8 +562,7 @@ mt7915_mac_init_band(struct mt7915_dev *dev, u8 band)
 	/* MT_TXD5_TX_STATUS_HOST (MPDU format) has higher priority than
 	 * MT_AGG_ACR_PPDU_TXS2H (PPDU format) even though ACR bit is set.
 	 */
-	if (mtk_wed_device_active(&dev->mt76.mmio.wed))
-		mt76_set(dev, MT_AGG_ACR4(band), MT_AGG_ACR_PPDU_TXS2H);
+	mt76_set(dev, MT_AGG_ACR4(band), MT_AGG_ACR_PPDU_TXS2H);
 }
 
 static void
