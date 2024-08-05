@@ -1171,6 +1171,8 @@ int mt7996_mcu_mld_link_oper(struct mt7996_phy *phy,
 			     struct mt7996_bss_conf *mconf, bool add);
 int mt7996_mcu_mld_set_attlm(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 			     u16 disabled_links, u16 switch_time, u32 duration);
+int mt7996_mcu_peer_mld_ttlm_req(struct mt7996_dev *dev, struct ieee80211_vif *vif,
+				 u64 changed);
 
 static inline u8 mt7996_max_interface_num(struct mt7996_dev *dev)
 {
