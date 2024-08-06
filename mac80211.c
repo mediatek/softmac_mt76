@@ -861,6 +861,7 @@ static void mt76_rx_release_amsdu(struct mt76_phy *phy, enum mt76_rxq_id q)
 	struct sk_buff *skb = phy->rx_amsdu[q].head;
 	struct mt76_rx_status *status = (struct mt76_rx_status *)skb->cb;
 	struct mt76_dev *dev = phy->dev;
+	struct mt76_queue *rxq = &dev->q_rx[q];
 
 	phy->rx_amsdu[q].head = NULL;
 	phy->rx_amsdu[q].tail = NULL;
@@ -892,6 +893,10 @@ static void mt76_rx_release_amsdu(struct mt76_phy *phy, enum mt76_rxq_id q)
 			return;
 		}
 	}
+
+	if (mt76_queue_is_wed_rro_data(rxq))
+		q = MT_RXQ_RRO_IND;
+
 	__skb_queue_tail(&dev->rx_skb[q], skb);
 }
 

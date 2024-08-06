@@ -13,6 +13,9 @@
 static bool hif2_enable = false;
 module_param(hif2_enable, bool, 0644);
 
+static bool rro_enable = false;
+module_param(rro_enable, bool, 0644);
+
 static LIST_HEAD(hif_list);
 static DEFINE_SPINLOCK(hif_lock);
 static u32 hif_idx;
@@ -145,6 +148,7 @@ static int mt7996_pci_probe(struct pci_dev *pdev,
 	if (IS_ERR(dev))
 		return PTR_ERR(dev);
 
+	dev->has_rro = rro_enable;
 	mdev = &dev->mt76;
 	mt7996_wfsys_reset(dev);
 	hif2 = mt7996_pci_init_hif2(pdev);

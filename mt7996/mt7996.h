@@ -129,6 +129,7 @@
 
 #define MT7996_BUILD_TIME_LEN		24
 
+#define MT7996_MAX_HIF_RXD_IN_PG	5
 #define MT7996_RRO_MSDU_PG_HASH_SIZE	127
 #define MT7996_RRO_MAX_SESSION		1024
 #define MT7996_RRO_WINDOW_MAX_LEN	1024
@@ -563,6 +564,33 @@ int mt7996_mcu_set_muru_qos_cfg(struct mt7996_dev *dev, u16 wlan_idx, u8 dir,
 				u8 scs_id, u8 req_type, u8 *qos_ie, u8 qos_ie_len);
 #endif
 
+struct mt7996_rro_hif {
+	u32 rx_blk_base_l;
+	u32 rx_blk_base_h: 4;
+	u32 eth_hdr_ofst : 7;
+	u32 rsv          : 1;
+	u32 ring_no      : 2;
+	u32 dst_sel      : 2;
+	u32 sdl          :14;
+	u32 ls           : 1;
+	u32 rsv2         : 1;
+	u32 pn_31_0;
+	u32 pn_47_32     :16;
+	u32 cs_status    : 4;
+	u32 cs_type      : 4;
+	u32 c            : 1;
+	u32 f            : 1;
+	u32 un           : 1;
+	u32 rsv3         : 1;
+	u32 is_fc_data   : 1;
+	u32 uc           : 1;
+	u32 mc           : 1;
+	u32 bc           : 1;
+	u16 rx_token_id;
+	u16 rsv4;
+	u32 rsv5;
+};
+
 struct mt7996_rro_ba_session {
 	u32 ack_sn         :12;
 	u32 win_sz         :3;
@@ -576,6 +604,26 @@ struct mt7996_rro_ba_session {
 	u32 to_sel         :3;
 	u32 rsv            :1;
 	u32 last_in_rxtime :12;
+};
+
+struct mt7996_rro_ba_session_elem {
+	struct list_head poll_list;
+	u16 session_id;
+};
+
+struct mt7996_msdu_pg {
+	struct mt7996_rro_hif rxd[MT7996_MAX_HIF_RXD_IN_PG];
+	u32 next_pg_l;
+	u32 next_pg_h	: 4;
+	u32 rsv		:27;
+	u32 owner	: 1;
+};
+
+struct mt7996_msdu_pg_addr {
+	struct list_head list;
+	dma_addr_t dma_addr;
+	struct mt76_queue *q;
+	void *buf;
 };
 
 struct mt7996_phy {
@@ -1216,6 +1264,11 @@ int mt7996_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
 void mt7996_tx_token_put(struct mt7996_dev *dev);
 void mt7996_queue_rx_skb(struct mt76_dev *mdev, enum mt76_rxq_id q,
 			 struct sk_buff *skb, u32 *info);
+void mt7996_rx_token_put(struct mt7996_dev *dev);
+void mt7996_rro_msdu_pg_free(struct mt7996_dev *dev);
+void mt7996_rro_rx_process(struct mt76_dev *mdev, void *data);
+int mt7996_rro_fill_msdu_page(struct mt76_dev *mdev, struct mt76_queue *q,
+			      dma_addr_t p, void *data);
 bool mt7996_rx_check(struct mt76_dev *mdev, void *data, int len);
 void mt7996_stats_work(struct work_struct *work);
 void mt7996_beacon_mon_work(struct work_struct *work);
@@ -1335,9 +1388,18 @@ int mt7996_mtk_init_band_debugfs_internal(struct mt7996_phy *phy, struct dentry 
 int mt7996_mcu_mlo_agc(struct mt7996_dev *dev, const void *data, int len);
 #endif
 
-#ifdef CONFIG_NET_MEDIATEK_SOC_WED
 int mt7996_dma_rro_init(struct mt7996_dev *dev);
+
+static inline void mt7996_set_pse_drop(struct mt7996_dev *dev, bool enable)
+{
+#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+	if (!is_mt7996(&dev->mt76) || !mtk_wed_device_active(&dev->mt76.mmio.wed))
+		return;
+
+	mtk_wed_device_ppe_drop(&dev->mt76.mmio.wed, enable);
 #endif /* CONFIG_NET_MEDIATEK_SOC_WED */
+}
+
 int mt7996_mcu_set_qos_map(struct mt7996_dev *dev, struct mt7996_vif_link *mconf,
 			   struct cfg80211_qos_map *usr_qos_map);
 #endif
