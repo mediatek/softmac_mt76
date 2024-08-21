@@ -1061,12 +1061,14 @@ mt7915_ampdu_action(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	case IEEE80211_AMPDU_TX_OPERATIONAL:
 		mtxq->aggr = true;
 		mtxq->send_bar = false;
+		set_bit((tid + AMPDU_ADDBA_SUCC_SHFT), &msta->wcid.ampdu_state);
 		ret = mt7915_mcu_add_tx_ba(dev, params, true);
 		break;
 	case IEEE80211_AMPDU_TX_STOP_FLUSH:
 	case IEEE80211_AMPDU_TX_STOP_FLUSH_CONT:
 		mtxq->aggr = false;
 		clear_bit(tid, &msta->wcid.ampdu_state);
+		clear_bit((tid + AMPDU_ADDBA_SUCC_SHFT), &msta->wcid.ampdu_state);
 		ret = mt7915_mcu_add_tx_ba(dev, params, false);
 		break;
 	case IEEE80211_AMPDU_TX_START:
@@ -1076,6 +1078,7 @@ mt7915_ampdu_action(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	case IEEE80211_AMPDU_TX_STOP_CONT:
 		mtxq->aggr = false;
 		clear_bit(tid, &msta->wcid.ampdu_state);
+		clear_bit((tid + AMPDU_ADDBA_SUCC_SHFT), &msta->wcid.ampdu_state);
 		ret = mt7915_mcu_add_tx_ba(dev, params, false);
 		ieee80211_stop_tx_ba_cb_irqsafe(vif, sta->addr, tid);
 		break;
@@ -1946,6 +1949,10 @@ mt7915_net_fill_forward_path(struct ieee80211_hw *hw,
 
 	if (msta->wcid.idx > MT7915_WTBL_STA)
 		return -EIO;
+
+	if (!test_bit((mvif->qos_map[path->mtk_wdma.tid >> 2] + AMPDU_ADDBA_SUCC_SHFT),
+	    &msta->wcid.ampdu_state))
+		return -EAGAIN;
 
 	path->type = DEV_PATH_MTK_WDMA;
 	path->dev = ctx->dev;

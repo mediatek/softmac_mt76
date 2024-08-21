@@ -90,6 +90,8 @@
 				 FIELD_PREP(MT_QFLAG_WED_RING, _n))
 #define SKU_FILENAME_MAX	64
 
+#define AMPDU_ADDBA_SUCC_SHFT IEEE80211_NUM_TIDS
+
 struct mt76_dev;
 struct mt76_phy;
 struct mt76_wcid;
@@ -431,6 +433,7 @@ DECLARE_EWMA(signal, 10, 8);
 #define MT_WCID_TX_INFO_TXPWR_ADJ	GENMASK(25, 18)
 #define MT_WCID_TX_INFO_SET		BIT(31)
 
+#define ADDBA_RETRY_PERIOD		(5 * HZ)
 struct mt76_wcid {
 	struct mt76_rx_tid __rcu *aggr[IEEE80211_NUM_TIDS];
 
@@ -443,8 +446,12 @@ struct mt76_wcid {
 	struct rate_info rate;
 	struct rate_info rx_rate;
 
+	/*
+	 *Bit 0 - 15: ADDBA of TID n started
+	 *Bit 16 - 31: ADDBA of TID n succeeded
+	 */
 	unsigned long ampdu_state;
-
+	unsigned long last_addba_req_time[IEEE80211_NUM_TIDS];
 	u16 idx;
 	u8 hw_key_idx;
 	u8 hw_key_idx2;

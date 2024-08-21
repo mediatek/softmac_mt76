@@ -500,6 +500,34 @@ mt76_connac2_mac_write_txwi_80211(struct mt76_dev *dev, __le32 *txwi,
 	}
 }
 
+static void
+mt76_check_tx_ba_status(struct mt76_wcid *wcid, u8 tid)
+{
+	struct ieee80211_sta *sta;
+
+	if (!wcid)
+		return;
+
+	sta = wcid_to_sta(wcid);
+
+	if (!sta ||
+	    !(sta->deflink.ht_cap.ht_supported || sta->deflink.he_cap.has_he))
+		return;
+
+	if (test_bit(tid, &wcid->ampdu_state)) {
+		ieee80211_refresh_tx_agg_session_timer(sta, tid);
+		return;
+	}
+
+	if (!wcid->last_addba_req_time[tid] ||
+	    time_after(jiffies, wcid->last_addba_req_time[tid] + ADDBA_RETRY_PERIOD)) {
+		set_bit(tid, &wcid->ampdu_state);
+		if (ieee80211_start_tx_ba_session(sta, tid, 0) < 0)
+			clear_bit(tid, &wcid->ampdu_state);
+		wcid->last_addba_req_time[tid] = jiffies;
+	}
+}
+
 void mt76_connac2_mac_write_txwi(struct mt76_dev *dev, __le32 *txwi,
 				 struct sk_buff *skb, struct mt76_wcid *wcid,
 				 struct ieee80211_key_conf *key, int pid,
@@ -649,14 +677,8 @@ bool mt76_connac2_mac_fill_txs(struct mt76_dev *dev, struct mt76_wcid *wcid,
 			le32_get_bits(txs_data[7], MT_TXS7_MPDU_RETRY_CNT);
 
 		if (wcid->sta) {
-			struct ieee80211_sta *sta;
-			u8 tid;
-
-			sta = container_of((void *)wcid, struct ieee80211_sta,
-					   drv_priv);
-			tid = FIELD_GET(MT_TXS0_TID, txs);
-
-			ieee80211_refresh_tx_agg_session_timer(sta, tid);
+			if (!le32_get_bits(txs_data[0], MT_TXS0_FIXED_RATE))
+				mt76_check_tx_ba_status(wcid, FIELD_GET(MT_TXS0_TID, txs));
 		}
 	}
 
@@ -1164,10 +1186,7 @@ void mt76_connac2_tx_check_aggr(struct ieee80211_sta *sta, __le32 *txwi)
 		return;
 
 	wcid = (struct mt76_wcid *)sta->drv_priv;
-	if (!test_and_set_bit(tid, &wcid->ampdu_state)) {
-		if (ieee80211_start_tx_ba_session(sta, tid, 0))
-			clear_bit(tid, &wcid->ampdu_state);
-	}
+	mt76_check_tx_ba_status(wcid, tid);
 }
 EXPORT_SYMBOL_GPL(mt76_connac2_tx_check_aggr);
 
