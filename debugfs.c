@@ -118,6 +118,8 @@ mt76_register_debugfs_fops(struct mt76_phy *phy,
 	debugfs_create_blob("eeprom", 0400, dir, &dev->eeprom);
 	if (dev->otp.data)
 		debugfs_create_blob("otp", 0400, dir, &dev->otp);
+	if (dev->ext_eeprom.data)
+		debugfs_create_blob("ext_eeprom", 0400, dir, &dev->ext_eeprom);
 	debugfs_create_devm_seqfile(dev->dev, "rx-queues", dir,
 				    mt76_rx_queues_read);
 

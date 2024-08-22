@@ -2837,6 +2837,9 @@ static int mt7996_show_eeprom_mode(struct seq_file *s, void *data)
 	case BIN_FILE_MODE:
 		seq_printf(s, "   bin file mode\n   filename = %s\n", dev->mt76.bin_file_name);
 		break;
+	case EXT_EEPROM_MODE:
+		seq_printf(s, "   external eeprom mode\n");
+		break;
 	default:
 		break;
 	}

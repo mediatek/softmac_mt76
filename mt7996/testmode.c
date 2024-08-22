@@ -2146,37 +2146,43 @@ mt7996_tm_write_back_to_efuse(struct mt7996_dev *dev)
 {
 	struct mt7996_mcu_eeprom_info req = {
 		.tag = cpu_to_le16(UNI_EFUSE_ACCESS),
-		.len = cpu_to_le16(sizeof(req) - 4),
+		.len = cpu_to_le16(sizeof(req) - 4 +
+				   MT76_TM_EEPROM_BLOCK_SIZE),
 	};
 	u8 read_buf[MT76_TM_EEPROM_BLOCK_SIZE], *eeprom = dev->mt76.eeprom.data;
+	int msg_len = sizeof(req) + MT76_TM_EEPROM_BLOCK_SIZE;
 	int i, ret = -EINVAL;
 
 	/* prevent from damaging chip id in efuse */
 	if (mt76_chip(&dev->mt76) != get_unaligned_le16(eeprom))
-		goto out;
+		return ret;
 
 	for (i = 0; i < MT7996_EEPROM_SIZE; i += MT76_TM_EEPROM_BLOCK_SIZE) {
-		req.addr = cpu_to_le32(i);
-		memcpy(req.data, eeprom + i, MT76_TM_EEPROM_BLOCK_SIZE);
+		struct sk_buff *skb;
 
-		ret = mt7996_mcu_get_eeprom(dev, i, read_buf, sizeof(read_buf));
-		if (ret) {
-			if (ret != -EINVAL)
-				return ret;
+		memset(read_buf, 0, MT76_TM_EEPROM_BLOCK_SIZE);
+		ret = mt7996_mcu_get_eeprom(dev, i, read_buf, sizeof(read_buf),
+					    EFUSE_MODE);
+		if (ret && ret != -EINVAL)
+			return ret;
 
-			memset(read_buf, 0, MT76_TM_EEPROM_BLOCK_SIZE);
-		}
-
-		if (!memcmp(req.data, read_buf, MT76_TM_EEPROM_BLOCK_SIZE))
+		if (!memcmp(eeprom + i, read_buf, MT76_TM_EEPROM_BLOCK_SIZE))
 			continue;
 
-		ret = mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(EFUSE_CTRL),
-					&req, sizeof(req), true);
+		skb = mt76_mcu_msg_alloc(&dev->mt76, NULL, msg_len);
+		if (!skb)
+			return -ENOMEM;
+
+		req.addr = cpu_to_le32(i);
+		skb_put_data(skb, &req, sizeof(req));
+		skb_put_data(skb, eeprom + i, MT76_TM_EEPROM_BLOCK_SIZE);
+
+		ret = mt76_mcu_skb_send_msg(&dev->mt76, skb,
+					    MCU_WM_UNI_CMD(EFUSE_CTRL), true);
 		if (ret)
 			return ret;
 	}
 
-out:
 	return ret;
 }
 
@@ -2200,6 +2206,9 @@ mt7996_tm_set_eeprom(struct mt76_phy *mphy, u32 offset, u8 *val, u8 action)
 		break;
 	case MT76_TM_EEPROM_ACTION_WRITE_TO_EFUSE:
 		ret = mt7996_tm_write_back_to_efuse(dev);
+		break;
+	case MT76_TM_EEPROM_ACTION_WRITE_TO_EXT_EEPROM:
+		ret = mt7996_mcu_write_ext_eeprom(dev, 0, MT7996_EEPROM_SIZE, NULL);
 		break;
 	default:
 		break;

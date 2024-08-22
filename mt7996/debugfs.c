@@ -1062,7 +1062,9 @@ mt7996_efuse_get(struct file *file, char __user *user_buf,
 		block_num = DIV_ROUND_UP(mdev->otp.size, MT7996_EEPROM_BLOCK_SIZE);
 		for (i = 0; i < block_num; i++) {
 			buff = mdev->otp.data + i * MT7996_EEPROM_BLOCK_SIZE;
-			ret = mt7996_mcu_get_eeprom(dev, i * MT7996_EEPROM_BLOCK_SIZE, buff);
+			ret = mt7996_mcu_get_eeprom(dev, i * MT7996_EEPROM_BLOCK_SIZE,
+						    buff, MT7996_EEPROM_BLOCK_SIZE,
+						    EFUSE_MODE);
 			if (ret && ret != -EINVAL)
 				return ret;
 		}
@@ -1075,6 +1077,58 @@ mt7996_efuse_get(struct file *file, char __user *user_buf,
 
 static const struct file_operations mt7996_efuse_ops = {
 	.read = mt7996_efuse_get,
+	.open = simple_open,
+	.llseek = default_llseek,
+};
+
+static ssize_t
+mt7996_ext_eeprom_get(struct file *file, char __user *user_buf,
+		      size_t count, loff_t *ppos)
+{
+	struct mt7996_dev *dev = file->private_data;
+	struct mt76_dev *mdev = &dev->mt76;
+	u8 *buff = mdev->ext_eeprom.data;
+	u32 block_num, block_size = MT7996_EXT_EEPROM_BLOCK_SIZE;
+	int i;
+	ssize_t ret;
+
+	if (!mt7996_has_ext_eeprom(dev)) {
+		dev_info(dev->mt76.dev, "No external eeprom device found\n");
+		return 0;
+	}
+
+	mdev->ext_eeprom.size = MT7996_EEPROM_SIZE;
+
+	if (!mdev->ext_eeprom.data) {
+		mdev->ext_eeprom.data = devm_kzalloc(mdev->dev,
+						     mdev->ext_eeprom.size,
+						     GFP_KERNEL);
+		if (!mdev->ext_eeprom.data)
+			return -ENOMEM;
+
+		block_num = DIV_ROUND_UP(mdev->ext_eeprom.size, block_size);
+		for (i = 0; i < block_num; i++) {
+			u32 buf_len = block_size;
+			u32 offset = i * block_size;
+
+			if (offset + block_size > mdev->ext_eeprom.size)
+				buf_len = mdev->ext_eeprom.size % block_size;
+			buff = mdev->ext_eeprom.data + offset;
+			ret = mt7996_mcu_get_eeprom(dev, offset, buff, buf_len,
+						    EXT_EEPROM_MODE);
+			if (ret && ret != -EINVAL)
+				return ret;
+		}
+	}
+
+	ret = simple_read_from_buffer(user_buf, count, ppos,
+				      mdev->ext_eeprom.data, mdev->ext_eeprom.size);
+
+	return ret;
+}
+
+static const struct file_operations mt7996_ext_eeprom_ops = {
+	.read = mt7996_ext_eeprom_get,
 	.open = simple_open,
 	.llseek = default_llseek,
 };
@@ -1223,6 +1277,7 @@ int mt7996_init_dev_debugfs(struct mt7996_phy *phy)
 				    mt7996_twt_stats);
 	debugfs_create_file("rf_regval", 0600, dir, dev, &fops_rf_regval);
 	debugfs_create_file("otp", 0400, dir, dev, &mt7996_efuse_ops);
+	debugfs_create_file("ext_eeprom", 0400, dir, dev, &mt7996_ext_eeprom_ops);
 	debugfs_create_devm_seqfile(dev->mt76.dev, "vow_info", dir,
 	                            mt7996_vow_info_read);
 	debugfs_create_devm_seqfile(dev->mt76.dev, "airtime", dir,
