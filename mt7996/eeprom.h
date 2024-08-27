@@ -95,6 +95,19 @@ static const u32 mt7992_prek_rev[] = {
 	[DPD_OTFG0_SIZE] =			2 * MT_EE_CAL_UNIT,
 };
 
+static const u32 mt7990_prek_rev[] = {
+	[GROUP_SIZE_2G] =			4 * MT_EE_CAL_UNIT,
+	[GROUP_SIZE_5G] =			45 * MT_EE_CAL_UNIT,
+	[GROUP_SIZE_6G] =			90 * MT_EE_CAL_UNIT,
+	[ADCDCOC_SIZE_2G] =			4 * 2,
+	[ADCDCOC_SIZE_5G] =			4 * 3,
+	[ADCDCOC_SIZE_6G] =			4 * 3,
+	[DPD_LEGACY_SIZE] =			5 * MT_EE_CAL_UNIT,
+	/* no mem dpd cal for griffin, use legacy dpd cal instead */
+	[DPD_MEM_SIZE] =			0,
+	[DPD_OTFG0_SIZE] =			2 * MT_EE_CAL_UNIT,
+};
+
 extern const struct ieee80211_channel dpd_2g_ch_list_bw20[];
 extern const struct ieee80211_channel dpd_5g_skip_ch_list[];
 extern const struct ieee80211_channel dpd_5g_ch_list_bw80[];
@@ -109,7 +122,9 @@ extern const struct ieee80211_channel dpd_6g_ch_list_bw320[];
 						 PREK(GROUP_SIZE_6G) + PREK(ADCDCOC_SIZE_2G) + \
 						 PREK(ADCDCOC_SIZE_5G) + PREK(ADCDCOC_SIZE_6G))
 #define DPD_PER_CH_BW20_SIZE			(PREK(DPD_LEGACY_SIZE) + PREK(DPD_OTFG0_SIZE))
-#define DPD_PER_CH_GT_BW20_SIZE			(PREK(DPD_MEM_SIZE) + PREK(DPD_OTFG0_SIZE))
+#define DPD_PER_CH_GT_BW20_SIZE			(PREK(DPD_MEM_SIZE) ? PREK(DPD_MEM_SIZE) + \
+								      PREK(DPD_OTFG0_SIZE) : \
+								      DPD_PER_CH_BW20_SIZE)
 #define MT_EE_CAL_DPD_SIZE_2G			(DPD_CH_NUM(BW20_2G) * DPD_PER_CH_BW20_SIZE)
 #define MT_EE_CAL_DPD_SIZE_5G			(DPD_CH_NUM(BW20_5G) * DPD_PER_CH_BW20_SIZE + \
 						 DPD_CH_NUM(BW80_5G) * DPD_PER_CH_GT_BW20_SIZE + \

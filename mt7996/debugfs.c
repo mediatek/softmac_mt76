@@ -292,7 +292,7 @@ mt7996_rdd_monitor(struct seq_file *s, void *data)
 
 	mutex_lock(&dev->mt76.mutex);
 
-	if (!mt7996_has_background_radar(dev)) {
+	if (!mt7996_eeprom_has_background_radar(dev)) {
 		seq_puts(s, "no background radar capability\n");
 		goto out;
 	}

@@ -74,6 +74,7 @@
 #define MT7990_FIRMWARE_WA		""
 #define MT7990_FIRMWARE_WM		"mediatek/mt7996/mt7990_wm.bin"
 #define MT7990_FIRMWARE_DSP		""
+#define MT7990_FIRMWARE_WM_TM		"mediatek/mt7996/mt7990_wm_tm.bin"
 #define MT7990_ROM_PATCH		"mediatek/mt7996/mt7990_rom_patch.bin"
 
 #define MT7996_EEPROM_DEFAULT		"mediatek/mt7996/mt7996_eeprom.bin"
@@ -215,6 +216,7 @@ enum mt7996_eeprom_mode {
 enum mt7996_ddie_type {
 	DDIE_7996,
 	DDIE_7992,
+	DDIE_7990,
 	DDIE_TYPE_NUM,
 };
 
@@ -273,6 +275,18 @@ enum mt7996_rxq_id {
 	MT7996_RXQ_RRO_IND = 0,
 	MT7990_RXQ_TXFREE0 = 6,
 	MT7990_RXQ_TXFREE1 = 7,
+};
+
+enum {
+	MT7996_TXFREE_FROM_MAC,
+	MT7996_TXFREE_FROM_WA,
+};
+
+enum {
+	MT7996_RRO_BMC_NOT_BYPASS_UC_BASED_ON_WTBL,
+	MT7996_RRO_ALL_NOT_BYPASS,
+	MT7996_RRO_BMC_BYPASS_UC_BASED_ON_WTBL,
+	MT7996_RRO_ALL_BYPASS,
 };
 
 struct mt7996_twt_flow {
@@ -809,6 +823,9 @@ struct mt7996_dev {
 	bool has_eht:1;
 	bool has_rro:1;
 
+	bool fips_cap:1;
+	bool pwr_boost_cap:1;
+
 	struct {
 		struct {
 			void *ptr;
@@ -1011,6 +1028,7 @@ mt7996_has_ext_eeprom(struct mt7996_dev *dev)
 	case MT7996_DEVICE_ID:
 		return false;
 	case MT7992_DEVICE_ID:
+	case MT7990_DEVICE_ID:
 	default:
 		return true;
 	}
@@ -1195,6 +1213,7 @@ void mt7996_mcu_exit(struct mt7996_dev *dev);
 int mt7996_mcu_get_per_sta_info(struct mt76_dev *dev, u16 tag,
 	                        u16 sta_num, u16 *sta_list);
 int mt7996_mcu_get_all_sta_info(struct mt76_dev *dev, u16 tag);
+int mt7996_mcu_get_bss_acq_pkt_cnt(struct mt7996_dev *dev);
 int mt7996_mcu_wed_rro_reset_sessions(struct mt7996_dev *dev, u16 id);
 int mt7996_mcu_set_sniffer_mode(struct mt7996_phy *phy, bool enabled);
 int mt7996_mcu_set_tx_power_ctrl(struct mt7996_phy *phy, u8 power_ctrl_id, u8 data);

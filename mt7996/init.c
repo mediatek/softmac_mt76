@@ -668,47 +668,65 @@ void mt7996_mac_init(struct mt7996_dev *dev)
 		mt76_rmw_field(dev, i, MT_LED_GPIO_SEL_MASK, 4);
 	}
 
-	/* rro module init */
-	rx_path_type = is_mt7996(&dev->mt76) ? 2 : 7;
-	rro_bypass = is_mt7996(&dev->mt76) ? 1 : 2;
-	txfree_path = is_mt7996(&dev->mt76) ? 0: 1;
+	/* rro module init, 2pcie */
+	switch (mt76_chip(&dev->mt76)) {
+	case MT7992_DEVICE_ID:
+		rx_path_type = 7;
+		rro_bypass = MT7996_RRO_BMC_BYPASS_UC_BASED_ON_WTBL;
+		txfree_path = MT7996_TXFREE_FROM_WA;
+		break;
+	case MT7990_DEVICE_ID:
+		rx_path_type = 7;
+		rro_bypass = MT7996_RRO_BMC_BYPASS_UC_BASED_ON_WTBL;
+		txfree_path = MT7996_TXFREE_FROM_MAC;
+		break;
+	case MT7996_DEVICE_ID:
+	default:
+		rx_path_type = 2;
+		rro_bypass = MT7996_RRO_ALL_NOT_BYPASS;
+		txfree_path = MT7996_TXFREE_FROM_MAC;
+		break;
+	}
 
 	switch (dev->option_type) {
 	case 2:
-		if (is_mt7996(&dev->mt76)) {
-			/* eagle + 7988d */
+		/* eagle + 7988d */
+		if (is_mt7996(&dev->mt76))
 			rx_path_type = 3;
-			rro_bypass = 1;
-			txfree_path = 0;
-		}
 		break;
 	case 3:
 		/* Airoha */
-		if (is_mt7996(&dev->mt76)) {
+		if (is_mt7996(&dev->mt76))
 			rx_path_type = 6;
-			rro_bypass = 1;
-			txfree_path = 0;
-		} else {
+		else
 			rx_path_type = 8;
-			rro_bypass = 2;
-			txfree_path = 1;
-		}
 		break;
 	case 4:
 		if (is_mt7996(&dev->mt76)) {
 			/* Bollinger */
 			rx_path_type = 2;
-			rro_bypass = 1;
-			txfree_path = 0;
+			rro_bypass = MT7996_RRO_ALL_NOT_BYPASS;
+			txfree_path = MT7996_TXFREE_FROM_MAC;
 		}
 		break;
 	default:
 		break;
 	}
 
-	mt7996_mcu_set_rro(dev, UNI_RRO_SET_PLATFORM_TYPE, dev->hif2 ? rx_path_type : 0);
-	mt7996_mcu_set_rro(dev, UNI_RRO_SET_BYPASS_MODE, dev->has_rro ? rro_bypass : 3);
-	mt7996_mcu_set_rro(dev, UNI_RRO_SET_TXFREE_PATH, dev->has_rro ? txfree_path : 1);
+	/* griffin does not have WA */
+	if (!dev->has_rro && mt7996_has_wa(dev))
+		txfree_path = MT7996_TXFREE_FROM_WA;
+
+	rx_path_type = dev->hif2 ? rx_path_type : 0;
+	rro_bypass = dev->has_rro ? rro_bypass : MT7996_RRO_ALL_BYPASS;
+
+	mt7996_mcu_set_rro(dev, UNI_RRO_SET_PLATFORM_TYPE, rx_path_type);
+	mt7996_mcu_set_rro(dev, UNI_RRO_SET_BYPASS_MODE, rro_bypass);
+	mt7996_mcu_set_rro(dev, UNI_RRO_SET_TXFREE_PATH, txfree_path);
+
+	dev_info(dev->mt76.dev,
+		"Platform_type = %d, bypass_rro = %d, txfree_path = %d\n",
+		rx_path_type, rro_bypass, txfree_path);
 
 	if (dev->has_rro) {
 		u16 timeout;
@@ -941,7 +959,7 @@ void mt7996_rro_hw_init(struct mt7996_dev *dev)
 	for (i = 0; i < MT7996_RRO_MSDU_PG_HASH_SIZE; i++)
 		INIT_LIST_HEAD(&dev->wed_rro.pg_hash_head[i]);
 
-	if (is_mt7992(&dev->mt76)) {
+	if (!is_mt7996(&dev->mt76)) {
 		/* set emul 3.0 function */
 		mt76_wr(dev, MT_RRO_3_0_EMU_CONF,
 			MT_RRO_3_0_EMU_CONF_EN_MASK);
@@ -994,7 +1012,7 @@ void mt7996_rro_hw_init(struct mt7996_dev *dev)
 	/* use max session idx + 1 as particular session id */
 	mt76_wr(dev, MT_RRO_PARTICULAR_CFG0, dev->wed_rro.session.phy_addr);
 
-	if (is_mt7992(&dev->mt76)) {
+	if (!is_mt7996(&dev->mt76)) {
 		reg = MT_RRO_MSDU_PG_SEG_ADDR0;
 
 		mt76_set(dev, MT_RRO_3_1_GLOBAL_CONFIG,

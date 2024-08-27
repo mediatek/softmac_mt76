@@ -3039,9 +3039,7 @@ void mt7996_mac_work(struct work_struct *work)
 				mt7996_mcu_get_all_sta_info(mdev, UNI_ALL_STA_TX_STAT);
 				mt7996_mcu_get_all_sta_info(mdev, UNI_ALL_STA_DATA_TX_RETRY_COUNT);
 
-				if (mt7996_mcu_wa_cmd(phy->dev, MCU_WA_PARAM_CMD(QUERY), MCU_WA_PARAM_BSS_ACQ_PKT_CNT,
-				                      BSS_ACQ_PKT_CNT_BSS_BITMAP_ALL | BSS_ACQ_PKT_CNT_READ_CLR, 0))
-					dev_err(mdev->dev, "Failed to query per-AC-queue packet counts.\n");
+				mt7996_mcu_get_bss_acq_pkt_cnt(phy->dev);
 
 				if (mphy->mac_work_count == 100) {
 					if (phy->dev->idxlog_enable && mt7996_mcu_fw_time_sync(mdev))

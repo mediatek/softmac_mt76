@@ -882,11 +882,19 @@ static int mt7996_vendor_pp_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 		return 0;
 
 	switch (mode) {
+	case PP_FW_MODE:
+		err = mt7996_mcu_set_pp_alg_ctrl(phy, PP_ALG_SET_TIMER);
+		if (err)
+			return err;
+
+		err = mt7996_mcu_set_pp_alg_ctrl(phy, PP_ALG_SET_THR);
+		if (err)
+			return err;
+		fallthrough;
 	case PP_USR_MODE:
 		if (tb[MTK_VENDOR_ATTR_PP_BITMAP])
 			punct_bitmap = nla_get_u16(tb[MTK_VENDOR_ATTR_PP_BITMAP]);
 		fallthrough;
-	case PP_FW_MODE:
 	case PP_DISABLE:
 		err = mt7996_mcu_set_pp_en(phy, mode, punct_bitmap);
 		break;

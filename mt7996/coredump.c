@@ -126,6 +126,8 @@ mt7996_coredump_get_mem_layout(struct mt7996_dev *dev, u8 type, u32 *num)
 		}
 		*num = ARRAY_SIZE(mt7992_wm_mem_regions);
 		return &mt7992_wm_mem_regions[0];
+	case MT7990_DEVICE_ID:
+		/* Todo: add mt7990 support */
 	default:
 		return NULL;
 	}

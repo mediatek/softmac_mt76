@@ -793,7 +793,7 @@ int mt7996_dma_init(struct mt7996_dev *dev)
 		if (ret)
 			return ret;
 
-		if (is_mt7992(&dev->mt76)) {
+		if (!is_mt7996(&dev->mt76)) {
 			dev->mt76.q_rx[MT_RXQ_RRO_BAND1].flags =
 				MT_WED_RRO_Q_DATA(1) | MT_QFLAG_WED_RRO_EN;
 			if (mtk_wed_device_active(wed) && mtk_wed_get_rx_capa(wed))

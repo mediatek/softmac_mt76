@@ -612,7 +612,7 @@ mt7996_tm_dpd_prek(struct mt7996_phy *phy, enum mt76_testmode_state state)
 		},
 	};
 	u32 i, j, group_size, dpd_size, size, offs, *pre_cal;
-	u32 wait_on_prek_offset = 0;
+	u32 func_data, wait_on_prek_offset = 0;
 	u8 do_precal, *eeprom;
 	int ret = 0;
 
@@ -656,10 +656,13 @@ mt7996_tm_dpd_prek(struct mt7996_phy *phy, enum mt76_testmode_state state)
 		wait_event_timeout(mdev->mcu.wait, dev->cur_prek_offset == wait_on_prek_offset,
 				   30 * HZ);
 
+		/* griffin does not support mem dpd cal */
+		func_data = PREK(DPD_MEM_SIZE) ? RF_DPD_FLAT_5G_MEM_CAL : RF_DPD_FLAT_5G_CAL;
+
 		/* 5g channel bw80 calibration */
 		ret = mt7996_tm_dpd_prek_send_req(phy, &req, dpd_5g_ch_list_bw80,
 						  DPD_CH_NUM(BW80_5G),
-						  NL80211_CHAN_WIDTH_80, RF_DPD_FLAT_5G_MEM_CAL);
+						  NL80211_CHAN_WIDTH_80, func_data);
 		if (ret)
 			return ret;
 		wait_on_prek_offset += DPD_CH_NUM(BW80_5G) * DPD_PER_CH_GT_BW20_SIZE;
@@ -669,7 +672,7 @@ mt7996_tm_dpd_prek(struct mt7996_phy *phy, enum mt76_testmode_state state)
 		/* 5g channel bw160 calibration */
 		ret = mt7996_tm_dpd_prek_send_req(phy, &req, dpd_5g_ch_list_bw160,
 						  DPD_CH_NUM(BW160_5G),
-						  NL80211_CHAN_WIDTH_160, RF_DPD_FLAT_5G_MEM_CAL);
+						  NL80211_CHAN_WIDTH_160, func_data);
 		wait_on_prek_offset += DPD_CH_NUM(BW160_5G) * DPD_PER_CH_GT_BW20_SIZE;
 		wait_event_timeout(mdev->mcu.wait, dev->cur_prek_offset == wait_on_prek_offset,
 				   30 * HZ);
@@ -687,10 +690,13 @@ mt7996_tm_dpd_prek(struct mt7996_phy *phy, enum mt76_testmode_state state)
 		wait_event_timeout(mdev->mcu.wait, dev->cur_prek_offset == wait_on_prek_offset,
 				   30 * HZ);
 
+		/* griffin does not support mem dpd cal */
+		func_data = PREK(DPD_MEM_SIZE) ? RF_DPD_FLAT_6G_MEM_CAL : RF_DPD_FLAT_6G_CAL;
+
 		/* 6g channel bw80 calibration */
 		ret = mt7996_tm_dpd_prek_send_req(phy, &req, dpd_6g_ch_list_bw80,
 						  DPD_CH_NUM(BW80_6G),
-						  NL80211_CHAN_WIDTH_80, RF_DPD_FLAT_6G_MEM_CAL);
+						  NL80211_CHAN_WIDTH_80, func_data);
 		if (ret)
 			return ret;
 		wait_on_prek_offset += DPD_CH_NUM(BW80_6G) * DPD_PER_CH_GT_BW20_SIZE;
@@ -700,7 +706,7 @@ mt7996_tm_dpd_prek(struct mt7996_phy *phy, enum mt76_testmode_state state)
 		/* 6g channel bw160 calibration */
 		ret = mt7996_tm_dpd_prek_send_req(phy, &req, dpd_6g_ch_list_bw160,
 						  DPD_CH_NUM(BW160_6G),
-						  NL80211_CHAN_WIDTH_160, RF_DPD_FLAT_6G_MEM_CAL);
+						  NL80211_CHAN_WIDTH_160, func_data);
 		if (ret)
 			return ret;
 		wait_on_prek_offset += DPD_CH_NUM(BW160_6G) * DPD_PER_CH_GT_BW20_SIZE;
@@ -710,7 +716,7 @@ mt7996_tm_dpd_prek(struct mt7996_phy *phy, enum mt76_testmode_state state)
 		/* 6g channel bw320 calibration */
 		ret = mt7996_tm_dpd_prek_send_req(phy, &req, dpd_6g_ch_list_bw320,
 						  DPD_CH_NUM(BW320_6G),
-						  NL80211_CHAN_WIDTH_320, RF_DPD_FLAT_6G_MEM_CAL);
+						  NL80211_CHAN_WIDTH_320, func_data);
 		wait_on_prek_offset += DPD_CH_NUM(BW320_6G) * DPD_PER_CH_GT_BW20_SIZE;
 		wait_event_timeout(mdev->mcu.wait, dev->cur_prek_offset == wait_on_prek_offset,
 				   30 * HZ);
@@ -2159,6 +2165,9 @@ mt7996_tm_efuse_update_is_valid(struct mt7996_dev *dev, u32 offset, u8 *write_bu
 		[DDIE_7992] = {{.start = 0x10, .end = 0x18f, .prot_mask = -1},
 			       {.start = 0x1b0, .end = 0x3ff, .prot_mask = -1},
 			       {.start = -1}},
+		[DDIE_7990] = {{.start = 0x10, .end = 0x18f, .prot_mask = -1},
+			       {.start = 0x1b0, .end = 0x3ff, .prot_mask = -1},
+			       {.start = -1}},
 	};
 	static const struct efuse_region adie_prot_offs[][PROT_OFFS_MAX_SIZE] = {
 		[ADIE_7975] = {{.start = 0x5c0, .end = 0x62f, .prot_mask = -1},
@@ -2228,6 +2237,13 @@ mt7996_tm_efuse_update_is_valid(struct mt7996_dev *dev, u32 offset, u8 *write_bu
 			return false;
 		base = EFUSE_BASE_OFFS_DDIE;
 		prot_offs = ddie_prot_offs[DDIE_7992];
+		break;
+	case MT7990_DEVICE_ID:
+		/* block all the adie region in efuse for griffin */
+		if (offset >= EFUSE_BASE_OFFS_ADIE0)
+			return false;
+		base = EFUSE_BASE_OFFS_DDIE;
+		prot_offs = ddie_prot_offs[DDIE_7990];
 		break;
 	default:
 		return false;

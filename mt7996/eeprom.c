@@ -377,6 +377,8 @@ static int mt7996_eeprom_parse_efuse_hw_cap(struct mt7996_phy *phy,
 					    u8 *path, u8 *rx_path, u8 *nss)
 {
 #define MODE_HE_ONLY		BIT(0)
+#define PWR_BOOST_CAP		BIT(7)
+#define FIPS_CAP		BIT(8)
 #define WTBL_SIZE_GROUP		GENMASK(31, 28)
 #define STREAM_CAP(_offs)	((cap & (0x7 << (_offs))) >> (_offs))
 	struct mt7996_dev *dev = phy->dev;
@@ -387,8 +389,6 @@ static int mt7996_eeprom_parse_efuse_hw_cap(struct mt7996_phy *phy,
 	if (ret)
 		return ret;
 
-	/* for internal development */
-	dev->has_eht = true;
 	if (cap) {
 		u8 band_offs = phy->mt76->band_idx * 3;
 
@@ -397,6 +397,18 @@ static int mt7996_eeprom_parse_efuse_hw_cap(struct mt7996_phy *phy,
 		*nss = min_t(u8, *nss, STREAM_CAP(1 + band_offs));
 		*path = min_t(u8, *path, STREAM_CAP(10 + band_offs));
 		*rx_path = min_t(u8, *rx_path, STREAM_CAP(19 + band_offs));
+
+		if (is_mt7990(&dev->mt76)) {
+			dev->pwr_boost_cap = !!(cap & PWR_BOOST_CAP);
+			dev->fips_cap = !!(cap & FIPS_CAP);
+		}
+	} else {
+		/* for internal RFB without efuse hw cap */
+		dev->has_eht = true;
+		if (is_mt7990(&dev->mt76)) {
+			dev->pwr_boost_cap = true;
+			dev->fips_cap = true;
+		}
 	}
 
 	if (dev->wtbl_size_group < 2 || dev->wtbl_size_group > 4)
@@ -524,15 +536,18 @@ static void mt7996_eeprom_init_precal(struct mt7996_dev *dev)
 		dev->prek.dpd_ch_num[DPD_CH_NUM_BW320_6G] = ARRAY_SIZE(dpd_6g_ch_list_bw320);
 		break;
 	case MT7992_DEVICE_ID:
-		dev->prek.rev  = mt7992_prek_rev;
+		dev->prek.rev = mt7992_prek_rev;
 		dev->prek.dpd_ch_num[DPD_CH_NUM_BW80_5G] = ARRAY_SIZE(dpd_5g_ch_list_bw80);
 		/* 6g is not used in current sku */
 		dev->prek.dpd_ch_num[DPD_CH_NUM_BW20_6G] = 0;
 		dev->prek.dpd_ch_num[DPD_CH_NUM_BW80_6G] = 0;
 		dev->prek.dpd_ch_num[DPD_CH_NUM_BW160_6G] = 0;
 		break;
+	case MT7990_DEVICE_ID:
+		dev->prek.rev = mt7990_prek_rev;
+		break;
 	default:
-		dev->prek.rev  = mt7996_prek_rev;
+		dev->prek.rev = mt7996_prek_rev;
 		break;
 	}
 }
@@ -647,7 +662,8 @@ bool mt7996_eeprom_has_background_radar(struct mt7996_dev *dev)
 			return false;
 		break;
 	case MT7992_DEVICE_ID:
-		if (dev->var.type == MT7992_VAR_TYPE_23)
+		if (dev->var.type == MT7992_VAR_TYPE_23 ||
+		    dev->var.type == MT7992_VAR_TYPE_24)
 			return false;
 		break;
 	case MT7990_DEVICE_ID: {

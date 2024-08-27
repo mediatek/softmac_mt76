@@ -46,6 +46,11 @@ enum dbg_offs_rev {
 	MIB_MSR2,
 	MIB_MCTR5,
 	MIB_MCTR6,
+	MIB_TSCR8,
+	MIB_TBCR0,
+	MIB_TBCR1,
+	MIB_TBCR2,
+	MIB_TBCR3,
 	__MT_DBG_OFFS_REV_MAX,
 };
 
@@ -83,6 +88,11 @@ static const u32 mt7996_dbg_offs[] = {
 	[MIB_MSR2]		= 0xa6c,
 	[MIB_MCTR5]		= 0xa70,
 	[MIB_MCTR6]		= 0xa74,
+	[MIB_TSCR8]		= 0x6cc,
+	[MIB_TBCR0]		= 0x6ec,
+	[MIB_TBCR1]		= 0x6f0,
+	[MIB_TBCR2]		= 0x6f4,
+	[MIB_TBCR3]		= 0x6f8,
 };
 
 static const u32 mt7992_dbg_offs[] = {
@@ -119,6 +129,52 @@ static const u32 mt7992_dbg_offs[] = {
 	[MIB_MSR2]		= 0xb68,
 	[MIB_MCTR5]		= 0xb6c,
 	[MIB_MCTR6]		= 0xb70,
+	[MIB_TSCR8]		= 0x6cc,
+	[MIB_TBCR0]		= 0x6ec,
+	[MIB_TBCR1]		= 0x6f0,
+	[MIB_TBCR2]		= 0x6f4,
+	[MIB_TBCR3]		= 0x6f8,
+};
+
+static const u32 mt7990_dbg_offs[] = {
+	[AGG_AALCR2]		= 0x12c,
+	[AGG_AALCR3]		= 0x130,
+	[AGG_AALCR4]		= 0x134,
+	[AGG_AALCR5]		= 0x138,
+	[AGG_AALCR6]		= 0x13c,
+	[AGG_AALCR7]		= 0x140,
+	[MIB_TDRCR0]		= 0x808,
+	[MIB_TDRCR1]		= 0x80c,
+	[MIB_TDRCR2]		= 0x810,
+	[MIB_TDRCR3]		= 0x814,
+	[MIB_TDRCR4]		= 0x818,
+	[MIB_RSCR26]		= 0xa34,
+	[MIB_TSCR18]		= 0xc08,
+	[MIB_TRDR0]		= 0xc10,
+	[MIB_TRDR2]		= 0xc18,
+	[MIB_TRDR3]		= 0xc1c,
+	[MIB_TRDR4]		= 0xc20,
+	[MIB_TRDR5]		= 0xc24,
+	[MIB_TRDR6]		= 0xc28,
+	[MIB_TRDR7]		= 0xc2c,
+	[MIB_TRDR8]		= 0xc30,
+	[MIB_TRDR9]		= 0xc34,
+	[MIB_TRDR10]		= 0xc38,
+	[MIB_TRDR11]		= 0xc3c,
+	[MIB_TRDR12]		= 0xc40,
+	[MIB_TRDR13]		= 0xc44,
+	[MIB_TRDR14]		= 0xc48,
+	[MIB_TRDR15]		= 0xc4c,
+	[MIB_MSR0]		= 0xc50,
+	[MIB_MSR1]		= 0xc54,
+	[MIB_MSR2]		= 0xc58,
+	[MIB_MCTR5]		= 0xc5c,
+	[MIB_MCTR6]		= 0xc60,
+	[MIB_TSCR8]		= 0x76c,
+	[MIB_TBCR0]		= 0x78c,
+	[MIB_TBCR1]		= 0x790,
+	[MIB_TBCR2]		= 0x794,
+	[MIB_TBCR3]		= 0x798,
 };
 
 /* used to differentiate between generations */
@@ -733,19 +789,13 @@ struct queue_desc {
 #define BN0_WF_MIB_TOP_BTCR_ADDR                               (BN0_WF_MIB_TOP_BASE + 0x5A0) // D5A0
 #define BN0_WF_MIB_TOP_RVSR0_ADDR                              (BN0_WF_MIB_TOP_BASE + __OFFS(MIB_RVSR0))
 
-#define BN0_WF_MIB_TOP_TSCR0_ADDR                              (BN0_WF_MIB_TOP_BASE + 0x6B0) // D6B0
-#define BN0_WF_MIB_TOP_TSCR3_ADDR                              (BN0_WF_MIB_TOP_BASE + 0x6BC) // D6BC
-#define BN0_WF_MIB_TOP_TSCR4_ADDR                              (BN0_WF_MIB_TOP_BASE + 0x6C0) // D6C0
-#define BN0_WF_MIB_TOP_TSCR5_ADDR                              (BN0_WF_MIB_TOP_BASE + 0x6C4) // D6C4
-#define BN0_WF_MIB_TOP_TSCR6_ADDR                              (BN0_WF_MIB_TOP_BASE + 0x6C8) // D6C8
-#define BN0_WF_MIB_TOP_TSCR7_ADDR                              (BN0_WF_MIB_TOP_BASE + 0x6D0) // D6D0
-#define BN0_WF_MIB_TOP_TSCR8_ADDR                              (BN0_WF_MIB_TOP_BASE + 0x6CC) // D6CC
+#define BN0_WF_MIB_TOP_TSCR8_ADDR                              (BN0_WF_MIB_TOP_BASE + __DBG_OFFS(MIB_TSCR8))
 
-#define BN0_WF_MIB_TOP_TBCR0_ADDR                              (BN0_WF_MIB_TOP_BASE + 0x6EC) // D6EC
-#define BN0_WF_MIB_TOP_TBCR1_ADDR                              (BN0_WF_MIB_TOP_BASE + 0x6F0) // D6F0
-#define BN0_WF_MIB_TOP_TBCR2_ADDR                              (BN0_WF_MIB_TOP_BASE + 0x6F4) // D6F4
-#define BN0_WF_MIB_TOP_TBCR3_ADDR                              (BN0_WF_MIB_TOP_BASE + 0x6F8) // D6F8
-#define BN0_WF_MIB_TOP_TBCR4_ADDR                              (BN0_WF_MIB_TOP_BASE + 0x6FC) // D6FC
+#define BN0_WF_MIB_TOP_TBCR0_ADDR                              (BN0_WF_MIB_TOP_BASE + __DBG_OFFS(MIB_TBCR0))
+#define BN0_WF_MIB_TOP_TBCR1_ADDR                              (BN0_WF_MIB_TOP_BASE + __DBG_OFFS(MIB_TBCR1))
+#define BN0_WF_MIB_TOP_TBCR2_ADDR                              (BN0_WF_MIB_TOP_BASE + __DBG_OFFS(MIB_TBCR2))
+#define BN0_WF_MIB_TOP_TBCR3_ADDR                              (BN0_WF_MIB_TOP_BASE + __DBG_OFFS(MIB_TBCR3))
+#define BN0_WF_MIB_TOP_TBCR4_ADDR                              (BN0_WF_MIB_TOP_BASE + 0x6FC) // D6FC, only for 7996
 
 #define BN0_WF_MIB_TOP_TDRCR0_ADDR                             (BN0_WF_MIB_TOP_BASE + __DBG_OFFS(MIB_TDRCR0))
 #define BN0_WF_MIB_TOP_TDRCR1_ADDR                             (BN0_WF_MIB_TOP_BASE + __DBG_OFFS(MIB_TDRCR1))
@@ -960,14 +1010,13 @@ enum cipher_suit {
 
 #define MT_DBG_WTBL_BASE		0x820D8000
 
-#define MT_DBG_WTBLON_TOP_BASE		0x820d4000
-#define MT_DBG_WTBLON_TOP_WDUCR_ADDR	(MT_DBG_WTBLON_TOP_BASE + 0x0370) // 4370
-#define MT_DBG_WTBLON_TOP_WDUCR_GROUP	GENMASK(4, 0)
-
 #define MT_DBG_UWTBL_TOP_BASE		0x820c4000
 #define MT_DBG_UWTBL_TOP_WDUCR_ADDR	(MT_DBG_UWTBL_TOP_BASE + 0x0104) // 4104
 #define MT_DBG_UWTBL_TOP_WDUCR_GROUP	GENMASK(5, 0)
 #define MT_DBG_UWTBL_TOP_WDUCR_TARGET	BIT(31)
+/* for 7990 */
+#define MT_DBG_UWTBL_TOP_KDUCR_ADDR	(MT_DBG_UWTBL_TOP_BASE + 0x010c) // 410c
+#define MT_DBG_UWTBL_TOP_KDUCR_GROUP	GENMASK(6, 0)
 
 #define LWTBL_IDX2BASE_ID		GENMASK(14, 8)
 #define LWTBL_IDX2BASE_DW		GENMASK(7, 2)
@@ -985,6 +1034,10 @@ enum cipher_suit {
 #define KEYTBL_IDX2BASE_DW		GENMASK(5, 2)
 #define KEYTBL_IDX2BASE(_key, _dw)	(MT_DBG_UWTBL_TOP_BASE | 0x2000 | \
 					FIELD_PREP(KEYTBL_IDX2BASE_KEY, _key) | \
+					FIELD_PREP(KEYTBL_IDX2BASE_DW, _dw))
+#define KEYTBL_IDX2BASE_KEY_7990	GENMASK(11, 6)
+#define KEYTBL_IDX2BASE_7990(_key, _dw)	(MT_DBG_UWTBL_TOP_BASE | 0x1000 | \
+					FIELD_PREP(KEYTBL_IDX2BASE_KEY_7990, _key) | \
 					FIELD_PREP(KEYTBL_IDX2BASE_DW, _dw))
 
 // UMAC WTBL
@@ -1089,6 +1142,10 @@ enum cipher_suit {
 #define WF_UWTBL_SEC_ADDR_MODE_ADDR                                 32
 #define WF_UWTBL_SEC_ADDR_MODE_MASK                                 0x00300000 // 21-20
 #define WF_UWTBL_SEC_ADDR_MODE_SHIFT                                20
+#define WF_UWTBL_AAD_OM_DW                                          8
+#define WF_UWTBL_AAD_OM_ADDR                                        32
+#define WF_UWTBL_AAD_OM_MASK                                        0x01000000 // 24-24
+#define WF_UWTBL_AAD_OM_SHIFT                                       24
 #define WF_UWTBL_WMM_Q_DW                                           8
 #define WF_UWTBL_WMM_Q_ADDR                                         32
 #define WF_UWTBL_WMM_Q_MASK                                         0x06000000 // 26-25
@@ -1221,6 +1278,11 @@ enum cipher_suit {
 #define WF_LWTBL_DUAL_CTS_CAP_MASK \
 	0x00004000 // 14-14
 #define WF_LWTBL_DUAL_CTS_CAP_SHIFT                                 14
+#define WF_LWTBL_MURTS_DW                                           2
+#define WF_LWTBL_MURTS_ADDR                                         8
+#define WF_LWTBL_MURTS_MASK \
+	0x00008000 // 15-15
+#define WF_LWTBL_MURTS_SHIFT                                        15
 #define WF_LWTBL_CIPHER_SUIT_PGTK_DW                                2
 #define WF_LWTBL_CIPHER_SUIT_PGTK_ADDR                              8
 #define WF_LWTBL_CIPHER_SUIT_PGTK_MASK \
@@ -1446,6 +1508,11 @@ enum cipher_suit {
 #define WF_LWTBL_AF_HE_MASK \
 	0x00000018 // 4- 3
 #define WF_LWTBL_AF_HE_SHIFT                                        3
+#define WF_LWTBL_BSA_EN_DW                                          5
+#define WF_LWTBL_BSA_EN_ADDR                                        20
+#define WF_LWTBL_BSA_EN_MASK \
+	0x00000010 // 4- 4
+#define WF_LWTBL_BSA_EN_SHIFT                                       4
 #define WF_LWTBL_RTS_DW                                             5
 #define WF_LWTBL_RTS_ADDR                                           20
 #define WF_LWTBL_RTS_MASK \
@@ -1684,6 +1751,11 @@ enum cipher_suit {
 #define WF_LWTBL_PARTIAL_AID_MASK \
 	0x1ff00000 // 28-20
 #define WF_LWTBL_PARTIAL_AID_SHIFT                                  20
+#define WF_LWTBL_EHDD_DW                                            8
+#define WF_LWTBL_EHDD_ADDR                                          32
+#define WF_LWTBL_EHDD_MASK \
+	0x40000000 // 30-30
+#define WF_LWTBL_EHDD_SHIFT                                         30
 #define WF_LWTBL_CHK_PER_DW                                         8
 #define WF_LWTBL_CHK_PER_ADDR                                       32
 #define WF_LWTBL_CHK_PER_MASK \
@@ -1804,11 +1876,21 @@ enum cipher_suit {
 #define WF_LWTBL_CIPHER_SUIT_IGTK_MASK \
 	0x00003000 // 13-12
 #define WF_LWTBL_CIPHER_SUIT_IGTK_SHIFT                             12
+#define WF_LWTBL_CIPHER_SUIT_IGTK_DW_7990                           14
+#define WF_LWTBL_CIPHER_SUIT_IGTK_ADDR_7990                         56
+#define WF_LWTBL_CIPHER_SUIT_IGTK_MASK_7990 \
+	0x00000700 // 10- 8
+#define WF_LWTBL_CIPHER_SUIT_IGTK_SHIFT_7990                        8
 #define WF_LWTBL_CIPHER_SUIT_BIGTK_DW                               14
 #define WF_LWTBL_CIPHER_SUIT_BIGTK_ADDR                             56
 #define WF_LWTBL_CIPHER_SUIT_BIGTK_MASK \
 	0x0000c000 // 15-14
 #define WF_LWTBL_CIPHER_SUIT_BIGTK_SHIFT                            14
+#define WF_LWTBL_CIPHER_SUIT_BIGTK_DW_7990                          14
+#define WF_LWTBL_CIPHER_SUIT_BIGTK_ADDR_7990                        56
+#define WF_LWTBL_CIPHER_SUIT_BIGTK_MASK_7990 \
+	0x00007000 // 14-12
+#define WF_LWTBL_CIPHER_SUIT_BIGTK_SHIFT_7990                       12
 #define WF_LWTBL_RATE1_FAIL_CNT_DW                                  14
 #define WF_LWTBL_RATE1_FAIL_CNT_ADDR                                56
 #define WF_LWTBL_RATE1_FAIL_CNT_MASK \
@@ -2024,6 +2106,11 @@ enum cipher_suit {
 #define WF_LWTBL_DISPATCH_RATIO_MASK \
 	0x00003f80 // 13- 7
 #define WF_LWTBL_DISPATCH_RATIO_SHIFT                               7
+#define WF_LWTBL_EMLSR_TRANS_DLY_IDX_DW                             30
+#define WF_LWTBL_EMLSR_TRANS_DLY_IDX_ADDR                           120
+#define WF_LWTBL_EMLSR_TRANS_DLY_IDX_MASK \
+	0x0000c000 // 15-14
+#define WF_LWTBL_EMLSR_TRANS_DLY_IDX_SHIFT                          14
 #define WF_LWTBL_LINK_MGF_DW                                        30
 #define WF_LWTBL_LINK_MGF_ADDR                                      120
 #define WF_LWTBL_LINK_MGF_MASK \
@@ -2154,6 +2241,20 @@ enum cipher_suit {
 	0x00fc0000 // 23-18
 #define WF_LWTBL_SNR_RX3_SHIFT                                      18
 
+/* for 7992 & 7990 */
+#define WF_LWTBL_SNR_RX0_MASK_7992  \
+	0x000000ff //  7- 0
+#define WF_LWTBL_SNR_RX0_SHIFT_7992                                 0
+#define WF_LWTBL_SNR_RX1_MASK_7992 \
+	0x0000ff00 // 15- 8
+#define WF_LWTBL_SNR_RX1_SHIFT_7992                                 8
+#define WF_LWTBL_SNR_RX2_MASK_7992 \
+	0x00ff0000 // 23-16
+#define WF_LWTBL_SNR_RX2_SHIFT_7992                                 16
+#define WF_LWTBL_SNR_RX3_MASK_7992 \
+	0xff000000 // 31-24
+#define WF_LWTBL_SNR_RX3_SHIFT_7992                                 24
+
 /* WTBL Group - Packet Number */
 /* DW 2 */
 #define WTBL_PN0_MASK                   BITS(0, 7)
@@ -2275,7 +2376,7 @@ enum cipher_suit {
 #define WTBL_PSM				WF_LWTBL_PSM_MASK
 
 /* Need to sync with FW define */
-#define INVALID_KEY_ENTRY                       WTBL_KEY_LINK_DW_KEY_LOC0_MASK
+#define INVALID_KEY_ENTRY                       WF_UWTBL_KEY_LOC0_MASK
 
 // RATE
 #define WTBL_RATE_TX_RATE_MASK          	BITS(0, 5)
@@ -2324,6 +2425,10 @@ enum umac_ple_ctrl_port3_queue_idx {
 /* PSE PLE QUEUE */
 #define CR_NUM_OF_AC_MT7996	34
 #define CR_NUM_OF_AC_MT7992	17
+
+#define CR_NUM_OF_TWT_MT7996	34
+#define CR_NUM_OF_TWT_MT7992	17
+#define CR_NUM_OF_TWT_MT7990	18
 struct bmac_queue_info {
 	char *QueueName;
 	u32 Portid;
@@ -2672,6 +2777,15 @@ struct bmac_queue_info_t {
 #define WF_PSE_TOP_QUEUE_EMPTY_CPU_Q0_EMPTY_MASK               0x00000001                // CPU_Q0_EMPTY[0]
 #define WF_PSE_TOP_QUEUE_EMPTY_CPU_Q0_EMPTY_SHFT               0
 
+#define WF_PSE_TOP_QUEUE_EMPTY_1_HIF_16_EMPTY_ADDR             WF_PSE_TOP_QUEUE_EMPTY_1_ADDR
+#define WF_PSE_TOP_QUEUE_EMPTY_1_HIF_16_EMPTY_MASK             0x00001000
+#define WF_PSE_TOP_QUEUE_EMPTY_1_HIF_16_EMPTY_SHFT             12
+#define WF_PSE_TOP_QUEUE_EMPTY_1_HIF_15_EMPTY_ADDR             WF_PSE_TOP_QUEUE_EMPTY_1_ADDR
+#define WF_PSE_TOP_QUEUE_EMPTY_1_HIF_15_EMPTY_MASK             0x80000000                // HIF_15_EMPTY[31]
+#define WF_PSE_TOP_QUEUE_EMPTY_1_HIF_15_EMPTY_SHFT             31
+#define WF_PSE_TOP_QUEUE_EMPTY_1_HIF_14_EMPTY_ADDR             WF_PSE_TOP_QUEUE_EMPTY_1_ADDR
+#define WF_PSE_TOP_QUEUE_EMPTY_1_HIF_14_EMPTY_MASK             0x40000000                // HIF_14_EMPTY[30]
+#define WF_PSE_TOP_QUEUE_EMPTY_1_HIF_14_EMPTY_SHFT             30
 #define WF_PSE_TOP_QUEUE_EMPTY_1_HIF_13_EMPTY_ADDR             WF_PSE_TOP_QUEUE_EMPTY_1_ADDR
 #define WF_PSE_TOP_QUEUE_EMPTY_1_HIF_13_EMPTY_MASK             0x20000000                // HIF_13_EMPTY[29]
 #define WF_PSE_TOP_QUEUE_EMPTY_1_HIF_13_EMPTY_SHFT             29

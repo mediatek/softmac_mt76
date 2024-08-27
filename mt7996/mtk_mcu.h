@@ -819,9 +819,9 @@ enum ibf_version {
 static inline int get_ibf_version(struct mt7996_dev *dev)
 {
 	switch (mt76_chip(&dev->mt76)) {
-	case 0x7990:
+	case MT7996_DEVICE_ID:
 		return IBF_VER_1;
-	case 0x7992:
+	case MT7992_DEVICE_ID:
 	default:
 		return IBF_VER_2;
 	}

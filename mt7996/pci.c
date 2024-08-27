@@ -116,7 +116,10 @@ static int mt7996_pci_probe(struct pci_dev *pdev,
 	int irq, ret;
 	struct mt76_dev *mdev;
 
-	hif2_enable |= (id->device == 0x7990 || id->device == 0x7991 || id->device == 0x799a);
+	hif2_enable |= (id->device == MT7996_DEVICE_ID ||
+			id->device == MT7996_DEVICE_ID_2 ||
+			id->device == MT7992_DEVICE_ID_2 ||
+			id->device == MT7990_DEVICE_ID_2);
 
 	ret = pcim_enable_device(pdev);
 	if (ret)

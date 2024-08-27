@@ -41,7 +41,7 @@ EXPORT_SYMBOL_GPL(mt76_tm_policy);
 
 static inline bool mt76_testmode_offload(struct mt76_dev *dev)
 {
-	return is_mt7996(dev) || is_mt7992(dev);
+	return is_mt799x(dev);
 }
 
 void mt76_testmode_tx_pending(struct mt76_phy *phy)
