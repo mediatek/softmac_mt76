@@ -1463,6 +1463,60 @@ mt7996_mcu_pp_event(struct mt7996_dev *dev, struct sk_buff *skb)
 }
 
 static void
+mt7996_mcu_uni_bss_acq_pkt_cnt(struct mt7996_dev *dev, struct tlv *tlv)
+{
+	struct mt7996_mld_sdo_bss_acq_pkt_cnt *data =
+		(struct mt7996_mld_sdo_bss_acq_pkt_cnt *)tlv->data;
+	u64 sum[IEEE80211_NUM_ACS] = {0};
+	u8 ac_cnt = 0;
+	int i, j;
+
+	for (i = 0; i < UNI_CMD_SDO_CFG_BSS_NUM; i++) {
+		for (j = IEEE80211_AC_VO; j < IEEE80211_NUM_ACS; j++)
+			sum[j] += le32_to_cpu(data->pkt_cnt[i][mt76_connac_lmac_mapping(j)]);
+	}
+
+	for (i = IEEE80211_AC_VO; i < IEEE80211_NUM_ACS; i++) {
+		if (sum[i] > WMM_PKT_THRESHOLD)
+			ac_cnt++;
+	}
+
+	if (ac_cnt > 1 && !dev->wmm_pbc_enable) {
+		dev->wmm_pbc_enable = true;
+		queue_work(dev->mt76.wq, &dev->wmm_pbc_work);
+	} else if (ac_cnt <= 1 && dev->wmm_pbc_enable) {
+		dev->wmm_pbc_enable = false;
+		queue_work(dev->mt76.wq, &dev->wmm_pbc_work);
+	}
+}
+
+static void
+mt7996_mcu_sdo_event(struct mt7996_dev *dev, struct sk_buff *skb)
+{
+	struct mt7996_mcu_sdo_event *event = (void *)skb->data;
+	struct tlv *tlv;
+	int len;
+
+	skb_pull(skb, sizeof(*event));
+	tlv = (struct tlv *)skb->data;
+	len = skb->len;
+
+	while (len > 0 && le16_to_cpu(tlv->len) <= len) {
+		switch (le16_to_cpu(tlv->tag)) {
+		case UNI_EVENT_SDO_BSS_ACQ_PKT_CNT:
+			mt7996_mcu_uni_bss_acq_pkt_cnt(dev, tlv);
+			break;
+		default:
+			break;
+		}
+
+		len -= le16_to_cpu(tlv->len);
+		tlv = (struct tlv *)((u8 *)(tlv) + le16_to_cpu(tlv->len));
+	}
+
+}
+
+static void
 mt7996_mcu_bss_bcn_crit_finish(void *priv, u8 *mac, struct ieee80211_vif *vif)
 {
 	struct mt7996_mcu_bss_event *data = priv;
@@ -1538,6 +1592,9 @@ mt7996_mcu_uni_rx_unsolicited_event(struct mt7996_dev *dev, struct sk_buff *skb)
 		break;
 	case MCU_UNI_EVENT_PP:
 		mt7996_mcu_pp_event(dev, skb);
+		break;
+	case MCU_UNI_EVENT_SDO:
+		mt7996_mcu_sdo_event(dev, skb);
 		break;
 	case MCU_UNI_EVENT_BSS_INFO:
 		mt7996_mcu_bss_event(dev, skb);
@@ -2187,7 +2244,7 @@ int mt7996_mcu_set_timing(struct mt7996_phy *phy, struct ieee80211_vif *vif,
 	mt7996_mcu_bss_ifs_timing_tlv(skb, phy);
 
 	return mt76_mcu_skb_send_msg(&dev->mt76, skb,
-				     MCU_WMWA_UNI_CMD(BSS_INFO_UPDATE), true);
+				     MCU_WM_UNI_CMD(BSS_INFO_UPDATE), true);
 }
 
 static int
@@ -4131,7 +4188,7 @@ int mt7996_mcu_beacon_inband_discov(struct mt7996_dev *dev,
 	dev_kfree_skb(skb);
 
 	return mt76_mcu_skb_send_msg(&dev->mt76, rskb,
-				     MCU_WMWA_UNI_CMD(BSS_INFO_UPDATE), true);
+				     MCU_WM_UNI_CMD(BSS_INFO_UPDATE), true);
 }
 
 static int mt7996_driver_own(struct mt7996_dev *dev, u8 band)
@@ -4458,7 +4515,7 @@ int mt7996_mcu_fw_log_2_host(struct mt7996_dev *dev, u8 type, u8 ctrl)
 		.ctrl = ctrl,
 	};
 
-	if (type == MCU_FW_LOG_WA)
+	if (type == MCU_FW_LOG_WA && mt7996_has_wa(dev))
 		return mt76_mcu_send_msg(&dev->mt76, MCU_WA_UNI_CMD(WSYS_CONFIG),
 					 &data, sizeof(data), true);
 
@@ -6520,7 +6577,7 @@ int mt7996_mcu_wtbl_update_hdr_trans(struct mt7996_dev *dev,
 	/* starec hdr trans */
 	mt7996_mcu_sta_hdr_trans_tlv(dev, skb, vif, &msta_link->wcid);
 	return mt76_mcu_skb_send_msg(&dev->mt76, skb,
-				     MCU_WMWA_UNI_CMD(STA_REC_UPDATE), true);
+				     MCU_WM_UNI_CMD(STA_REC_UPDATE), true);
 }
 
 int mt7996_mcu_ps_leave(struct mt7996_dev *dev, struct mt7996_vif_link *mconf,
@@ -6811,6 +6868,33 @@ int mt7996_mcu_get_all_sta_info(struct mt76_dev *dev, u16 tag)
 
 	return mt76_mcu_send_msg(dev, MCU_WM_UNI_CMD(ALL_STA_INFO),
 				 &req, sizeof(req), false);
+}
+
+int mt7996_mcu_get_bss_acq_pkt_cnt(struct mt7996_dev *dev)
+{
+	struct {
+		u8 _rsv[4];
+
+		__le16 tag;
+		__le16 len;
+
+		__le32 bitmap[UNI_CMD_SDO_CFG_BSS_MAP_WORDLEN];
+	} __packed req = {
+		.tag = cpu_to_le16(UNI_CMD_SDO_GET_BSS_ACQ_PKT_NUM),
+		.len = cpu_to_le16(sizeof(req) - 4),
+	};
+	int i = 0;
+
+	if (mt7996_has_wa(dev))
+		return mt7996_mcu_wa_cmd(dev, MCU_WA_PARAM_CMD(QUERY),
+			MCU_WA_PARAM_BSS_ACQ_PKT_CNT,
+			BSS_ACQ_PKT_CNT_BSS_BITMAP_ALL | BSS_ACQ_PKT_CNT_READ_CLR, 0);
+
+	for (i = 0; i < UNI_CMD_SDO_CFG_BSS_MAP_WORDLEN; i++)
+		req.bitmap[i] = cpu_to_le32(~0);
+
+	return mt76_mcu_send_msg(&dev->mt76, MCU_WA_UNI_CMD(SDO), &req,
+				 sizeof(req), false);
 }
 
 int mt7996_mcu_wed_rro_reset_sessions(struct mt7996_dev *dev, u16 id)
@@ -7441,7 +7525,20 @@ int mt7996_mcu_set_pp_alg_ctrl(struct mt7996_phy *phy, u8 action)
 		__le16 len;
 
 		__le32 pp_timer_intv;
-		__le32 rsv2[14];
+		__le32 thr_x2_value;
+		__le32 thr_x2_shift;
+		__le32 thr_x3_value;
+		__le32 thr_x3_shift;
+		__le32 thr_x4_value;
+		__le32 thr_x4_shift;
+		__le32 thr_x5_value;
+		__le32 thr_x5_shift;
+		__le32 thr_x6_value;
+		__le32 thr_x6_shift;
+		__le32 thr_x7_value;
+		__le32 thr_x7_shift;
+		__le32 thr_x8_value;
+		__le32 thr_x8_shift;
 		u8 band_idx;
 		u8 pp_action;
 		u8 reset;
@@ -7450,11 +7547,52 @@ int mt7996_mcu_set_pp_alg_ctrl(struct mt7996_phy *phy, u8 action)
 		.tag = cpu_to_le16(UNI_CMD_PP_ALG_CTRL),
 		.len = cpu_to_le16(sizeof(req) - 4),
 
-		.pp_timer_intv = action == PP_ALG_SET_TIMER ? 2000 : 0,
+		.pp_timer_intv = 0,
+		.thr_x2_value = 0,
+		.thr_x2_shift = 0,
+		.thr_x3_value = 0,
+		.thr_x3_shift = 0,
+		.thr_x4_value = 0,
+		.thr_x4_shift = 0,
+		.thr_x5_value = 0,
+		.thr_x5_shift = 0,
+		.thr_x6_value = 0,
+		.thr_x6_shift = 0,
+		.thr_x7_value = 0,
+		.thr_x7_shift = 0,
+		.thr_x8_value = 0,
+		.thr_x8_shift = 0,
 		.band_idx = phy->mt76->band_idx,
 		.pp_action = action,
 		.reset = 0,
 	};
+
+	switch (action)
+	{
+	case PP_ALG_SET_TIMER:
+		req.pp_timer_intv = 5000;
+		break;
+	case PP_ALG_SET_THR:
+		req.thr_x2_value = 1;
+		req.thr_x2_shift = 0;
+		req.thr_x3_value = 5000000;
+		req.thr_x3_shift = 3;
+		req.thr_x4_value = 1;
+		req.thr_x4_shift = 1;
+		req.thr_x5_value = 1;
+		req.thr_x5_shift = 0;
+		req.thr_x6_value = 1;
+		req.thr_x6_shift = 3;
+		req.thr_x7_value = 1;
+		req.thr_x7_shift = 0;
+		req.thr_x8_value = 5000000;
+		req.thr_x8_shift = 2;
+		break;
+	case PP_ALG_GET_STATISTICS:
+		break;
+	default:
+		return 0;
+	}
 
 	return mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(PP),
 				 &req, sizeof(req), false);
@@ -8200,13 +8338,22 @@ int mt7996_mcu_set_qos_map(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 {
 	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
 	struct {
-		u8 bss_idx;
-		u8 qos_map_enable;
-		u8 __rsv[2];
-		s8 qos_map[IP_DSCP_NUM];
+		u8 _rsv[4];
+
+		__le16 tag;
+		__le16 len;
+
+		struct {
+			u8 bss_idx;
+			u8 qos_map_enable;
+			u8 __rsv[2];
+			s8 qos_map[IP_DSCP_NUM];
+		} data;
 	} __packed req = {
-		.bss_idx = link->mt76.idx,
-		.qos_map_enable = true,
+		.tag = cpu_to_le16(UNI_CMD_SDO_SET_QOS_MAP),
+		.len = cpu_to_le16(sizeof(req) - 4),
+		.data.bss_idx = link->mt76.idx,
+		.data.qos_map_enable = true,
 	};
 	s8 i;
 
@@ -8214,17 +8361,18 @@ int mt7996_mcu_set_qos_map(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 	 * Three most significant bits of DSCP are used as UP.
 	 */
 	for (i = 0; i < IP_DSCP_NUM; ++i)
-		req.qos_map[i] = i >> 3;
+		req.data.qos_map[i] = i >> 3;
 
 	/* Recommended QoS map, defined in section 4 of RFC8325.
 	 * Used in cfg80211_classify8021d since kernel v6.8.
 	 */
-	req.qos_map[10] = req.qos_map[12] = req.qos_map[14] = req.qos_map[16] = 0;
-	req.qos_map[18] = req.qos_map[20] = req.qos_map[22] = 3;
-	req.qos_map[24] = 4;
-	req.qos_map[40] = 5;
-	req.qos_map[44] = req.qos_map[46] = 6;
-	req.qos_map[48] = 7;
+	req.data.qos_map[10] = req.data.qos_map[12] =
+			       req.data.qos_map[14] = req.data.qos_map[16] = 0;
+	req.data.qos_map[18] = req.data.qos_map[20] = req.data.qos_map[22] = 3;
+	req.data.qos_map[24] = 4;
+	req.data.qos_map[40] = 5;
+	req.data.qos_map[44] = req.data.qos_map[46] = 6;
+	req.data.qos_map[48] = 7;
 
 	/* User-defined QoS map */
 	if (usr_qos_map) {
@@ -8233,7 +8381,7 @@ int mt7996_mcu_set_qos_map(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 			u8 high = usr_qos_map->up[i].high;
 
 			if (low < IP_DSCP_NUM && high < IP_DSCP_NUM && low <= high)
-				memset(req.qos_map + low, i, high - low + 1);
+				memset(req.data.qos_map + low, i, high - low + 1);
 		}
 
 		for (i = 0; i < usr_qos_map->num_des; ++i) {
@@ -8241,13 +8389,17 @@ int mt7996_mcu_set_qos_map(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 			u8 up = usr_qos_map->dscp_exception[i].up;
 
 			if (dscp < IP_DSCP_NUM && up < IEEE80211_NUM_UPS)
-				req.qos_map[dscp] = up;
+				req.data.qos_map[dscp] = up;
 		}
 	}
 
-	memcpy(mvif->qos_map, req.qos_map, IP_DSCP_NUM);
+	memcpy(mvif->qos_map, req.data.qos_map, IP_DSCP_NUM);
 
-	return mt76_mcu_send_msg(&dev->mt76, MCU_WA_EXT_CMD(SET_QOS_MAP), &req,
-				 sizeof(req), false);
+	if (!mt7996_has_wa(dev))
+		return mt76_mcu_send_msg(&dev->mt76, MCU_WA_UNI_CMD(SDO),
+					 &req, sizeof(req), false);
+
+	return mt76_mcu_send_msg(&dev->mt76, MCU_WA_EXT_CMD(SET_QOS_MAP), &req.data,
+				 sizeof(req.data), false);
 }
 #endif

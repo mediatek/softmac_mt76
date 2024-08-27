@@ -2632,6 +2632,7 @@ mt7996_background_radar_handle_7975_ifem(struct ieee80211_hw *hw,
 		is_ifem_adie = dev->var.type == MT7992_VAR_TYPE_44 &&
 			       dev->var.fem != MT7996_FEM_EXT;
 		break;
+	case MT7990_DEVICE_ID:
 	default:
 		return;
 	}

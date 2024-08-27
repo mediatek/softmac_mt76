@@ -1196,6 +1196,27 @@ struct mt7996_mcu_mac_info_tsf_diff {
 	u8 rsv[2];
 } __packed;
 
+struct mt7996_mcu_sdo_event {
+	struct mt7996_mcu_rxd rxd;
+
+	/* fixed field */
+	u8 rsv[4];
+	/* tlv */
+	u8 buf[];
+} __packed;
+
+#define UNI_CMD_SDO_CFG_BSS_NUM 96
+#define UNI_CMD_SDO_CFG_BSS_MAP_WORDLEN ((UNI_CMD_SDO_CFG_BSS_NUM + 31) / 32)
+
+struct mt7996_mld_sdo_bss_acq_pkt_cnt {
+	__le32 bitmap[UNI_CMD_SDO_CFG_BSS_MAP_WORDLEN];
+	__le32 pkt_cnt[UNI_CMD_SDO_CFG_BSS_NUM][IEEE80211_NUM_ACS];
+};
+
+enum {
+	UNI_EVENT_SDO_BSS_ACQ_PKT_CNT = 1,
+};
+
 struct mt7996_mcu_mac_info_event {
 	u8 rsv[4];
 	u8 buf[];
@@ -1431,7 +1452,14 @@ enum {
 enum {
 	UNI_CMD_SDO_SET = 1,
 	UNI_CMD_SDO_QUERY,
-	UNI_CMD_SDO_CP_MODE = 6,
+	UNI_CMD_SDO_AUTO_BA,
+	UNI_CMD_SDO_SET_QOS_MAP,
+	UNI_CMD_SDO_HOTSPOT,
+	UNI_CMD_SDO_CP_MODE,
+	UNI_CMD_SDO_RED_SETTING,
+	UNI_CMD_SDO_PKT_BUDGET_CTRL_CFG,
+	UNI_CMD_SDO_GET_BSS_ACQ_PKT_NUM,
+	UNI_CMD_SDO_OVERRIDE_CTRL
 };
 
 enum {
@@ -1457,7 +1485,7 @@ enum pp_mode {
 enum pp_alg_action {
 	PP_ALG_SET_TIMER,
 	PP_ALG_SET_THR,
-	PP_ALG_GET_STATISTICS = 2,
+	PP_ALG_GET_STATISTICS,
 };
 
 enum {

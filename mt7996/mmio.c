@@ -56,6 +56,14 @@ static const u32 mt7996_offs[] = {
 	[MIB_BSCR7]		= 0x9e8,
 	[MIB_BSCR17]		= 0xa10,
 	[MIB_TRDR1]		= 0xa28,
+	[MIB_TSCR0]		= 0x6b0,
+	[MIB_TSCR1]		= 0x6b4,
+	[MIB_TSCR2]		= 0x6b8,
+	[MIB_TSCR3]		= 0x6bc,
+	[MIB_TSCR4]		= 0x6c0,
+	[MIB_TSCR5]		= 0x6c4,
+	[MIB_TSCR6]		= 0x6c8,
+	[MIB_TSCR7]		= 0x6d0,
 	[HIF_REMAP_L1]		= 0x24,
 	[HIF_REMAP_BASE_L1]	= 0x130000,
 	[HIF_REMAP_L2]		= 0x1b4,
@@ -93,6 +101,14 @@ static const u32 mt7992_offs[] = {
 	[MIB_BSCR7]		= 0xae4,
 	[MIB_BSCR17]		= 0xb0c,
 	[MIB_TRDR1]		= 0xb24,
+	[MIB_TSCR0]		= 0x6b0,
+	[MIB_TSCR1]		= 0x6b4,
+	[MIB_TSCR2]		= 0x6b8,
+	[MIB_TSCR3]		= 0x6bc,
+	[MIB_TSCR4]		= 0x6c0,
+	[MIB_TSCR5]		= 0x6c4,
+	[MIB_TSCR6]		= 0x6c8,
+	[MIB_TSCR7]		= 0x6d0,
 	[HIF_REMAP_L1]		= 0x8,
 	[HIF_REMAP_BASE_L1]	= 0x40000,
 	[HIF_REMAP_L2]		= 0x1b4,
@@ -130,6 +146,14 @@ static const u32 mt7990_offs[] = {
 	[MIB_BSCR7]		= 0xbd4,
 	[MIB_BSCR17]		= 0xbfc,
 	[MIB_TRDR1]		= 0xc14,
+	[MIB_TSCR0]		= 0x750,
+	[MIB_TSCR1]		= 0x754,
+	[MIB_TSCR2]		= 0x758,
+	[MIB_TSCR3]		= 0x75c,
+	[MIB_TSCR4]		= 0x760,
+	[MIB_TSCR5]		= 0x764,
+	[MIB_TSCR6]		= 0x768,
+	[MIB_TSCR7]		= 0x770,
 	[HIF_REMAP_L1]		= 0x8,
 	[HIF_REMAP_BASE_L1]	= 0x40000,
 	[HIF_REMAP_L2]		= 0x1b8,
@@ -656,10 +680,8 @@ int mt7996_mmio_wed_init(struct mt7996_dev *dev, void *pdev_ptr,
 			if (dev->hif2)
 				wed->wlan.id = MT7990_DEVICE_ID;
 		}
-		dev->mt76.rx_token_size = tx_token_size + rx_token_size;
 
-		if (dev->hif2 && is_mt7992(&dev->mt76))
-			wed->wlan.id = 0x7992;
+		dev->mt76.rx_token_size = tx_token_size + rx_token_size;
 	}
 
 	wed->wlan.nbuf = tx_token_size;
