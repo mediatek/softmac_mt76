@@ -667,8 +667,7 @@ int mt7996_mmio_wed_init(struct mt7996_dev *dev, void *pdev_ptr,
 				wed->wlan.id = MT7990_DEVICE_ID;
 		}
 
-		if (dev->hif2 && is_mt7992(&dev->mt76))
-			wed->wlan.id = 0x7992;
+		dev->mt76.rx_token_size = tx_token_size + rx_token_size;
 	}
 
 	wed->wlan.nbuf = tx_token_size;
