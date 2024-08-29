@@ -363,4 +363,10 @@ struct mt7996_tm_rdd_ipi_ctrl {
 	__le32 tx_assert_time;		/* unit: us */
 } __packed;
 
+struct efuse_region {
+	u16 start;
+	u16 end;
+	u16 prot_mask;
+};
+
 #endif

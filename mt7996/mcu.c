@@ -5394,13 +5394,6 @@ static int mt7996_mcu_set_cal_free_data(struct mt7996_dev *dev)
 #define MT_EE_CAL_FREE_MAX_SIZE		30
 #define MT_EE_7977BN_OFFSET		(0x1200 - 0x500)
 #define MT_EE_END_OFFSET		0xffff
-	enum adie_type {
-		ADIE_7975,
-		ADIE_7976,
-		ADIE_7977,
-		ADIE_7978,
-		ADIE_7979,
-	};
 	static const u16 adie_offs_list[][MT_EE_CAL_FREE_MAX_SIZE] = {
 		[ADIE_7975] = {0x5cd, 0x5cf, 0x5d1, 0x5d3, 0x6c0, 0x6c1, 0x6c2, 0x6c3,
 			       0x7a1, 0x7a6, 0x7a8, 0x7aa, -1},
@@ -5430,10 +5423,10 @@ static int mt7996_mcu_set_cal_free_data(struct mt7996_dev *dev)
 			       0x127a, 0x127b, 0x127c, 0x127e, 0x1280, -1},
 	};
 	static const u16 adie_base_7996[] = {
-		0x400, 0x1e00, 0x1200
+		EFUSE_BASE_OFFS_ADIE0, EFUSE_BASE_OFFS_ADIE1, EFUSE_BASE_OFFS_ADIE2
 	};
 	static const u16 adie_base_7992[] = {
-		0x400, 0x1200, 0x0
+		EFUSE_BASE_OFFS_ADIE0, EFUSE_BASE_OFFS_ADIE1_7992, 0x0
 	};
 	static const u16 *adie_offs[__MT_MAX_BAND];
 	static const u16 *eep_offs[__MT_MAX_BAND];

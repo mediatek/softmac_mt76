@@ -212,6 +212,29 @@ enum mt7996_eeprom_mode {
 	EXT_EEPROM_MODE,
 };
 
+enum mt7996_ddie_type {
+	DDIE_7996,
+	DDIE_7992,
+	DDIE_TYPE_NUM,
+};
+
+enum mt7996_adie_type {
+	ADIE_7975,
+	ADIE_7976,
+	ADIE_7977,
+	ADIE_7978,
+	ADIE_7979,
+	ADIE_TYPE_NUM,
+};
+
+enum mt7996_efuse_base_offs {
+	EFUSE_BASE_OFFS_DDIE = 0x0,
+	EFUSE_BASE_OFFS_ADIE0 = 0x400,
+	EFUSE_BASE_OFFS_ADIE2 = 0x1200,
+	EFUSE_BASE_OFFS_ADIE1_7992 = 0x1200,
+	EFUSE_BASE_OFFS_ADIE1 = 0x1e00,
+};
+
 enum mt7996_coredump_state {
 	MT7996_COREDUMP_IDLE = 0,
 	MT7996_COREDUMP_MANUAL_WA,
