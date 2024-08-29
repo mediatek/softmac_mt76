@@ -7713,6 +7713,12 @@ int mt7996_mcu_set_pp_en(struct mt7996_phy *phy, u8 mode, u16 bitmap)
 	phy->punct_bitmap = bitmap;
 	phy->pp_mode = mode;
 
+#ifdef CONFIG_MTK_DEBUG
+	/* Configuring PP would cause FW to disable MRU Probe by default. */
+	if (!is_mt7996(&dev->mt76))
+		phy->mru_probe_enable = false;
+#endif
+
 	return mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(PP),
 				 &req, sizeof(req), false);
 }

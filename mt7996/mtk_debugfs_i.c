@@ -977,6 +977,102 @@ static const struct file_operations fops_mlo_agc_trig = {
 	.llseek = default_llseek,
 };
 
+static int
+mt7996_sr_pp_enable_get(void *data, u64 *val)
+{
+	struct mt7996_dev *dev = data;
+
+	*val = dev->sr_pp_enable;
+
+	return 0;
+}
+static int
+mt7996_sr_pp_enable_set(void *data, u64 val)
+{
+	struct mt7996_dev *dev = data;
+	int ret;
+	bool en = !!val;
+
+	if (en == dev->sr_pp_enable)
+		return 0;
+
+	ret = mt7996_mcu_set_sr_pp_en(dev, en);
+	if (ret)
+		return ret;
+
+	dev->sr_pp_enable = en;
+
+	return 0;
+}
+DEFINE_DEBUGFS_ATTRIBUTE(fops_sr_pp_enable, mt7996_sr_pp_enable_get,
+			 mt7996_sr_pp_enable_set, "%lld\n");
+
+static int
+mt7996_uba_enable_get(void *data, u64 *val)
+{
+	struct mt7996_dev *dev = data;
+
+	*val = dev->uba_enable;
+
+	return 0;
+}
+static int
+mt7996_uba_enable_set(void *data, u64 val)
+{
+	struct mt7996_dev *dev = data;
+	int ret;
+	bool en = !!val;
+
+	if (en == dev->uba_enable)
+		return 0;
+
+	ret = mt7996_mcu_set_uba_en(dev, en);
+	if (ret)
+		return ret;
+
+	dev->uba_enable = en;
+
+	return 0;
+}
+DEFINE_DEBUGFS_ATTRIBUTE(fops_uba_enable, mt7996_uba_enable_get,
+			 mt7996_uba_enable_set, "%lld\n");
+
+static int
+mt7996_mru_probe_enable_get(void *data, u64 *val)
+{
+	struct mt7996_phy *phy = data;
+
+	*val = phy->mru_probe_enable;
+
+	return 0;
+}
+static int
+mt7996_mru_probe_enable_set(void *data, u64 val)
+{
+#define MRU_PROBE_ENABLE 1
+	struct mt7996_phy *phy = data;
+	int ret;
+	bool en = !!val;
+
+	if (en == phy->mru_probe_enable)
+		return 0;
+
+	if (en != MRU_PROBE_ENABLE)
+		return 0;
+
+	ret = mt7996_mcu_set_mru_probe_en(phy);
+	if (ret)
+		return ret;
+
+	phy->mru_probe_enable = en;
+	/* When enabling MRU probe, PP would also enter FW mode */
+	phy->pp_mode = PP_FW_MODE;
+
+	return 0;
+}
+DEFINE_DEBUGFS_ATTRIBUTE(fops_mru_probe_enable, mt7996_mru_probe_enable_get,
+			 mt7996_mru_probe_enable_set, "%lld\n");
+
 int mt7996_mtk_init_dev_debugfs_internal(struct mt7996_phy *phy, struct dentry *dir)
 {
 	struct mt7996_dev *dev = phy->dev;
@@ -1003,6 +1099,11 @@ int mt7996_mtk_init_dev_debugfs_internal(struct mt7996_phy *phy, struct dentry *
 	debugfs_create_file("mlo_agc_tx", 0200, dir, dev, &fops_mlo_agc_tx);
 	debugfs_create_file("mlo_agc_trig", 0200, dir, dev, &fops_mlo_agc_trig);
 
+	if (!is_mt7996(&dev->mt76)) {
+		debugfs_create_file("sr_pp_enable", 0600, dir, dev,
+				    &fops_sr_pp_enable);
+		debugfs_create_file("uba_enable", 0600, dir, dev, &fops_uba_enable);
+	}
 	return 0;
 }
 
@@ -1011,6 +1112,10 @@ int mt7996_mtk_init_band_debugfs_internal(struct mt7996_phy *phy, struct dentry 
 	/* MLO related Table */
 	debugfs_create_file("rmac_table", 0400, dir, phy, &mt7996_rmac_table_fops);
 	debugfs_create_file("agg_table", 0400, dir, phy, &mt7996_agg_table_fops);
+
+	if (!is_mt7996(&phy->dev->mt76))
+		debugfs_create_file("mru_probe_enable", 0600, dir, phy,
+				    &fops_mru_probe_enable);
 
 	return 0;
 }
