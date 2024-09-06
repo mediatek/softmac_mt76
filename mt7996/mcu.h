@@ -1180,6 +1180,36 @@ enum {
 	UNI_CMD_THERMAL_PROTECT_INFO,
 };
 
+enum {
+	UNI_CMD_MAC_INFO_TSF_DIFF = 2,
+};
+
+enum {
+	UNI_EVENT_MAC_INFO_TSF_DIFF = 2,
+};
+
+struct mt7996_mcu_mac_info_tsf_diff {
+	__le16 tag;
+	__le16 len;
+	u8 bss_idx0;
+	u8 bss_idx1;
+	u8 rsv[2];
+} __packed;
+
+struct mt7996_mcu_mac_info_event {
+	u8 rsv[4];
+	u8 buf[];
+} __packed;
+
+struct mt7996_mcu_mac_info_tsf_diff_resp {
+	__le16 tag;
+	__le16 len;
+	__le32 tsf0_bit0_31;
+	__le32 tsf0_bit32_63;
+	__le32 tsf1_bit0_31;
+	__le32 tsf1_bit32_63;
+} __packed;
+
 struct mt7996_mcu_bss_event {
 	struct mt7996_mcu_rxd rxd;
 

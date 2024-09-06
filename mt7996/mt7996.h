@@ -455,6 +455,8 @@ struct mt7996_vif_link {
 
 	u8 mld_idx;
 	u8 bpcc;
+
+	s64 tsf_offset[IEEE80211_MLD_MAX_NUM_LINKS];
 };
 
 struct mt7996_vif_link_info {
@@ -1388,6 +1390,8 @@ int mt7996_mcu_set_pp_en(struct mt7996_phy *phy, u8 mode, u16 bitmap);
 int mt7996_mcu_set_pp_sta_dscb(struct mt7996_phy *phy, struct cfg80211_chan_def *chandef,
 			       u8 omac_idx);
 int mt7996_mcu_set_pp_alg_ctrl(struct mt7996_phy *phy, u8 action);
+int mt7996_mcu_get_tsf_offset(struct mt7996_phy *phy, struct mt7996_vif *mvif,
+			      int rpting_link_id, int rpted_link_id);
 int mt7996_mcu_set_qos_map(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 			   struct mt7996_vif_link *link,
 			   struct cfg80211_qos_map *usr_qos_map);
@@ -1458,6 +1462,7 @@ int mt7996_mcu_set_csi(struct mt7996_phy *phy, u8 mode,
 		       u8 cfg, u8 v1, u32 v2, u8 *mac_addr);
 int mt7996_vendor_pp_bitmap_update(struct mt7996_phy *phy, u16 bitmap);
 int mt7996_mcu_set_lpi_psd(struct mt7996_phy *phy, u8 enable);
+int mt7996_vendor_tsf_offset_event(struct mt7996_phy *phy, s64 *tsf_offset, int tsf_len);
 #endif
 
 int mt7996_mcu_edcca_enable(struct mt7996_phy *phy, bool enable);
