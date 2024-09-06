@@ -618,8 +618,10 @@ int mt7996_mmio_wed_init(struct mt7996_dev *dev, void *pdev_ptr,
 		wed->wlan.reset_complete = mt76_wed_reset_complete;
 	}
 
-	if (mtk_wed_device_attach(wed))
+	if (mtk_wed_device_attach(wed)) {
+		wed_enable = false;
 		return 0;
+	}
 
 	if (!hif2) {
 		dev->mt76.hwrro_mode = is_mt7996(&dev->mt76) ? MT76_HWRRO_V3
