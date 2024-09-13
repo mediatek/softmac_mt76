@@ -2587,6 +2587,7 @@ mt7996_net_fill_forward_path(struct ieee80211_hw *hw,
 	struct mtk_wed_device *wed = &dev->mt76.mmio.wed;
 	struct mt7996_sta_link *msta_link;
 	struct mt76_vif_link *mlink;
+	u8 dscp = path->mtk_wdma.tid >> 2;
 
 	mlink = rcu_dereference(mvif->mt76.link[msta->deflink_id]);
 	if (!mlink)
@@ -2633,7 +2634,7 @@ mt7996_net_fill_forward_path(struct ieee80211_hw *hw,
 	ctx->dev = NULL;
 
 	if (path->mtk_wdma.amsdu)
-		path->mtk_wdma.tid = mvif->qos_map[path->mtk_wdma.tid >> 2];
+		path->mtk_wdma.tid = mvif->qos_map[dscp];
 
 	return 0;
 }

@@ -1204,18 +1204,37 @@ u32 mt7996_wed_init_buf(void *ptr, dma_addr_t phys, int token_id)
 }
 
 static void
-mt7996_tx_check_aggr(struct ieee80211_link_sta *link_sta,
-		     struct mt76_wcid *wcid, struct sk_buff *skb)
+mt7996_check_tx_ba_status(struct ieee80211_link_sta *link_sta,
+			  struct mt76_wcid *wcid, u8 tid)
 {
+	struct ieee80211_sta *sta = link_sta->sta;
 	struct mt7996_sta *msta;
-	struct mt7996_sta_link *msta_link;
-	struct ieee80211_link_sta *link_sta;
-	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
-	bool is_8023 = info->flags & IEEE80211_TX_CTL_HW_80211_ENCAP;
-	u16 fc, tid;
 
 	if (!(link_sta->ht_cap.ht_supported || link_sta->he_cap.has_he))
 		return;
+
+	if (test_bit(tid, &wcid->ampdu_state)) {
+		ieee80211_refresh_tx_agg_session_timer(sta, tid);
+		return;
+	}
+
+	msta = (struct mt7996_sta *)sta->drv_priv;
+	if (!msta->last_addba_req_time[tid] ||
+	    time_after(jiffies, msta->last_addba_req_time[tid] + ADDBA_RETRY_PERIOD)) {
+		set_bit(tid, &wcid->ampdu_state);
+		if (ieee80211_start_tx_ba_session(sta, tid, 0) < 0)
+			clear_bit(tid, &wcid->ampdu_state);
+		msta->last_addba_req_time[tid] = jiffies;
+	}
+}
+
+static void
+mt7996_tx_check_aggr(struct ieee80211_link_sta *link_sta,
+		     struct mt76_wcid *wcid, struct sk_buff *skb)
+{
+	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
+	bool is_8023 = info->flags & IEEE80211_TX_CTL_HW_80211_ENCAP;
+	u16 fc, tid;
 
 	tid = skb->priority & IEEE80211_QOS_CTL_TID_MASK;
 
@@ -1238,8 +1257,7 @@ mt7996_tx_check_aggr(struct ieee80211_link_sta *link_sta,
 	if (unlikely(fc != (IEEE80211_FTYPE_DATA | IEEE80211_STYPE_QOS_DATA)))
 		return;
 
-	if (!test_and_set_bit(tid, &wcid->ampdu_state))
-		ieee80211_start_tx_ba_session(link_sta->sta, tid, 0);
+	mt7996_check_tx_ba_status(link_sta, wcid, tid);
 }
 
 static void
