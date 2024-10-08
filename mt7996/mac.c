@@ -2960,9 +2960,13 @@ void mt7996_mac_sta_rc_work(struct work_struct *work)
 
 		spin_unlock_bh(&dev->mt76.sta_poll_lock);
 
-		if (changed & (IEEE80211_RC_SUPP_RATES_CHANGED |
-			       IEEE80211_RC_NSS_CHANGED |
-			       IEEE80211_RC_BW_CHANGED))
+		if (changed & IEEE80211_RC_VHT_OMN_CHANGED)
+			mt7996_mcu_set_fixed_field(dev, msta_link->sta, NULL,
+						   msta_link->wcid.link_id,
+						   RATE_PARAM_VHT_OMN_UPDATE);
+		else if (changed & (IEEE80211_RC_SUPP_RATES_CHANGED |
+				    IEEE80211_RC_NSS_CHANGED |
+				    IEEE80211_RC_BW_CHANGED))
 			mt7996_mcu_add_rate_ctrl(dev, msta_link->sta, vif,
 						 msta_link->wcid.link_id,
 						 true);
