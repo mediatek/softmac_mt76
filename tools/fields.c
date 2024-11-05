@@ -76,6 +76,20 @@ static const char * const testmode_txbf_act[] = {
 	[MT76_TM_TXBF_ACT_TXCMD] = "txcmd",
 };
 
+static const char * const testmode_list_act[] = {
+	[MT76_TM_LM_ACT_SET_TX_SEGMENT] = "tx_seg",
+	[MT76_TM_LM_ACT_TX_START] = "tx_start",
+	[MT76_TM_LM_ACT_TX_STOP] = "tx_stop",
+	[MT76_TM_LM_ACT_SET_RX_SEGMENT] = "rx_seg",
+	[MT76_TM_LM_ACT_RX_START] = "rx_start",
+	[MT76_TM_LM_ACT_RX_STOP] = "rx_stop",
+	[MT76_TM_LM_ACT_SWITCH_SEGMENT] = "switch_seg",
+	[MT76_TM_LM_ACT_RX_STATUS] = "rx_stat",
+	[MT76_TM_LM_ACT_DUT_STATUS] = "dut_stat",
+	[MT76_TM_LM_ACT_CLEAR_SEGMENT] = "clear_seg",
+	[MT76_TM_LM_ACT_DUMP_SEGMENT] = "dump_seg",
+};
+
 static void print_enum(const struct tm_field *field, struct nlattr *attr)
 {
 	unsigned int i = nla_get_u8(attr);
@@ -452,6 +466,12 @@ static const struct tm_field testdata_fields[NUM_MT76_TM_ATTRS] = {
 	FIELD(u8, IPI_THRESHOLD, "ipi_threshold"),
 	FIELD(u32, IPI_PERIOD, "ipi_period"),
 	FIELD(u8, IPI_RESET, "ipi_reset"),
+	FIELD_ENUM(LM_ACT, "list_act", testmode_list_act),
+	FIELD(u8, LM_SEG_IDX, "lm_seg_idx"),
+	FIELD(u8, LM_CENTER_CH, "lm_center_ch"),
+	FIELD_ENUM(LM_CBW, "lm_cbw", testmode_bw),
+	FIELD(u8, LM_STA_IDX, "lm_sta_idx"),
+	FIELD(u32, LM_SEG_TIMEOUT, "lm_seg_timeout"),
 	FIELD_MAC(MAC_ADDRS, "mac_addrs"),
 	FIELD_NESTED_RO(STATS, stats, "",
 			.print_extra = print_extra_stats),
@@ -494,6 +514,12 @@ static struct nla_policy testdata_policy[NUM_MT76_TM_ATTRS] = {
 	[MT76_TM_ATTR_IPI_PERIOD] = { .type = NLA_U32 },
 	[MT76_TM_ATTR_IPI_ANTENNA_INDEX] = { .type = NLA_U8 },
 	[MT76_TM_ATTR_IPI_RESET] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_LM_ACT] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_LM_SEG_IDX] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_LM_CENTER_CH] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_LM_CBW] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_LM_STA_IDX] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_LM_SEG_TIMEOUT] = { .type = NLA_U32 },
 };
 
 const struct tm_field msg_field = {

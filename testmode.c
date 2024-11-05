@@ -36,6 +36,12 @@ const struct nla_policy mt76_tm_policy[NUM_MT76_TM_ATTRS] = {
 	[MT76_TM_ATTR_IPI_THRESHOLD] = { .type = NLA_U8 },
 	[MT76_TM_ATTR_IPI_PERIOD] = { .type = NLA_U32 },
 	[MT76_TM_ATTR_IPI_RESET] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_LM_ACT] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_LM_SEG_IDX] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_LM_CENTER_CH] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_LM_CBW] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_LM_STA_IDX] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_LM_SEG_TIMEOUT] = { .type = NLA_U32 },
 };
 EXPORT_SYMBOL_GPL(mt76_tm_policy);
 
@@ -525,6 +531,182 @@ mt76_tm_get_u8(struct nlattr *attr, u8 *dest, u8 min, u8 max)
 	return 0;
 }
 
+static void
+mt76_testmode_list_init_defaults(struct mt76_phy *phy, u8 seg_idx, u8 seg_type)
+{
+	struct mt76_list_mode_data *list = &phy->lists[seg_idx];
+	u8 addr[ETH_ALEN] = {phy->band_idx, 0x11, 0x22, 0x33, 0x44, 0x55};
+
+	list->seg_type = seg_type;
+	list->seg_timeout = 200;
+	/* rf settings */
+	memcpy(list->addr[0], addr, ETH_ALEN);
+	memcpy(list->addr[1], addr, ETH_ALEN);
+	memcpy(list->addr[2], addr, ETH_ALEN);
+	list->tx_antenna_mask = phy->antenna_mask;
+	list->rx_antenna_mask = phy->antenna_mask;
+	if (phy->chandef.chan)
+		list->center_ch1 = phy->chandef.chan->hw_value;
+
+	/* tx settings */
+	list->tx_mpdu_len = 1024;
+	list->tx_count = 1000;
+	list->tx_power = 23;
+	list->tx_rate_mode = MT76_TM_TX_MODE_OFDM;
+	list->tx_rate_idx = 7;
+	list->tx_rate_nss = 1;
+	list->tx_ipg = 50;
+}
+
+static int
+mt76_testmode_set_list_mode(struct mt76_phy *phy, struct nlattr **tb)
+{
+	struct mt76_dev *dev = phy->dev;
+	struct mt76_list_mode_data *list;
+	u8 list_act, seg_idx, seg_type;
+	u8 min_ch, max_ch;
+	int err;
+
+	if (!dev->test_ops->set_list_mode)
+		return -EOPNOTSUPP;
+
+	err = mt76_tm_get_u8(tb[MT76_TM_ATTR_LM_ACT], &list_act, 0, MT76_TM_LM_ACT_MAX);
+	if (err)
+		return err;
+
+	if (list_act != MT76_TM_LM_ACT_SET_TX_SEGMENT &&
+	    list_act != MT76_TM_LM_ACT_SET_RX_SEGMENT)
+		return dev->test_ops->set_list_mode(phy, 0, list_act);
+
+	if (!tb[MT76_TM_ATTR_LM_SEG_IDX] ||
+	    mt76_tm_get_u8(tb[MT76_TM_ATTR_LM_SEG_IDX], &seg_idx, 0, LIST_SEG_MAX_NUM) ||
+	    seg_idx > phy->seg_num)
+		return -EINVAL;
+
+	if (list_act == MT76_TM_LM_ACT_SET_TX_SEGMENT)
+		seg_type = LM_SEG_TYPE_TX;
+	else
+		seg_type = LM_SEG_TYPE_RX;
+
+	if (!phy->lists) {
+		phy->lists = kzalloc(sizeof(*phy->lists), GFP_KERNEL);
+		if (!phy->lists)
+			return -ENOMEM;
+
+		phy->seg_num = 1;
+		mt76_testmode_list_init_defaults(phy, seg_idx, seg_type);
+	} else {
+		/* mixed segment type is not allowed */
+		if (phy->lists[0].seg_type != seg_type)
+			return -EINVAL;
+		if (seg_idx == phy->seg_num) {
+			unsigned long size;
+			void *tmp;
+
+			phy->seg_num++;
+			size = sizeof(*phy->lists) * phy->seg_num;
+			tmp = krealloc((void *)phy->lists, size, GFP_KERNEL);
+			if (!tmp)
+				return -ENOMEM;
+
+			phy->lists = (struct mt76_list_mode_data *)tmp;
+			mt76_testmode_list_init_defaults(phy, seg_idx, seg_type);
+		}
+	}
+
+	list = &phy->lists[seg_idx];
+
+	if (tb[MT76_TM_ATTR_LM_CENTER_CH]) {
+		struct ieee80211_supported_band *sband = NULL;
+		int n_channels;
+
+		if (phy->cap.has_2ghz)
+			sband = &phy->sband_2g.sband;
+		if (phy->cap.has_5ghz)
+			sband = &phy->sband_5g.sband;
+		if (phy->cap.has_6ghz)
+			sband = &phy->sband_6g.sband;
+		if (!sband)
+			return -EINVAL;
+
+		n_channels = sband->n_channels;
+		min_ch = sband->channels[0].hw_value;
+		max_ch = sband->channels[n_channels - 1].hw_value;
+	}
+
+	if (mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_ANTENNA], &list->tx_antenna_mask, 0, 0xff) ||
+	    mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_ANTENNA], &list->rx_antenna_mask, 0, 0xff) ||
+	    mt76_tm_get_u8(tb[MT76_TM_ATTR_LM_CBW], &list->system_bw,
+			   NL80211_CHAN_WIDTH_20_NOHT, NL80211_CHAN_WIDTH_320) ||
+	    mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_PKT_BW], &list->data_bw,
+			   NL80211_CHAN_WIDTH_20_NOHT, NL80211_CHAN_WIDTH_320) ||
+	    mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_PRI_SEL], &list->pri_sel, 0, 15) ||
+	    mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_RATE_MODE], &list->tx_rate_mode,
+			   0, MT76_TM_TX_MODE_MAX) ||
+	    mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_RATE_NSS], &list->tx_rate_nss,
+			   1, hweight8(phy->antenna_mask)) ||
+	    mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_RATE_SGI], &list->tx_rate_sgi, 0, 2) ||
+	    mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_RATE_LDPC], &list->tx_rate_ldpc, 0, 1) ||
+	    mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_RATE_STBC], &list->tx_rate_stbc, 0, 1) ||
+	    mt76_tm_get_u8(tb[MT76_TM_ATTR_LM_CENTER_CH], &list->center_ch1, min_ch, max_ch))
+		return -EINVAL;
+
+	if (tb[MT76_TM_ATTR_MAC_ADDRS]) {
+		struct nlattr *cur;
+		int idx = 0;
+		int rem;
+
+		nla_for_each_nested(cur, tb[MT76_TM_ATTR_MAC_ADDRS], rem) {
+			if (nla_len(cur) != ETH_ALEN || idx >= ARRAY_SIZE(list->addr))
+				return -EINVAL;
+
+			memcpy(list->addr[idx], nla_data(cur), ETH_ALEN);
+			idx++;
+		}
+	}
+
+	if (tb[MT76_TM_ATTR_TX_POWER]) {
+		struct nlattr *cur;
+		int idx = 0;
+		int rem;
+
+		nla_for_each_nested(cur, tb[MT76_TM_ATTR_TX_POWER], rem) {
+			if (nla_len(cur) != 1 || idx >= 1)
+				return -EINVAL;
+
+			err = mt76_tm_get_u8(cur, &list->tx_power, 0, 63);
+			if (err)
+				return err;
+			idx++;
+		}
+	}
+
+	if (tb[MT76_TM_ATTR_TX_LENGTH]) {
+		u32 val = nla_get_u32(tb[MT76_TM_ATTR_TX_LENGTH]);
+
+		if (val > mt76_testmode_max_mpdu_len(phy, list->tx_rate_mode) ||
+		    val < sizeof(struct ieee80211_hdr))
+			return -EINVAL;
+
+		list->tx_mpdu_len = val;
+	}
+
+	if (tb[MT76_TM_ATTR_TX_COUNT])
+		list->tx_count = nla_get_u32(tb[MT76_TM_ATTR_TX_COUNT]);
+	if (tb[MT76_TM_ATTR_TX_RATE_IDX])
+		list->tx_rate_idx = nla_get_u8(tb[MT76_TM_ATTR_TX_RATE_IDX]);
+	if (tb[MT76_TM_ATTR_TX_IPG])
+		list->tx_ipg = nla_get_u32(tb[MT76_TM_ATTR_TX_IPG]);
+	if (tb[MT76_TM_ATTR_LM_STA_IDX])
+		list->sta_idx = nla_get_u8(tb[MT76_TM_ATTR_LM_STA_IDX]);
+	if (tb[MT76_TM_ATTR_LM_SEG_TIMEOUT])
+		list->seg_timeout = nla_get_u32(tb[MT76_TM_ATTR_LM_SEG_TIMEOUT]);
+
+	err = dev->test_ops->set_list_mode(phy, seg_idx, list_act);
+
+	return err;
+}
+
 static int
 mt76_testmode_set_eeprom(struct mt76_phy *phy, struct nlattr **tb)
 {
@@ -623,6 +805,11 @@ int mt76_testmode_cmd(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	err = -EINVAL;
 
 	mutex_lock(&dev->mutex);
+
+	if (tb[MT76_TM_ATTR_LM_ACT]) {
+		err = mt76_testmode_set_list_mode(phy, tb);
+		goto out;
+	}
 
 	if (tb[MT76_TM_ATTR_EEPROM_ACTION]) {
 		err = mt76_testmode_set_eeprom(phy, tb);

@@ -826,6 +826,8 @@ struct mt76_testmode_ops {
 	void (*tx_stop)(struct mt76_phy *phy);
 	int (*set_eeprom)(struct mt76_phy *phy, u32 offset, u8 *val, u8 action);
 	int (*dump_precal)(struct mt76_phy *mphy, struct sk_buff *msg, int flag, int type);
+	int (*set_list_mode)(struct mt76_phy *phy, int seg_idx,
+			     enum mt76_testmode_list_act list_act);
 };
 
 #define MT_TM_FW_RX_COUNT	BIT(0)
@@ -900,6 +902,41 @@ struct mt76_testmode_data {
 	u8 ipi_threshold;
 	u32 ipi_period;
 	u8 ipi_reset;
+};
+
+enum {
+	LM_SEG_TYPE_TX,
+	LM_SEG_TYPE_RX,
+};
+
+struct mt76_list_mode_data {
+	/* seg settings */
+	u8 seg_type;
+	u32 ant_swap;
+	u32 seg_timeout;
+	/* rf settings */
+	u8 addr[3][ETH_ALEN];
+	u8 tx_antenna_mask;
+	u8 rx_antenna_mask;
+	u8 center_ch1;
+	u8 center_ch2;
+	u8 system_bw;
+	u8 data_bw;
+	u8 pri_sel;
+	/* tx settings */
+	u16 tx_mpdu_len;
+	u32 tx_count;
+	u8 tx_power;
+	u8 tx_rate_mode;
+	u8 tx_rate_idx;
+	u8 tx_rate_stbc;
+	u8 tx_rate_ldpc;
+	u32 tx_ipg;
+	u8 tx_rate_sgi;
+	u8 tx_rate_nss;
+	u8 hw_tx_mode;
+	/* rx settings */
+	u32 sta_idx;
 };
 
 struct mt76_vif_link {
@@ -1010,6 +1047,8 @@ struct mt76_phy {
 
 #ifdef CONFIG_NL80211_TESTMODE
 	struct mt76_testmode_data test;
+	struct mt76_list_mode_data *lists;
+	int seg_num;
 #endif
 
 	struct delayed_work mac_work;

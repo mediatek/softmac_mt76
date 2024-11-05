@@ -123,6 +123,7 @@ enum {
 
 enum {
 	UNI_RF_TEST_CTRL,
+	UNI_RF_TEST_LIST_MODE,
 };
 
 #define RF_CMD(cmd)		RF_TEST_CMD_##cmd
@@ -368,5 +369,133 @@ struct efuse_region {
 	u16 end;
 	u16 prot_mask;
 };
+
+/* list mode */
+
+struct lm_tx_seg_hdr {
+	__le32 ext_id;
+	__le32 frame_control;
+	__le32 duration;
+	__le32 seq_id;
+	__le32 tx_mpdu_len;
+	u8 da[ETH_ALEN];
+	u8 sa[ETH_ALEN];
+	u8 bssid[ETH_ALEN];
+	__le32 tx_rate_stbc;
+	__le32 seg_num;
+	__le32 seg_param_num;
+} __packed;
+
+struct lm_rx_seg_hdr {
+	__le32 ext_id;
+	u8 addr[ETH_ALEN];
+	__le32 seg_num;
+	__le32 seg_param_num;
+} __packed;
+
+struct lm_rf_setting {
+	__le32 seg_idx;
+	__le32 band;
+	__le32 band_idx;
+	__le32 tx_antenna_mask;
+	__le32 rx_antenna_mask;
+	__le32 center_ch1;
+	__le32 center_ch2;
+	__le32 system_bw;
+	__le32 data_bw;
+	__le32 pri_sel;
+} __packed;
+
+struct lm_tx_setting {
+	__le32 ch_band;
+	__le32 tx_mpdu_len;
+	__le32 tx_count;
+	__le32 tx_power;
+	__le32 tx_rate_mode;
+	__le32 tx_rate_idx;
+	__le32 tx_rate_ldpc;
+	__le32 tx_ipg;
+	__le32 tx_rate_sgi;
+	__le32 tx_rate_nss;
+	__le32 hw_tx_mode;
+	__le32 ant_swap;
+	__le32 seg_timeout;
+} __packed;
+
+struct lm_rx_setting {
+	__le32 sta_idx;
+	__le32 ch_band;
+	__le32 ant_swap;
+	__le32 seg_timeout;
+} __packed;
+
+struct mt7996_tm_list_tx_seg {
+	struct lm_tx_seg_hdr hdr;
+	struct lm_rf_setting rf;
+	struct lm_tx_setting tx;
+};
+
+struct mt7996_tm_list_rx_seg {
+	struct lm_rx_seg_hdr hdr;
+	struct lm_rf_setting rf;
+	struct lm_rx_setting rx;
+};
+
+struct mt7996_tm_list_rx_stat {
+	__le32 ext_id;
+	__le32 seg_start_idx;
+} __packed;
+
+struct mt7996_tm_list_req {
+	u8 _rsv[4];
+
+	__le16 tag;
+	__le16 len;
+	union {
+		struct mt7996_tm_list_tx_seg tx_seg;
+		struct mt7996_tm_list_rx_seg rx_seg;
+		struct mt7996_tm_list_rx_stat rx_stat;
+		__le32 ext_id;
+	} seg;
+} __packed;
+
+enum lm_state {
+	LM_STATE_IDLE,
+	LM_STATE_DPD_CAL,
+	LM_STATE_TX,
+	LM_STATE_RX,
+	LM_STATE_NUM,
+};
+
+struct lm_event_state {
+	enum lm_state state;
+	__le32 seg_idx;
+} __packed;
+
+struct lm_rx_status {
+	__le32 rx_ok;
+	__le32 fcs_err;
+	s32 rssi0;
+	s32 rssi1;
+	s32 rssi2;
+	s32 rssi3;
+	s32 rssi4;
+} __packed;
+
+struct mt7996_tm_list_event {
+	/* FIXME: the actual event data has two extra byte */
+	u8 rsv[2];
+
+	__le16 status;
+	__le32 ext_id;
+	__le32 total_seg;
+	__le32 seg_read_num;
+	union {
+		DECLARE_FLEX_ARRAY(__le32, tx_stats);
+		DECLARE_FLEX_ARRAY(struct lm_rx_status, rx_stats);
+		struct lm_event_state event_state;
+		u8 event[1024];
+	};
+} __packed;
 
 #endif

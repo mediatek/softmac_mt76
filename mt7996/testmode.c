@@ -256,6 +256,8 @@ mt7996_tm_init(struct mt7996_phy *phy, bool en)
 
 	if (en)
 		INIT_DELAYED_WORK(&phy->ipi_work, mt7996_tm_ipi_work);
+	else
+		kfree(phy->mt76->lists);
 }
 
 void
@@ -2350,6 +2352,272 @@ mt7996_tm_set_eeprom(struct mt76_phy *mphy, u32 offset, u8 *val, u8 action)
 	return ret;
 }
 
+static int
+mt7996_tm_dump_seg_list(struct mt7996_phy *phy)
+{
+	struct mt7996_dev *dev = phy->dev;
+	struct mt76_list_mode_data *list;
+	static const char * const testmode_tx_mode[] = {
+		[MT76_TM_TX_MODE_CCK] = "cck",
+		[MT76_TM_TX_MODE_OFDM] = "ofdm",
+		[MT76_TM_TX_MODE_HT] = "ht",
+		[MT76_TM_TX_MODE_VHT] = "vht",
+		[MT76_TM_TX_MODE_HE_SU] = "he_su",
+		[MT76_TM_TX_MODE_HE_EXT_SU] = "he_ext_su",
+		[MT76_TM_TX_MODE_HE_TB] = "he_tb",
+		[MT76_TM_TX_MODE_HE_MU] = "he_mu",
+		[MT76_TM_TX_MODE_EHT_SU] = "eht_su",
+		[MT76_TM_TX_MODE_EHT_TRIG] = "eht_tb",
+		[MT76_TM_TX_MODE_EHT_MU] = "eht_mu",
+	};
+	int i, cbw, dbw;
+
+	if (!phy->mt76->lists) {
+		dev_info(dev->mt76.dev, "No available segment list\n");
+		return 0;
+	}
+
+	dev_info(dev->mt76.dev, "Total Segment Number %d:\n", phy->mt76->seg_num);
+	for (i = 0; i < phy->mt76->seg_num; i++) {
+		list = &phy->mt76->lists[i];
+
+		dev_info(dev->mt76.dev, "%s Segment %d:\n",
+			 list->seg_type == LM_SEG_TYPE_TX ? "TX" : "RX", i);
+		dev_info(dev->mt76.dev, "\tantenna swap: %d\n", list->ant_swap);
+		dev_info(dev->mt76.dev, "\tsegment timeout: %d\n", list->seg_timeout);
+		dev_info(dev->mt76.dev, "\ttx antenna mask: %d\n", list->tx_antenna_mask);
+		dev_info(dev->mt76.dev, "\trx antenna mask: %d\n", list->rx_antenna_mask);
+		dev_info(dev->mt76.dev, "\tcenter ch1: %d\n", list->center_ch1);
+		dev_info(dev->mt76.dev, "\tcenter ch2: %d\n", list->center_ch2);
+		cbw = mt7996_tm_bw_mapping(list->system_bw, BW_MAP_NL_TO_MHZ);
+		dbw = mt7996_tm_bw_mapping(list->data_bw, BW_MAP_NL_TO_MHZ);
+		dev_info(dev->mt76.dev, "\tsystem bw: %d MH\n", cbw);
+		dev_info(dev->mt76.dev, "\tdata bw: %d MHz\n", dbw);
+		dev_info(dev->mt76.dev, "\tprimary selection: %d\n", list->pri_sel);
+		if (list->seg_type == LM_SEG_TYPE_TX) {
+			dev_info(dev->mt76.dev, "\tda: %pM\n", list->addr[0]);
+			dev_info(dev->mt76.dev, "\tsa: %pM\n", list->addr[1]);
+			dev_info(dev->mt76.dev, "\tbssid: %pM\n", list->addr[2]);
+			dev_info(dev->mt76.dev, "\ttx mpdu len: %d\n", list->tx_mpdu_len);
+			dev_info(dev->mt76.dev, "\ttx count: %d\n", list->tx_count);
+			dev_info(dev->mt76.dev, "\ttx power: %d\n", list->tx_power);
+			dev_info(dev->mt76.dev, "\ttx rate mode: %s\n",
+				 testmode_tx_mode[list->tx_rate_mode]);
+			dev_info(dev->mt76.dev, "\ttx rate idx: %d\n", list->tx_rate_idx);
+			dev_info(dev->mt76.dev, "\ttx rate stbc: %d\n", list->tx_rate_stbc);
+			dev_info(dev->mt76.dev, "\ttx rate ldpc: %d\n", list->tx_rate_ldpc);
+			dev_info(dev->mt76.dev, "\ttx ipg: %d\n", list->tx_ipg);
+			dev_info(dev->mt76.dev, "\ttx rate sgi: %d\n", list->tx_rate_sgi);
+			dev_info(dev->mt76.dev, "\ttx rate nss: %d\n", list->tx_rate_nss);
+			dev_info(dev->mt76.dev, "\thw tx mode: %d\n", list->hw_tx_mode);
+		} else {
+			dev_info(dev->mt76.dev, "\town addr: %pM\n", list->addr[0]);
+			dev_info(dev->mt76.dev, "\tsta idx: %d\n", list->sta_idx);
+		}
+		dev_info(dev->mt76.dev, "\n");
+	}
+
+	return 0;
+}
+
+static int
+mt7996_tm_get_list_mode_rx_stat(struct mt7996_dev *dev, int ext_id)
+{
+	struct mt7996_tm_list_req req = {
+		.tag = cpu_to_le16(UNI_RF_TEST_LIST_MODE),
+		.len = cpu_to_le16(sizeof(req.seg)),
+		.seg.rx_stat.ext_id = cpu_to_le32(ext_id),
+	};
+	int seg_idx, total_seg, seg_read_num, ret;
+	struct mt7996_tm_list_event *event;
+	struct sk_buff *skb;
+
+	for (seg_idx = 0; seg_idx < LIST_SEG_MAX_NUM;) {
+		struct lm_rx_status *rx_stat;
+		int i;
+
+		req.seg.rx_stat.seg_start_idx = cpu_to_le32(seg_idx);
+		ret = mt76_mcu_send_and_get_msg(&dev->mt76, MCU_WM_UNI_CMD_QUERY(TESTMODE_CTRL),
+						&req, sizeof(req), true, &skb);
+		if (ret)
+			break;
+
+		event = (struct mt7996_tm_list_event *)skb->data;
+		total_seg = le32_to_cpu(event->total_seg);
+		seg_read_num = le32_to_cpu(event->seg_read_num);
+		if (seg_idx == 0)
+			dev_info(dev->mt76.dev,
+				 "ext_id: %d, status: %d, total_seg: %d, seg_read_num: %d\n",
+				 le32_to_cpu(event->ext_id), le16_to_cpu(event->status),
+				 total_seg, seg_read_num);
+
+		if (!seg_read_num)
+			break;
+
+		for (i = 0; i < seg_read_num; i++) {
+			rx_stat = &event->rx_stats[i];
+			dev_info(dev->mt76.dev, "seg_idx: %u, rx_ok: %u, fcs_err: %u\n",
+				 seg_idx + i, le32_to_cpu(rx_stat->rx_ok),
+				 le32_to_cpu(rx_stat->fcs_err));
+			dev_info(dev->mt76.dev, "rssi: %d, %d, %d, %d, %d\n",
+				 le32_to_cpu(rx_stat->rssi0), le32_to_cpu(rx_stat->rssi1),
+				 le32_to_cpu(rx_stat->rssi2), le32_to_cpu(rx_stat->rssi3),
+				 le32_to_cpu(rx_stat->rssi4));
+		}
+
+		seg_idx += seg_read_num;
+		if (seg_idx >= total_seg)
+			break;
+	}
+
+	return 0;
+}
+
+static int
+mt7996_tm_set_list_mode(struct mt76_phy *mphy, int seg_idx,
+			enum mt76_testmode_list_act list_act)
+{
+	struct mt76_list_mode_data *list = &mphy->lists[seg_idx];
+	struct mt7996_phy *phy = mphy->priv;
+	struct mt7996_dev *dev = phy->dev;
+	struct cfg80211_chan_def *chandef = &mphy->chandef;
+	struct ieee80211_channel *chan = chandef->chan;
+	struct mt7996_tm_list_req req = {
+		.tag = cpu_to_le16(UNI_RF_TEST_LIST_MODE),
+		.len = cpu_to_le16(sizeof(req.seg)),
+	};
+	static const u8 ch_band[] = {
+		[NL80211_BAND_2GHZ] = 0,
+		[NL80211_BAND_5GHZ] = 1,
+		[NL80211_BAND_6GHZ] = 2,
+	};
+	static const u8 lm_ext_id[] = {
+		[MT76_TM_LM_ACT_SET_TX_SEGMENT] = 16,
+		[MT76_TM_LM_ACT_TX_START] = 17,
+		[MT76_TM_LM_ACT_TX_STOP] = 19,
+		[MT76_TM_LM_ACT_SET_RX_SEGMENT] = 20,
+		[MT76_TM_LM_ACT_RX_START] = 21,
+		[MT76_TM_LM_ACT_RX_STOP] = 23,
+		[MT76_TM_LM_ACT_SWITCH_SEGMENT] = 25,
+		[MT76_TM_LM_ACT_RX_STATUS] = 22,
+		[MT76_TM_LM_ACT_DUT_STATUS] = 24,
+	};
+	static const char * const lm_state[] = {
+		[LM_STATE_IDLE] = "idle",
+		[LM_STATE_DPD_CAL] = "dpd cal",
+		[LM_STATE_TX] = "tx ongoing",
+		[LM_STATE_RX] = "rx ongoing",
+	};
+	int seg_param_num = sizeof(req.seg.tx_seg.rf) / sizeof(u32);
+	int ret, state, band = ch_band[chan->band];
+	struct mt7996_tm_list_event *event;
+	struct sk_buff *skb;
+	u8 cbw, dbw;
+
+	switch (list_act) {
+	case MT76_TM_LM_ACT_SET_TX_SEGMENT:
+		req.seg.tx_seg.hdr.ext_id = cpu_to_le32(lm_ext_id[list_act]);
+		req.seg.tx_seg.hdr.frame_control = cpu_to_le32(0x8);
+		req.seg.tx_seg.hdr.duration = cpu_to_le32(0);
+		req.seg.tx_seg.hdr.seq_id = cpu_to_le32(0);
+		req.seg.tx_seg.hdr.tx_mpdu_len = cpu_to_le32(list->tx_mpdu_len);
+		memcpy(req.seg.tx_seg.hdr.da, list->addr[0], ETH_ALEN);
+		memcpy(req.seg.tx_seg.hdr.sa, list->addr[1], ETH_ALEN);
+		memcpy(req.seg.tx_seg.hdr.bssid, list->addr[2], ETH_ALEN);
+		req.seg.tx_seg.hdr.tx_rate_stbc = cpu_to_le32(list->tx_rate_stbc);
+		req.seg.tx_seg.hdr.seg_num = cpu_to_le32(1);
+		seg_param_num += sizeof(req.seg.tx_seg.tx) / sizeof(u32);
+		req.seg.tx_seg.hdr.seg_param_num = cpu_to_le32(seg_param_num);
+		req.seg.tx_seg.rf.seg_idx = cpu_to_le32(seg_idx);
+		req.seg.tx_seg.rf.band = cpu_to_le32(band);
+		req.seg.tx_seg.rf.band_idx = cpu_to_le32(mphy->band_idx);
+		req.seg.tx_seg.rf.tx_antenna_mask = cpu_to_le32(list->tx_antenna_mask);
+		req.seg.tx_seg.rf.rx_antenna_mask = cpu_to_le32(list->rx_antenna_mask);
+		req.seg.tx_seg.rf.center_ch1 = cpu_to_le32(list->center_ch1);
+		req.seg.tx_seg.rf.center_ch2 = cpu_to_le32(list->center_ch2);
+		cbw = mt7996_tm_bw_mapping(list->system_bw, BW_MAP_NL_TO_TM);
+		dbw = mt7996_tm_bw_mapping(list->data_bw, BW_MAP_NL_TO_TM);
+		req.seg.tx_seg.rf.system_bw = cpu_to_le32(cbw);
+		req.seg.tx_seg.rf.data_bw = cpu_to_le32(dbw);
+		req.seg.tx_seg.rf.pri_sel = cpu_to_le32(list->pri_sel);
+		req.seg.tx_seg.tx.ch_band = cpu_to_le32(band);
+		req.seg.tx_seg.tx.tx_mpdu_len = cpu_to_le32(list->tx_mpdu_len);
+		req.seg.tx_seg.tx.tx_count = cpu_to_le32(list->tx_count);
+		req.seg.tx_seg.tx.tx_power = cpu_to_le32(list->tx_power);
+		req.seg.tx_seg.tx.tx_rate_mode = cpu_to_le32(list->tx_rate_mode);
+		req.seg.tx_seg.tx.tx_rate_idx = cpu_to_le32(list->tx_rate_idx);
+		req.seg.tx_seg.tx.tx_rate_ldpc = cpu_to_le32(list->tx_rate_ldpc);
+		req.seg.tx_seg.tx.tx_ipg = cpu_to_le32(list->tx_ipg);
+		req.seg.tx_seg.tx.tx_rate_sgi = cpu_to_le32(list->tx_rate_sgi);
+		req.seg.tx_seg.tx.tx_rate_nss = cpu_to_le32(list->tx_rate_nss);
+		req.seg.tx_seg.tx.hw_tx_mode = cpu_to_le32(0);
+		req.seg.tx_seg.tx.ant_swap = cpu_to_le32(0);
+		req.seg.tx_seg.tx.seg_timeout = cpu_to_le32(list->seg_timeout);
+		break;
+	case MT76_TM_LM_ACT_SET_RX_SEGMENT:
+		req.seg.rx_seg.hdr.ext_id = cpu_to_le32(lm_ext_id[list_act]);
+		memcpy(req.seg.rx_seg.hdr.addr, list->addr[0], ETH_ALEN);
+		req.seg.rx_seg.hdr.seg_num = cpu_to_le32(1);
+		seg_param_num += sizeof(req.seg.rx_seg.rx) / sizeof(u32);
+		req.seg.rx_seg.hdr.seg_param_num = cpu_to_le32(seg_param_num);
+		req.seg.rx_seg.rf.seg_idx = cpu_to_le32(seg_idx);
+		req.seg.rx_seg.rf.band = cpu_to_le32(band);
+		req.seg.rx_seg.rf.band_idx = cpu_to_le32(mphy->band_idx);
+		req.seg.rx_seg.rf.tx_antenna_mask = cpu_to_le32(list->tx_antenna_mask);
+		req.seg.rx_seg.rf.rx_antenna_mask = cpu_to_le32(list->rx_antenna_mask);
+		req.seg.rx_seg.rf.center_ch1 = cpu_to_le32(list->center_ch1);
+		req.seg.rx_seg.rf.center_ch2 = cpu_to_le32(list->center_ch2);
+		cbw = mt7996_tm_bw_mapping(list->system_bw, BW_MAP_NL_TO_TM);
+		dbw = mt7996_tm_bw_mapping(list->data_bw, BW_MAP_NL_TO_TM);
+		req.seg.rx_seg.rf.system_bw = cpu_to_le32(cbw);
+		req.seg.rx_seg.rf.data_bw = cpu_to_le32(dbw);
+		req.seg.rx_seg.rf.pri_sel = cpu_to_le32(list->pri_sel);
+		req.seg.rx_seg.rx.sta_idx = cpu_to_le32(list->sta_idx);
+		req.seg.rx_seg.rx.ch_band = cpu_to_le32(band);
+		req.seg.rx_seg.rx.ant_swap = cpu_to_le32(0);
+		req.seg.rx_seg.rx.seg_timeout = cpu_to_le32(list->seg_timeout);
+		break;
+	case MT76_TM_LM_ACT_TX_START:
+	case MT76_TM_LM_ACT_TX_STOP:
+	case MT76_TM_LM_ACT_RX_START:
+	case MT76_TM_LM_ACT_RX_STOP:
+	case MT76_TM_LM_ACT_SWITCH_SEGMENT:
+	case MT76_TM_LM_ACT_DUT_STATUS:
+		req.seg.ext_id = cpu_to_le32(lm_ext_id[list_act]);
+		break;
+	case MT76_TM_LM_ACT_RX_STATUS:
+		return mt7996_tm_get_list_mode_rx_stat(dev, lm_ext_id[list_act]);
+	case MT76_TM_LM_ACT_CLEAR_SEGMENT:
+		kfree(mphy->lists);
+		mphy->lists = NULL;
+		mphy->seg_num = 0;
+		return 0;
+	case MT76_TM_LM_ACT_DUMP_SEGMENT:
+		return mt7996_tm_dump_seg_list(phy);
+	default:
+		return -EINVAL;
+	}
+
+	ret = mt76_mcu_send_and_get_msg(&dev->mt76, MCU_WM_UNI_CMD_QUERY(TESTMODE_CTRL),
+					&req, sizeof(req), true, &skb);
+	if (ret)
+		return ret;
+
+	event = (struct mt7996_tm_list_event *)skb->data;
+	dev_info(dev->mt76.dev, "ext_id: %u, status: %u, total_seg: %u, seg_read_num: %u\n",
+		 le32_to_cpu(event->ext_id), le16_to_cpu(event->status),
+		 le32_to_cpu(event->total_seg), le32_to_cpu(event->seg_read_num));
+
+	state = le32_to_cpu(event->event_state.state);
+	if (list_act == MT76_TM_LM_ACT_DUT_STATUS && state < LM_STATE_NUM)
+		dev_info(dev->mt76.dev, "Event seg_idx: %u, state: %s\n",
+			 le32_to_cpu(event->event_state.seg_idx), lm_state[state]);
+
+	dev_kfree_skb(skb);
+
+	return ret;
+}
+
 const struct mt76_testmode_ops mt7996_testmode_ops = {
 	.set_state = mt7996_tm_set_state,
 	.set_params = mt7996_tm_set_params,
@@ -2358,4 +2626,5 @@ const struct mt76_testmode_ops mt7996_testmode_ops = {
 	.tx_stop = mt7996_tm_tx_stop,
 	.set_eeprom = mt7996_tm_set_eeprom,
 	.dump_precal = mt7996_tm_dump_precal,
+	.set_list_mode = mt7996_tm_set_list_mode,
 };

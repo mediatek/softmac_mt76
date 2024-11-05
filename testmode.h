@@ -81,6 +81,13 @@
  *				    the histogram of specific IPI index (u8)
  * @MT76_TM_ATTR_IPI_RESET: Reset the IPI counter
  *
+ * @MT76_TM_ATTR_LM_ACT: list mode setting actions (u8)
+ * @MT76_TM_ATTR_LM_SEG_IDX: segment index used in list mode (u8)
+ * @MT76_TM_ATTR_LM_CENTER_CH: center channel used in list mode (u8)
+ * @MT76_TM_ATTR_LM_CBW: system index used in list mode (u8)
+ * @MT76_TM_ATTR_LM_STA_IDX: station index used in list mode (u8)
+ * @MT76_TM_ATTR_LM_SEG_TIMEOUT: TX/RX segment timeout used in list mode (u8)
+ *
  */
 enum mt76_testmode_attr {
 	MT76_TM_ATTR_UNSPEC,
@@ -146,6 +153,13 @@ enum mt76_testmode_attr {
 	MT76_TM_ATTR_IPI_PERIOD,
 	MT76_TM_ATTR_IPI_ANTENNA_INDEX,
 	MT76_TM_ATTR_IPI_RESET,
+
+	MT76_TM_ATTR_LM_ACT,
+	MT76_TM_ATTR_LM_SEG_IDX,
+	MT76_TM_ATTR_LM_CENTER_CH,
+	MT76_TM_ATTR_LM_CBW,
+	MT76_TM_ATTR_LM_STA_IDX,
+	MT76_TM_ATTR_LM_SEG_TIMEOUT,
 
 	/* keep last */
 	NUM_MT76_TM_ATTRS,
@@ -345,6 +359,41 @@ enum mt76_testmode_txbf_act {
 	/* keep last */
 	NUM_MT76_TM_TXBF_ACT,
 	MT76_TM_TXBF_ACT_MAX = NUM_MT76_TM_TXBF_ACT - 1,
+};
+
+#define LIST_SEG_MAX_NUM	100
+
+/**
+ * enum mt76_testmode_list_act - list mode action
+ *
+ * @MT76_TM_LM_ACT_SET_TX_SEGMENT: set the config of a TX segment
+ * @MT76_TM_LM_ACT_TX_START: start list TX
+ * @MT76_TM_LM_ACT_TX_STOP: stop list TX
+ * @MT76_TM_LM_ACT_SET_RX_SEGMENT: set the config of a RX segment
+ * @MT76_TM_LM_ACT_RX_START: start list RX
+ * @MT76_TM_LM_ACT_RX_STOP: stop list RX
+ * @MT76_TM_LM_ACT_SWITCH_SEGMENT: switch TX/RX segment
+ * @MT76_TM_LM_ACT_RX_STATUS: get RX status
+ * @MT76_TM_LM_ACT_DUT_STATUS: get DUT status
+ * @MT76_TM_LM_ACT_CLEAR_SEGMENT: clear all the TX/RX segments
+ * @MT76_TM_LM_ACT_DUMP_SEGMENT: dump all the TX/RX segment settings
+ */
+enum mt76_testmode_list_act {
+	MT76_TM_LM_ACT_SET_TX_SEGMENT,
+	MT76_TM_LM_ACT_TX_START,
+	MT76_TM_LM_ACT_TX_STOP,
+	MT76_TM_LM_ACT_SET_RX_SEGMENT,
+	MT76_TM_LM_ACT_RX_START,
+	MT76_TM_LM_ACT_RX_STOP,
+	MT76_TM_LM_ACT_SWITCH_SEGMENT,
+	MT76_TM_LM_ACT_RX_STATUS,
+	MT76_TM_LM_ACT_DUT_STATUS,
+	MT76_TM_LM_ACT_CLEAR_SEGMENT,
+	MT76_TM_LM_ACT_DUMP_SEGMENT,
+
+	/* keep last */
+	NUM_MT76_TM_LM_ACT,
+	MT76_TM_LM_ACT_MAX = NUM_MT76_TM_LM_ACT - 1,
 };
 
 #endif
