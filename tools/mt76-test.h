@@ -19,6 +19,14 @@
 #define DIV_ROUND_UP(n, d) (((n) + (d) - 1) / (d))
 #endif
 
+#ifndef BIT
+#define BIT(n) (1UL << (n))
+#endif
+
+#ifndef ETH_ALEN
+#define ETH_ALEN	6
+#endif
+
 #define EEPROM_FILE_PATH_FMT	"/tmp/mt76-test-%s"
 #define EEPROM_PART_SIZE	20480
 
@@ -26,6 +34,35 @@
 
 struct nl_msg;
 struct nlattr;
+
+#define MT_MAX_BAND	3
+
+struct phy_config {
+	int wiphy_idx;
+	int radio_idx;
+	int radio_num;
+	int parking_freq;
+	int band;
+	uint8_t mac_addr[ETH_ALEN];
+};
+
+struct radio_config {
+	int parking_freq;
+	enum nl80211_band band;
+};
+
+struct wiphy_config {
+	int wiphy_idx;
+	int radio_num;
+	struct radio_config radio[MT_MAX_BAND];
+};
+
+struct wiphy_list {
+	bool is_single_wiphy;
+	int wiphy_num;
+	uint8_t mac_addr[ETH_ALEN];
+	struct wiphy_config wiphy[MT_MAX_BAND * 2];
+};
 
 struct tm_field {
 	const char *name;

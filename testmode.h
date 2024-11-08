@@ -88,6 +88,8 @@
  * @MT76_TM_ATTR_LM_STA_IDX: station index used in list mode (u8)
  * @MT76_TM_ATTR_LM_SEG_TIMEOUT: TX/RX segment timeout used in list mode (u8)
  *
+ * @MT76_TM_ATTR_RADIO_IDX: radio index used for single multi-radio wiphy (u32)
+ *
  */
 enum mt76_testmode_attr {
 	MT76_TM_ATTR_UNSPEC,
@@ -160,6 +162,8 @@ enum mt76_testmode_attr {
 	MT76_TM_ATTR_LM_CBW,
 	MT76_TM_ATTR_LM_STA_IDX,
 	MT76_TM_ATTR_LM_SEG_TIMEOUT,
+
+	MT76_TM_ATTR_RADIO_IDX,
 
 	/* keep last */
 	NUM_MT76_TM_ATTRS,

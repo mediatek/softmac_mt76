@@ -495,6 +495,7 @@ mt7996_init_wiphy_band(struct ieee80211_hw *hw, struct mt7996_phy *phy)
 	}
 
 	dev->radio_phy[n_radios] = phy;
+	dev->mt76.radio_phy[n_radios] = phy->mt76;
 	radio->freq_range = freq;
 	radio->n_freq_range = 1;
 	radio->iface_combinations = is_mt7996(&dev->mt76) ? &if_comb : &if_comb_7992;

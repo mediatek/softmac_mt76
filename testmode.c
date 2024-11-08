@@ -806,6 +806,19 @@ int mt76_testmode_cmd(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 
 	mutex_lock(&dev->mutex);
 
+	/* handle radio conversion for single multi-radio wiphy */
+	if (tb[MT76_TM_ATTR_RADIO_IDX]) {
+		u32 radio_idx;
+
+		radio_idx = nla_get_u32(tb[MT76_TM_ATTR_RADIO_IDX]);
+		if (radio_idx > __MT_MAX_BAND ||
+		    !dev->radio_phy[radio_idx])
+			goto out;
+
+		phy = dev->radio_phy[radio_idx];
+		td = &phy->test;
+	}
+
 	if (tb[MT76_TM_ATTR_LM_ACT]) {
 		err = mt76_testmode_set_list_mode(phy, tb);
 		goto out;
@@ -1043,6 +1056,19 @@ int mt76_testmode_dump(struct ieee80211_hw *hw, struct sk_buff *msg,
 	}
 
 	mutex_lock(&dev->mutex);
+
+	/* handle radio conversion for single multi-radio wiphy */
+	if (tb[MT76_TM_ATTR_RADIO_IDX]) {
+		u32 radio_idx;
+
+		radio_idx = nla_get_u32(tb[MT76_TM_ATTR_RADIO_IDX]);
+		if (radio_idx > __MT_MAX_BAND ||
+		    !dev->radio_phy[radio_idx])
+			goto out;
+
+		phy = dev->radio_phy[radio_idx];
+		td = &phy->test;
+	}
 
 	if (tb[MT76_TM_ATTR_PRECAL] || tb[MT76_TM_ATTR_PRECAL_INFO]) {
 		int flag, type;

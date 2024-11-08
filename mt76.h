@@ -1079,6 +1079,7 @@ struct mt76_dev {
 	struct mt76_phy phy; /* must be first */
 	struct mt76_phy *phys[__MT_MAX_BAND];
 	struct mt76_phy *band_phys[NUM_NL80211_BANDS];
+	struct mt76_phy *radio_phy[__MT_MAX_BAND];
 
 	struct ieee80211_hw *hw;
 

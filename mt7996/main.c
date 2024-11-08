@@ -112,8 +112,6 @@ static int mt7996_start(struct ieee80211_hw *hw)
 #endif
 	}
 
-	mt7996_testmode_disable_all(dev);
-
 	mutex_unlock(&dev->mt76.mutex);
 
 	ieee80211_queue_delayed_work(hw, &dev->scs_work, HZ);
@@ -484,6 +482,8 @@ static int mt7996_add_interface(struct ieee80211_hw *hw,
 		dev_err(dev->mt76.dev, "Only monitor interface is allowed in testmode\n");
 		return -EINVAL;
 	}
+
+	mt7996_testmode_disable_all(dev);
 
 	for (i = 0; i < MT7996_MAX_RADIOS; i++) {
 		/* FIXME: only set the required radio temporarily for testmode.
