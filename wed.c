@@ -9,7 +9,10 @@
 void mt76_wed_release_rx_buf(struct mtk_wed_device *wed)
 {
 	struct mt76_dev *dev = container_of(wed, struct mt76_dev, mmio.wed);
+#if LINUX_VERSION_IS_LESS(6,6,0)
+	/* Todo: Check wether it is necessary in kernel 6.6 */
 	struct page *page;
+#endif
 	int i;
 
 	for (i = 0; i < dev->rx_token_size; i++) {
@@ -27,6 +30,8 @@ void mt76_wed_release_rx_buf(struct mtk_wed_device *wed)
 
 	mt76_free_pending_rxwi(dev);
 
+#if LINUX_VERSION_IS_LESS(6,6,0)
+	/* Todo: Check wether it is necessary in kernel 6.6 */
 	mt76_for_each_q_rx(dev, i) {
 		struct mt76_queue *q = &dev->q_rx[i];
 
@@ -46,6 +51,7 @@ void mt76_wed_release_rx_buf(struct mtk_wed_device *wed)
 	page = virt_to_page(wed->rx_buf_ring.rx_page.va);
 	__page_frag_cache_drain(page, wed->rx_buf_ring.rx_page.pagecnt_bias);
 	memset(&wed->rx_buf_ring.rx_page, 0, sizeof(wed->rx_buf_ring.rx_page));
+#endif
 }
 EXPORT_SYMBOL_GPL(mt76_wed_release_rx_buf);
 

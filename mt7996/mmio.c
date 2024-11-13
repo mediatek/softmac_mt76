@@ -544,6 +544,7 @@ int mt7996_mmio_wed_init(struct mt7996_dev *dev, void *pdev_ptr,
 		}
 
 		wed->wlan.wpdma_rx_glo = wed->wlan.phy_base + hif1_ofs + MT_WFDMA0_GLO_CFG;
+
 		wed->wlan.wpdma_rx[0] = wed->wlan.phy_base + hif1_ofs +
 				     MT_RXQ_RING_BASE(MT7996_RXQ_BAND2) +
 				     MT7996_RXQ_BAND2 * MT_RING_SIZE;
@@ -574,6 +575,7 @@ int mt7996_mmio_wed_init(struct mt7996_dev *dev, void *pdev_ptr,
 			wed->wlan.wpdma_rx_rro[1] = wed->wlan.phy_base + hif1_ofs +
 						    MT_RXQ_RING_BASE(MT7996_RXQ_RRO_BAND1) +
 						    MT7996_RXQ_RRO_BAND1 * MT_RING_SIZE;
+
 			wed->wlan.wpdma_rx[1] = wed->wlan.phy_base + hif1_ofs +
 						MT_RXQ_RING_BASE(MT7996_RXQ_BAND1) +
 						MT7996_RXQ_BAND1 * MT_RING_SIZE;

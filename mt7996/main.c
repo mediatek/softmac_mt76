@@ -2654,6 +2654,7 @@ mt7996_net_fill_forward_path(struct ieee80211_hw *hw,
 	path->mtk_wdma.bss = mlink->idx;
 	path->mtk_wdma.queue = 0;
 	path->mtk_wdma.wcid = msta_link->wcid.idx;
+	path->mtk_wdma.tid = mvif->qos_map[dscp];
 
 	if (ieee80211_hw_check(hw, SUPPORTS_AMSDU_IN_AMPDU) &&
 	    mtk_wed_is_amsdu_supported(wed))
@@ -2662,9 +2663,6 @@ mt7996_net_fill_forward_path(struct ieee80211_hw *hw,
 		path->mtk_wdma.amsdu = 0;
 
 	ctx->dev = NULL;
-
-	if (path->mtk_wdma.amsdu)
-		path->mtk_wdma.tid = mvif->qos_map[dscp];
 
 	return 0;
 }
