@@ -598,8 +598,7 @@ mt7996_mcu_rx_all_sta_info_event(struct mt7996_dev *dev, struct sk_buff *skb)
 static void
 mt7996_mcu_rx_thermal_notify(struct mt7996_dev *dev, struct sk_buff *skb)
 {
-#define THERMAL_NOTIFY_TAG 0x4
-#define THERMAL_NOTIFY 0x2
+#define THERMAL_NOTIFY_TAG 0x6
 	struct mt76_phy *mphy = &dev->mt76.phy;
 	struct mt7996_mcu_thermal_notify *n;
 	struct mt7996_phy *phy;
@@ -609,7 +608,7 @@ mt7996_mcu_rx_thermal_notify(struct mt7996_dev *dev, struct sk_buff *skb)
 	if (le16_to_cpu(n->tag) != THERMAL_NOTIFY_TAG)
 		return;
 
-	if (n->event_id != THERMAL_NOTIFY)
+	if (n->event_id != THERMAL_NOTIFY_TAG)
 		return;
 
 	if (n->band_idx > MT_BAND2)
@@ -645,9 +644,6 @@ mt7996_mcu_rx_unsolicited_event(struct mt7996_dev *dev, struct sk_buff *skb)
 	switch (rxd->eid) {
 	case MCU_EVENT_EXT:
 		mt7996_mcu_rx_ext_event(dev, skb);
-		break;
-	case MCU_UNI_EVENT_THERMAL:
-		mt7996_mcu_rx_thermal_notify(dev, skb);
 		break;
 	default:
 		break;
