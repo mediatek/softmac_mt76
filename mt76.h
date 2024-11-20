@@ -1182,6 +1182,7 @@ struct mt76_dev {
 
 #ifdef CONFIG_NL80211_TESTMODE
 	const struct mt76_testmode_ops *test_ops;
+	/* test_mtd can be used for mtd or emmc */
 	struct {
 		const char *name;
 		u32 offset;

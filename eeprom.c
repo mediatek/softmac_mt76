@@ -109,6 +109,52 @@ out_put_node:
 }
 EXPORT_SYMBOL_GPL(mt76_get_of_data_from_mtd);
 
+static void mt76_get_nvmem_part(struct mt76_dev *dev)
+{
+#ifdef CONFIG_NL80211_TESTMODE
+	struct device_node *np = dev->dev->of_node;
+	const __be32 *list;
+	const char *part;
+	phandle phandle;
+	int offset, size;
+	u32 reg[2];
+
+	list = of_get_property(np, "nvmem-cells", NULL);
+	if (!list)
+		return;
+
+	phandle = be32_to_cpup(list++);
+	if (!phandle)
+		return;
+
+	np = of_find_node_by_phandle(phandle);
+	if (!np)
+		return;
+
+	if (of_property_read_u32_array(np, "reg", reg, 2))
+		return;
+
+	offset = reg[0];
+	size = reg[1];
+
+	np = of_get_parent(of_get_parent(np));
+	if (!np)
+		return;
+
+	part = of_get_property(np, "partname", NULL);
+	if (!part)
+		part = of_get_property(np, "volname", NULL);
+	if (!part)
+		return;
+
+	if (size != dev->eeprom.size)
+		return;
+
+	dev->test_mtd.name = devm_kstrdup(dev->dev, part, GFP_KERNEL);
+	dev->test_mtd.offset = offset;
+#endif
+}
+
 int mt76_get_of_data_from_nvmem(struct mt76_dev *dev, void *eep,
 				const char *cell_name, int len)
 {
@@ -121,6 +167,8 @@ int mt76_get_of_data_from_nvmem(struct mt76_dev *dev, void *eep,
 	cell = of_nvmem_cell_get(np, cell_name);
 	if (IS_ERR(cell))
 		return PTR_ERR(cell);
+
+	mt76_get_nvmem_part(dev);
 
 	data = nvmem_cell_read(cell, &retlen);
 	nvmem_cell_put(cell);
