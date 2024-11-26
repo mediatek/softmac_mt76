@@ -2807,34 +2807,22 @@ mt7996_set_ttlm(struct ieee80211_hw *hw, struct ieee80211_vif *vif)
 	struct ieee80211_neg_ttlm merged_ttlm;
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
 	struct ieee80211_sta *sta;
-	int tid, ret;
-	u16 map = vif->valid_links;
+	int ret;
 
 	/* TODO check the intersection between Adv-TTLM and Neg-TTLM */
 	if (vif->type != NL80211_IFTYPE_STATION ||
 	    (vif->adv_ttlm.active && vif->neg_ttlm.valid))
 		return -EOPNOTSUPP;
 
-	if (vif->adv_ttlm.active)
-		map &= vif->adv_ttlm.map;
-
+	mutex_lock(&dev->mt76.mutex);
 	sta = ieee80211_find_sta(vif, vif->cfg.ap_addr);
-	if (!sta)
+	if (!sta) {
+		mutex_unlock(&dev->mt76.mutex);
 		return -EINVAL;
-
-	if (vif->neg_ttlm.valid) {
-		memcpy(merged_ttlm.downlink, vif->neg_ttlm.downlink,
-		       sizeof(merged_ttlm.downlink));
-		memcpy(merged_ttlm.uplink, vif->neg_ttlm.uplink,
-		       sizeof(merged_ttlm.uplink));
-	} else {
-		for (tid = 0; tid < IEEE80211_TTLM_NUM_TIDS; tid++) {
-			merged_ttlm.downlink[tid] = map;
-			merged_ttlm.uplink[tid] = map;
-		}
 	}
 
-	mutex_lock(&dev->mt76.mutex);
+	mt7996_get_merged_ttlm(vif, &merged_ttlm);
+
 	ret = mt7996_mcu_peer_mld_ttlm_req(dev, vif, sta, &merged_ttlm);
 	mutex_unlock(&dev->mt76.mutex);
 	return ret;
@@ -2965,6 +2953,48 @@ mt7996_set_qos_map(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	return ret;
 }
 
+static void
+mt7996_sta_channel_switch(struct ieee80211_hw *hw,
+			  struct ieee80211_vif *vif,
+			  struct ieee80211_channel_switch *ch_switch)
+{
+#define TX_PAUSED_GRACE_PERIOD		2000
+	struct mt7996_dev *dev = mt7996_hw_dev(hw);
+	struct ieee80211_bss_conf *conf;
+	struct mt7996_vif_link *mconf;
+	unsigned int link_id = ch_switch->link_id;
+	int csa_time;
+
+	if (vif->type != NL80211_IFTYPE_STATION)
+		return;
+
+	mutex_lock(&dev->mt76.mutex);
+
+	conf = link_conf_dereference_protected(vif, link_id);
+	mconf = mt7996_vif_link(dev, vif, link_id);
+	if (!conf || !mconf) {
+		mutex_unlock(&dev->mt76.mutex);
+		return;
+	}
+
+	/* a new csa occurred while the original one was still in progress */
+	if (mconf->state != MT7996_STA_CHSW_IDLE)
+		mt7996_sta_chsw_state_reset(mconf);
+
+	csa_time = (max_t(u8, ch_switch->count, 1) - 1) * conf->beacon_int;
+	mconf->pause_timeout = TX_PAUSED_GRACE_PERIOD +
+			       MT7996_MAX_BEACON_LOSS * conf->beacon_int +
+			       cfg80211_chandef_dfs_cac_time(hw->wiphy,
+							     &ch_switch->chandef);
+	mconf->next_state = MT7996_STA_CHSW_PAUSE_TX;
+	mutex_unlock(&dev->mt76.mutex);
+
+	cancel_delayed_work(&mconf->sta_chsw_work);
+	ieee80211_queue_delayed_work(hw, &mconf->sta_chsw_work,
+				     msecs_to_jiffies(csa_time));
+}
+
+
 const struct ieee80211_ops mt7996_ops = {
 	.add_chanctx = mt76_add_chanctx,
 	.remove_chanctx = mt76_remove_chanctx,
@@ -3036,4 +3066,5 @@ const struct ieee80211_ops mt7996_ops = {
 	.set_sta_ttlm = mt7996_set_sta_ttlm,
 	.can_neg_ttlm = mt7996_can_neg_ttlm,
 	.set_ttlm = mt7996_set_ttlm,
+	.channel_switch = mt7996_sta_channel_switch,
 };
