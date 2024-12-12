@@ -719,7 +719,9 @@ mt7996_mac_fill_rx(struct mt7996_dev *dev, enum mt76_rxq_id q,
 
 	trace_mt7996_fill_rx_done(phy, status->seqno, hdr_gap);
 
-	if (!status->wcid || !ieee80211_is_data_qos(fc) || hw_aggr)
+	status->wcid_idx = status->wcid ? status->wcid->idx : 0;
+
+	if (!status->wcid_idx || !ieee80211_is_data_qos(fc) || hw_aggr)
 		return 0;
 
 	status->aggr = unicast &&
