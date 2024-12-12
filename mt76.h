@@ -464,7 +464,7 @@ struct mt76_wcid {
 
 	struct list_head poll_list;
 
-	struct mt76_wcid *def_wcid;
+	struct mt76_wcid __rcu *def_wcid;
 };
 
 struct mt76_txq {
@@ -1604,10 +1604,9 @@ wcid_to_sta(struct mt76_wcid *wcid)
 	if (!wcid || !wcid->sta)
 		return NULL;
 
-	if (wcid->def_wcid)
-		ptr = wcid->def_wcid;
+	ptr = rcu_dereference(wcid->def_wcid);
 
-	return container_of(ptr, struct ieee80211_sta, drv_priv);
+	return ptr ? container_of(ptr, struct ieee80211_sta, drv_priv) : NULL;
 }
 
 static inline struct mt76_tx_cb *mt76_tx_skb_cb(struct sk_buff *skb)
