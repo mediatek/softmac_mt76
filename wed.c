@@ -178,6 +178,11 @@ int mt76_wed_dma_setup(struct mt76_dev *dev, struct mt76_queue *q, bool reset)
 		mt76_dma_rx_fill_buf(dev, q, false);
 		mtk_wed_device_ind_rx_ring_setup(q->wed, q->regs);
 		break;
+	case MT76_WED_RRO_Q_RXDMAD_C:
+		q->flags &= ~MT_QFLAG_WED;
+		mt76_dma_queue_reset(dev, q, true);
+		mtk_wed_device_rro_3_1_rx_ring_setup(q->wed, q->regs);
+		break;
 	default:
 		ret = -EINVAL;
 		break;

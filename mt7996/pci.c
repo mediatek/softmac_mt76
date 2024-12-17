@@ -13,8 +13,8 @@
 static bool hif2_enable = false;
 module_param(hif2_enable, bool, 0644);
 
-static bool rro_enable = false;
-module_param(rro_enable, bool, 0644);
+static int rro_mode = MT76_HWRRO_DISABLE;
+module_param(rro_mode, int, 0644);
 
 static LIST_HEAD(hif_list);
 static DEFINE_SPINLOCK(hif_lock);
@@ -151,8 +151,20 @@ static int mt7996_pci_probe(struct pci_dev *pdev,
 	if (IS_ERR(dev))
 		return PTR_ERR(dev);
 
-	dev->has_rro = rro_enable;
 	mdev = &dev->mt76;
+	switch (rro_mode) {
+	case MT76_HWRRO_V3:
+		mdev->hwrro_mode = rro_mode;
+		break;
+	case MT76_HWRRO_V3_1:
+		mdev->hwrro_mode = is_mt7996(mdev) ? MT76_HWRRO_V3 : MT76_HWRRO_V3_1;
+		break;
+	case MT76_HWRRO_DISABLE:
+	default:
+		mdev->hwrro_mode = MT76_HWRRO_DISABLE;
+		break;
+	}
+
 	mt7996_wfsys_reset(dev);
 	hif2 = mt7996_pci_init_hif2(pdev);
 	if (hif2)

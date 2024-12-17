@@ -606,6 +606,8 @@ mt7996_show_dma_info(struct seq_file *s, struct mt7996_dev *dev)
 		WF_WFDMA_HOST_DMA0_WPDMA_RX_RING12_CTRL0_ADDR);
 	dump_dma_rx_ring_info(s, dev, "IND:IND_CMD(MAC2H)", "Both",
 		WF_RRO_TOP_IND_CMD_0_CTRL0_ADDR);
+	dump_dma_rx_ring_info(s, dev, "RRO:Data0(MAC2H)", "Both",
+		WF_RRO_TOP_RX_RING_AP_0_CTRL0_ADDR);
 
 	if (dev->hif2) {
 		seq_printf(s, "HOST_DMA0 PCIe1 Ring Configuration\n");
@@ -4487,7 +4489,12 @@ mt7996_rx_drop_show(struct seq_file *s, void *data)
 	struct mt76_queue *q[2];
 	int i = 0;
 
-	q[0] = &mdev->q_rx[MT_RXQ_MAIN];
+	if (mtk_wed_device_active(&mdev->mmio.wed) &&
+	    mdev->mmio.wed.version == MTK_WED_HW_V3_1)
+		q[0] = &mdev->q_rx[MT_RXQ_WED_RX_DATA];
+	else
+		q[0] = &mdev->q_rx[MT_RXQ_MAIN];
+
 	q[1] = is_mt7996(mdev) ? &mdev->q_rx[MT_RXQ_BAND2] :
 				 &mdev->q_rx[MT_RXQ_BAND1];
 
@@ -4760,7 +4767,7 @@ void mt7996_mtk_init_dev_debugfs(struct mt7996_dev *dev, struct dentry *dir)
 	debugfs_create_file("muru_fixed_group_rate", 0600, dir, dev,
 			    &fops_muru_fixed_group_rate);
 
-	if (dev->has_rro) {
+	if (mt7996_has_hwrro(dev)) {
 		debugfs_create_u32("rro_sid", 0600, dir, &dev->dbg.sid);
 		debugfs_create_devm_seqfile(dev->mt76.dev, "rro_sid_info", dir,
 					    mt7996_rro_session_read);

@@ -2370,14 +2370,15 @@ mt7996_mac_restart(struct mt7996_dev *dev)
 	if (ret)
 		goto out;
 
-	if (mtk_wed_device_active(&dev->mt76.mmio.wed) && dev->has_rro) {
+	if (mtk_wed_device_active(&dev->mt76.mmio.wed) && mt7996_has_hwrro(dev)) {
 		u32 wed_irq_mask = dev->mt76.mmio.irqmask |
 				   MT_INT_TX_DONE_BAND2;
 
 		mt7996_rro_hw_init(dev);
 		mt76_for_each_q_rx(&dev->mt76, i) {
 			if (mt76_queue_is_wed_rro_ind(&dev->mt76.q_rx[i]) ||
-			    mt76_queue_is_wed_rro_msdu_pg(&dev->mt76.q_rx[i]))
+			    mt76_queue_is_wed_rro_msdu_pg(&dev->mt76.q_rx[i]) ||
+			    mt76_queue_is_wed_rro_rxdmad_c(&dev->mt76.q_rx[i]))
 				mt76_queue_rx_reset(dev, i);
 		}
 
@@ -2623,7 +2624,7 @@ void mt7996_mac_reset_work(struct work_struct *work)
 	dev_info(dev->mt76.dev,"%s L1 SER dma start done.",
 		 wiphy_name(dev->mt76.hw->wiphy));
 
-	if (is_mt7992(&dev->mt76) && dev->has_rro)
+	if (!is_mt7996(&dev->mt76) && dev->mt76.hwrro_mode == MT76_HWRRO_V3)
 		mt76_wr(dev, MT_RRO_3_0_EMU_CONF, MT_RRO_3_0_EMU_CONF_EN_MASK);
 
 	if (mtk_wed_device_active(&dev->mt76.mmio.wed)) {

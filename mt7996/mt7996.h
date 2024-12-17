@@ -99,7 +99,7 @@
 #define MT7996_EEPROM_BLOCK_SIZE		16
 #define MT7996_EXT_EEPROM_BLOCK_SIZE	1024
 #define MT7996_TOKEN_SIZE		16384
-#define MT7996_HW_TOKEN_SIZE		8192
+#define MT7996_WED_TOKEN_SIZE		16384
 #define MT7996_SW_TOKEN_SIZE		15360
 #define MT7996_PER_BAND_TOKEN_SIZE	4000
 
@@ -249,6 +249,7 @@ enum mt7996_coredump_state {
 };
 
 enum mt7996_txq_id {
+	MT7996_TXQ_WED_RX = 0,
 	MT7996_TXQ_FWDL = 16,
 	MT7996_TXQ_MCU_WM,
 	MT7996_TXQ_BAND0,
@@ -271,11 +272,13 @@ enum mt7996_rxq_id {
 	MT7996_RXQ_RRO_BAND2 = 6,
 	MT7996_RXQ_MSDU_PG_BAND0 = 10,
 	MT7996_RXQ_MSDU_PG_BAND1 = 11,
+	MT7996_RXQ_WED_RX_DATA = 11, /* for mt7992 and mt7990 with wed 3.1 */
 	MT7996_RXQ_MSDU_PG_BAND2 = 12,
 	MT7996_RXQ_TXFREE0 = 9,
 	MT7996_RXQ_TXFREE1 = 9,
 	MT7996_RXQ_TXFREE2 = 7,
 	MT7996_RXQ_RRO_IND = 0,
+	MT7996_RXQ_RRO_RXDMAD_C = 0,
 	MT7990_RXQ_TXFREE0 = 6,
 	MT7990_RXQ_TXFREE1 = 7,
 };
@@ -831,7 +834,6 @@ struct mt7996_dev {
 
 	bool flash_mode:1;
 	bool has_eht:1;
-	bool has_rro:1;
 
 	bool fips_cap:1;
 	bool pwr_boost_cap:1;
@@ -1263,6 +1265,11 @@ int mt7996_mcu_mld_set_attlm(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 int mt7996_mcu_peer_mld_ttlm_req(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 				 struct ieee80211_sta *sta,
 				 struct ieee80211_neg_ttlm *neg_ttlm);
+
+static inline bool mt7996_has_hwrro(struct mt7996_dev *dev)
+{
+	return dev->mt76.hwrro_mode != MT76_HWRRO_DISABLE;
+}
 
 static inline u8 mt7996_max_interface_num(struct mt7996_dev *dev)
 {

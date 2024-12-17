@@ -717,11 +717,11 @@ void mt7996_mac_init(struct mt7996_dev *dev)
 	}
 
 	/* griffin does not have WA */
-	if (!dev->has_rro && mt7996_has_wa(dev))
+	if (!mt7996_has_hwrro(dev) && mt7996_has_wa(dev))
 		txfree_path = MT7996_TXFREE_FROM_WA;
 
 	rx_path_type = dev->hif2 ? rx_path_type : 0;
-	rro_bypass = dev->has_rro ? rro_bypass : MT7996_RRO_ALL_BYPASS;
+	rro_bypass = mt7996_has_hwrro(dev) ? rro_bypass : MT7996_RRO_ALL_BYPASS;
 
 	mt7996_mcu_set_rro(dev, UNI_RRO_SET_PLATFORM_TYPE, rx_path_type);
 	mt7996_mcu_set_rro(dev, UNI_RRO_SET_BYPASS_MODE, rro_bypass);
@@ -731,7 +731,7 @@ void mt7996_mac_init(struct mt7996_dev *dev)
 		"Platform_type = %d, bypass_rro = %d, txfree_path = %d\n",
 		rx_path_type, rro_bypass, txfree_path);
 
-	if (dev->has_rro) {
+	if (mt7996_has_hwrro(dev)) {
 		u16 timeout;
 
 		timeout = mt76_rr(dev, MT_HW_REV) == MT_HW_REV1 ? 512 : 128;
@@ -949,13 +949,52 @@ void mt7996_wfsys_reset(struct mt7996_dev *dev)
 	msleep(20);
 }
 
-void mt7996_rro_hw_init(struct mt7996_dev *dev)
+static void mt7996_rro_v3_hw_init(struct mt7996_dev *dev)
 {
 	struct mtk_wed_device *wed = &dev->mt76.mmio.wed;
+
+	if (dev->mt76.hwrro_mode == MT76_HWRRO_V3_1)
+		return;
+
+	if (mt76_wed_check_rx_cap(wed)) {
+		wed->wlan.ind_cmd.win_size = ffs(MT7996_RRO_WINDOW_MAX_LEN) - 6;
+		if (is_mt7996(&dev->mt76))
+			wed->wlan.ind_cmd.particular_sid = MT7996_RRO_MAX_SESSION;
+		else
+			wed->wlan.ind_cmd.particular_sid = 1;
+		wed->wlan.ind_cmd.particular_se_phys = dev->wed_rro.session.phy_addr;
+		wed->wlan.ind_cmd.se_group_nums = MT7996_RRO_ADDR_ELEM_LEN;
+		wed->wlan.ind_cmd.ack_sn_addr = MT_RRO_ACK_SN_CTRL;
+
+		mt76_wr(dev, MT_RRO_IND_CMD_SIGNATURE_BASE0, 0x15010e00);
+		mt76_set(dev, MT_RRO_IND_CMD_SIGNATURE_BASE1,
+			MT_RRO_IND_CMD_SIGNATURE_BASE1_EN);
+	} else {
+		mt76_wr(dev, MT_RRO_IND_CMD_SIGNATURE_BASE0, 0);
+		mt76_wr(dev, MT_RRO_IND_CMD_SIGNATURE_BASE1, 0);
+	}
+
+	/* particular session configure */
+	/* use max session idx + 1 as particular session id */
+	mt76_wr(dev, MT_RRO_PARTICULAR_CFG0, dev->wed_rro.session.phy_addr);
+
+	if (!is_mt7996(&dev->mt76))
+		mt76_wr(dev, MT_RRO_PARTICULAR_CFG1,
+			MT_RRO_PARTICULAR_CONFG_EN |
+			FIELD_PREP(MT_RRO_PARTICULAR_SID, 1));
+	else
+		mt76_wr(dev, MT_RRO_PARTICULAR_CFG1,
+			MT_RRO_PARTICULAR_CONFG_EN |
+			FIELD_PREP(MT_RRO_PARTICULAR_SID, MT7996_RRO_MAX_SESSION));
+
+}
+
+void mt7996_rro_hw_init(struct mt7996_dev *dev)
+{
 	u32 reg = MT_RRO_ADDR_ELEM_SEG_ADDR0;
 	int i;
 
-	if (!dev->has_rro)
+	if (!mt7996_has_hwrro(dev))
 		return;
 
 	INIT_LIST_HEAD(&dev->wed_rro.pg_addr_cache);
@@ -963,12 +1002,30 @@ void mt7996_rro_hw_init(struct mt7996_dev *dev)
 		INIT_LIST_HEAD(&dev->wed_rro.pg_hash_head[i]);
 
 	if (!is_mt7996(&dev->mt76)) {
-		/* set emul 3.0 function */
-		mt76_wr(dev, MT_RRO_3_0_EMU_CONF,
-			MT_RRO_3_0_EMU_CONF_EN_MASK);
+		reg = MT_RRO_MSDU_PG_SEG_ADDR0;
 
-		mt76_wr(dev, MT_RRO_ADDR_ARRAY_BASE0,
-			dev->wed_rro.addr_elem[0].phy_addr);
+		if (dev->mt76.hwrro_mode == MT76_HWRRO_V3_1) {
+			mt76_clear(dev, MT_RRO_3_0_EMU_CONF,
+				   MT_RRO_3_0_EMU_CONF_EN_MASK);
+			mt76_set(dev, MT_RRO_3_1_GLOBAL_CONFIG,
+				 MT_RRO_3_1_GLOBAL_CONFIG_RXDMAD_SEL);
+		} else {
+			/* set emul 3.0 function */
+			mt76_wr(dev, MT_RRO_3_0_EMU_CONF,
+				MT_RRO_3_0_EMU_CONF_EN_MASK);
+
+			mt76_wr(dev, MT_RRO_ADDR_ARRAY_BASE0,
+				dev->wed_rro.addr_elem[0].phy_addr);
+		}
+
+		mt76_set(dev, MT_RRO_3_1_GLOBAL_CONFIG,
+			 MT_RRO_3_1_GLOBAL_CONFIG_INTERLEAVE_EN);
+
+		/* setup Msdu page address */
+		for (i = 0; i < MT7996_RRO_MSDU_PG_CR_CNT; i++) {
+			mt76_wr(dev, reg, dev->wed_rro.msdu_pg[i].phy_addr >> 4);
+			reg += 4;
+		}
 	} else {
 
 		/* TODO: remove line after WM has set */
@@ -993,47 +1050,8 @@ void mt7996_rro_hw_init(struct mt7996_dev *dev)
 			MT_RRO_ADDR_ARRAY_ELEM_ADDR_SEG_MODE);
 	}
 
-	if (mtk_wed_device_active(wed) && mtk_wed_get_rx_capa(wed)) {
-		wed->wlan.ind_cmd.win_size = ffs(MT7996_RRO_WINDOW_MAX_LEN) - 6;
-		if (is_mt7996(&dev->mt76))
-			wed->wlan.ind_cmd.particular_sid = MT7996_RRO_MAX_SESSION;
-		else
-			wed->wlan.ind_cmd.particular_sid = 1;
-		wed->wlan.ind_cmd.particular_se_phys = dev->wed_rro.session.phy_addr;
-		wed->wlan.ind_cmd.se_group_nums = MT7996_RRO_ADDR_ELEM_LEN;
-		wed->wlan.ind_cmd.ack_sn_addr = MT_RRO_ACK_SN_CTRL;
+	mt7996_rro_v3_hw_init(dev);
 
-		mt76_wr(dev, MT_RRO_IND_CMD_SIGNATURE_BASE0, 0x15010e00);
-		mt76_set(dev, MT_RRO_IND_CMD_SIGNATURE_BASE1,
-			MT_RRO_IND_CMD_SIGNATURE_BASE1_EN);
-	} else {
-		mt76_wr(dev, MT_RRO_IND_CMD_SIGNATURE_BASE0, 0);
-		mt76_wr(dev, MT_RRO_IND_CMD_SIGNATURE_BASE1, 0);
-	}
-
-	/* particular session configure */
-	/* use max session idx + 1 as particular session id */
-	mt76_wr(dev, MT_RRO_PARTICULAR_CFG0, dev->wed_rro.session.phy_addr);
-
-	if (!is_mt7996(&dev->mt76)) {
-		reg = MT_RRO_MSDU_PG_SEG_ADDR0;
-
-		mt76_set(dev, MT_RRO_3_1_GLOBAL_CONFIG,
-			 MT_RRO_3_1_GLOBAL_CONFIG_INTERLEAVE_EN);
-
-		/* setup Msdu page address */
-		for (i = 0; i < MT7996_RRO_MSDU_PG_CR_CNT; i++) {
-			mt76_wr(dev, reg, dev->wed_rro.msdu_pg[i].phy_addr >> 4);
-			reg += 4;
-		}
-		mt76_wr(dev, MT_RRO_PARTICULAR_CFG1,
-			MT_RRO_PARTICULAR_CONFG_EN |
-			FIELD_PREP(MT_RRO_PARTICULAR_SID, 1));
-	} else {
-		mt76_wr(dev, MT_RRO_PARTICULAR_CFG1,
-			MT_RRO_PARTICULAR_CONFG_EN |
-			FIELD_PREP(MT_RRO_PARTICULAR_SID, MT7996_RRO_MAX_SESSION));
-	}
 	/* interrupt enable */
 	mt76_wr(dev, MT_RRO_HOST_INT_ENA,
 		MT_RRO_HOST_INT_ENA_HOST_RRO_DONE_ENA);
@@ -1047,18 +1065,20 @@ static int mt7996_wed_rro_init(struct mt7996_dev *dev)
 	void *ptr;
 	int i;
 
-	if (!dev->has_rro)
+	if (!mt7996_has_hwrro(dev))
 		return 0;
 
-	for (i = 0; i < ARRAY_SIZE(dev->wed_rro.ba_bitmap); i++) {
-		ptr = dmam_alloc_coherent(dev->mt76.dma_dev,
-					  MT7996_RRO_BA_BITMAP_CR_SIZE,
-					  &dev->wed_rro.ba_bitmap[i].phy_addr,
-					  GFP_KERNEL);
-		if (!ptr)
-			return -ENOMEM;
+	if (dev->mt76.hwrro_mode == MT76_HWRRO_V3) {
+		for (i = 0; i < ARRAY_SIZE(dev->wed_rro.ba_bitmap); i++) {
+			ptr = dmam_alloc_coherent(dev->mt76.dma_dev,
+						  MT7996_RRO_BA_BITMAP_CR_SIZE,
+						  &dev->wed_rro.ba_bitmap[i].phy_addr,
+						  GFP_KERNEL);
+			if (!ptr)
+				return -ENOMEM;
 
-		dev->wed_rro.ba_bitmap[i].ptr = ptr;
+			dev->wed_rro.ba_bitmap[i].ptr = ptr;
+		}
 	}
 
 	for (i = 0; i < ARRAY_SIZE(dev->wed_rro.addr_elem); i++) {
@@ -1080,7 +1100,7 @@ static int mt7996_wed_rro_init(struct mt7996_dev *dev)
 			addr->signature = 0xff;
 			addr++;
 		}
-		if (mtk_wed_device_active(wed) && mtk_wed_get_rx_capa(wed))
+		if (mt76_wed_check_rx_cap(wed))
 			wed->wlan.ind_cmd.addr_elem_phys[i] = dev->wed_rro.addr_elem[i].phy_addr;
 	}
 
@@ -1119,7 +1139,7 @@ static void mt7996_wed_rro_free(struct mt7996_dev *dev)
 {
 	int i;
 
-	if (!dev->has_rro)
+	if (!mt7996_has_hwrro(dev))
 		return;
 
 	for (i = 0; i < ARRAY_SIZE(dev->wed_rro.ba_bitmap); i++) {
@@ -1872,7 +1892,7 @@ void mt7996_unregister_device(struct mt7996_dev *dev)
 	mt7996_mcu_exit(dev);
 	mt7996_tx_token_put(dev);
 	mt7996_dma_cleanup(dev);
-	if (dev->has_rro && !mtk_wed_device_active(&dev->mt76.mmio.wed)) {
+	if (mt7996_has_hwrro(dev) && !mtk_wed_device_active(&dev->mt76.mmio.wed)) {
 		mt7996_rro_msdu_pg_free(dev);
 		mt7996_rx_token_put(dev);
 	}

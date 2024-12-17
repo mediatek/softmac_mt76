@@ -74,6 +74,7 @@
 #define MT_WED_RRO_Q_DATA(_n)	__MT_WED_RRO_Q(MT76_WED_RRO_Q_DATA, _n)
 #define MT_WED_RRO_Q_MSDU_PG(_n)	__MT_WED_RRO_Q(MT76_WED_RRO_Q_MSDU_PG, _n)
 #define MT_WED_RRO_Q_IND	__MT_WED_RRO_Q(MT76_WED_RRO_Q_IND, 0)
+#define MT_WED_RRO_Q_RXDMAD_C	__MT_WED_RRO_Q(MT76_WED_RRO_Q_RXDMAD_C, 0)
 
 
 struct mt76_dev;
@@ -101,6 +102,13 @@ enum mt76_wed_type {
 	MT76_WED_RRO_Q_DATA,
 	MT76_WED_RRO_Q_MSDU_PG,
 	MT76_WED_RRO_Q_IND,
+	MT76_WED_RRO_Q_RXDMAD_C,
+};
+
+enum mt76_hwrro_mode {
+	MT76_HWRRO_DISABLE,
+	MT76_HWRRO_V3,
+	MT76_HWRRO_V3_1,
 };
 
 struct mt76_bus_ops {
@@ -159,6 +167,8 @@ enum mt76_rxq_id {
 	MT_RXQ_TXFREE_BAND1,
 	MT_RXQ_TXFREE_BAND2,
 	MT_RXQ_RRO_IND,
+	MT_RXQ_RRO_RXDMAD_C,
+	MT_RXQ_WED_RX_DATA,
 	__MT_RXQ_MAX
 };
 
@@ -1117,6 +1127,7 @@ struct mt76_dev {
 	struct mt76_queue q_rx[__MT_RXQ_MAX];
 	const struct mt76_queue_ops *queue_ops;
 	int tx_dma_idx[4];
+	enum mt76_hwrro_mode hwrro_mode;
 
 	struct mt76_worker tx_worker;
 	struct napi_struct tx_napi;
@@ -1430,6 +1441,11 @@ int mt76_wed_net_setup_tc(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 u32 mt76_wed_init_rx_buf(struct mtk_wed_device *wed, int size);
 int mt76_wed_offload_enable(struct mtk_wed_device *wed);
 int mt76_wed_dma_setup(struct mt76_dev *dev, struct mt76_queue *q, bool reset);
+
+static inline bool mt76_wed_check_rx_cap(struct mtk_wed_device *wed)
+{
+	return mtk_wed_device_active(wed) && mtk_wed_get_rx_capa(wed);
+}
 #else
 static inline u32 mt76_wed_init_rx_buf(struct mtk_wed_device *wed, int size)
 {
@@ -1445,6 +1461,11 @@ static inline int mt76_wed_dma_setup(struct mt76_dev *dev, struct mt76_queue *q,
 				     bool reset)
 {
 	return 0;
+}
+
+static inline bool mt76_wed_check_rx_cap(struct mtk_wed_device *wed)
+{
+	return false;
 }
 #endif /* CONFIG_NET_MEDIATEK_SOC_WED */
 
@@ -2058,6 +2079,12 @@ static inline bool mt76_queue_is_wed_rro_ind(struct mt76_queue *q)
 {
 	return mt76_queue_is_wed_rro(q) &&
 	       FIELD_GET(MT_QFLAG_WED_TYPE, q->flags) == MT76_WED_RRO_Q_IND;
+}
+
+static inline bool mt76_queue_is_wed_rro_rxdmad_c(struct mt76_queue *q)
+{
+	return mt76_queue_is_wed_rro(q) &&
+	       FIELD_GET(MT_QFLAG_WED_TYPE, q->flags) == MT76_WED_RRO_Q_RXDMAD_C;
 }
 
 static inline bool mt76_queue_is_wed_rro_data(struct mt76_queue *q)

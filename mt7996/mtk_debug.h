@@ -942,7 +942,8 @@ struct queue_desc {
 /* RRO TOP */
 #define WF_RRO_TOP_BASE                                        0xA000 /*0x820C2000 */
 #define WF_RRO_TOP_IND_CMD_0_CTRL0_ADDR                        (WF_RRO_TOP_BASE + 0x40) // 2040
-											//
+#define WF_RRO_TOP_RX_RING_AP_0_CTRL0_ADDR                     (WF_RRO_TOP_BASE + 0x650) // 2650
+
 /* WTBL */
 enum mt7996_wtbl_type {
 	WTBL_TYPE_LMAC, 	/* WTBL in LMAC */

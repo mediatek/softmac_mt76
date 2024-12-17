@@ -123,8 +123,13 @@ enum offs_rev {
 
 #define MT_RRO_3_1_GLOBAL_CONFIG		MT_RRO_TOP(0x604)
 #define MT_RRO_3_1_GLOBAL_CONFIG_INTERLEAVE_EN	BIT(0)
+#define MT_RRO_3_1_GLOBAL_CONFIG_RX_DIDX_WR_EN	BIT(2)
+#define MT_RRO_3_1_GLOBAL_CONFIG_RX_CIDX_RD_EN	BIT(3)
+#define MT_RRO_3_1_GLOBAL_CONFIG_RXDMAD_SEL	BIT(6)
 
 #define MT_RRO_MSDU_PG_SEG_ADDR0		MT_RRO_TOP(0x620)
+#define MT_RRO_RX_RING_AP_CIDX_ADDR		MT_RRO_TOP(0x6f0)
+#define MT_RRO_RX_RING_AP_DIDX_ADDR		MT_RRO_TOP(0x6f4)
 
 #define MT_RRO_ACK_SN_CTRL			MT_RRO_TOP(0x50)
 #define MT_RRO_ACK_SN_CTRL_SN_MASK		GENMASK(27, 16)
@@ -522,6 +527,7 @@ enum offs_rev {
 #define MT_TXQ_RING_BASE(q)			(MT_Q_BASE(__TXQ(q)) + 0x300)
 #define MT_RXQ_RING_BASE(q)			(MT_Q_BASE(__RXQ(q)) + 0x500)
 #define MT_RXQ_RRO_IND_RING_BASE		MT_RRO_TOP(0x40)
+#define MT_RXQ_RRO_AP_RING_BASE			MT_RRO_TOP(0x650)
 
 #define MT_MCUQ_EXT_CTRL(q)			(MT_Q_BASE(q) +	0x600 +	\
 						 MT_MCUQ_ID(q) * 0x4)
@@ -544,6 +550,7 @@ enum offs_rev {
 #define MT_INT_RX_DONE_WA_MAIN			BIT(2)
 #define MT_INT_RX_DONE_WA_EXT			BIT(3) /* for mt7992 */
 #define MT_INT_RX_DONE_WA_TRI			BIT(3)
+#define MT_INT_RX_DONE_WED_RX_DATA_MT7996	BIT(4) /* for mt7996 */
 #define MT_INT_RX_TXFREE_MAIN			BIT(17)
 #define MT_INT_RX_TXFREE_BAND1			BIT(15)
 #define MT_INT_RX_TXFREE_TRI			BIT(15)
@@ -558,8 +565,10 @@ enum offs_rev {
 #define MT_INT_RX_DONE_RRO_BAND1		BIT(17)
 #define MT_INT_RX_DONE_RRO_BAND2		BIT(14)
 #define MT_INT_RX_DONE_RRO_IND			BIT(11)
+#define MT_INT_RX_DONE_RRO_RXDMAD_C		BIT(11)
 #define MT_INT_RX_DONE_MSDU_PG_BAND0		BIT(18)
 #define MT_INT_RX_DONE_MSDU_PG_BAND1		BIT(19)
+#define MT_INT_RX_DONE_WED_RX_DATA		BIT(19) /* for mt7992 and mt7990 */
 #define MT_INT_RX_DONE_MSDU_PG_BAND2		BIT(23)
 
 #define MT_INT_RX(q)				(dev->q_int_mask[__RXQ(q)])
