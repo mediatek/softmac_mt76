@@ -15,6 +15,7 @@
 #define MT7996_MAX_RADIOS		3
 #define MT7996_MAX_INTERFACES		19	/* per-band */
 #define MT7996_MAX_WMM_SETS		4
+#define MT7996_MAX_MBSSID		16
 #define MT7996_WTBL_BMC_SIZE		(is_mt7996(&dev->mt76) ? 64 : 32)
 #define MT7996_WTBL_RESERVED		(mt7996_wtbl_size(dev) - 1)
 #define MT7996_WTBL_STA			(MT7996_WTBL_RESERVED - \
@@ -447,6 +448,7 @@ struct mt7996_vif_link {
 
 	u8 mld_idx;
 	u8 bpcc;
+	u8 mbssid_idx;
 
 	s64 tsf_offset[IEEE80211_MLD_MAX_NUM_LINKS];
 };
@@ -760,6 +762,8 @@ struct mt7996_phy {
 	bool thermal_protection_enable:1;
 	bool mru_probe_enable:1;
 #endif
+	/* Index 0 (TxBSS) is not used */
+	struct mt7996_vif_link __rcu *mbssid_conf[MT7996_MAX_MBSSID];
 };
 
 struct mt7996_dev {
