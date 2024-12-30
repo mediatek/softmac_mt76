@@ -17,6 +17,10 @@
 static bool wed_enable = true;
 module_param(wed_enable, bool, 0644);
 
+unsigned int mt76_debug_mask = 0x1f;
+module_param(mt76_debug_mask, uint, 0644);
+MODULE_PARM_DESC(mt76_debug_mask, "Debugging mask");
+
 static const struct __base mt7996_reg_base[] = {
 	[WF_AGG_BASE]		= { { 0x820e2000, 0x820f2000, 0x830e2000 } },
 	[WF_ARB_BASE]		= { { 0x820e3000, 0x820f3000, 0x830e3000 } },
@@ -714,6 +718,7 @@ static int mt7996_mmio_init(struct mt76_dev *mdev,
 	dev->mt76.bus = bus_ops;
 
 	mdev->rev = (device_id << 16) | (mt76_rr(dev, MT_HW_REV) & 0xff);
+	mdev->debug_mask = mt76_debug_mask;
 
 	dev_dbg(mdev->dev, "ASIC revision: %04x\n", mdev->rev);
 

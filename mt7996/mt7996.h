@@ -10,6 +10,7 @@
 #include <linux/ktime.h>
 #include <linux/pci.h>
 #include "../mt76_connac.h"
+#include "../debug.h"
 #include "regs.h"
 
 #define MT7996_MAX_RADIOS		3

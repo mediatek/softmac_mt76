@@ -23,6 +23,7 @@
 #endif
 #include "util.h"
 #include "testmode.h"
+#include "debug.h"
 
 #define CHAN2G(_idx, _freq) {			\
 	.band = NL80211_BAND_2GHZ,		\
@@ -1200,6 +1201,8 @@ struct mt76_dev {
 	};
 
 	atomic_t bus_hung;
+
+	unsigned int debug_mask;
 
 	const char *bin_file_name;
 	struct mt76_tx_debug tx_dbg_stats;

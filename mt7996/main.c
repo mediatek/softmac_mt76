@@ -10,10 +10,6 @@
 #include "mtk_mcu.h"
 #endif
 
-unsigned int mt7996_debug_mask = 0x1f;
-module_param(mt7996_debug_mask, uint, 0644);
-MODULE_PARM_DESC(mt7996_debug_mask, "Debugging mask");
-
 static void mt7996_testmode_disable_all(struct mt7996_dev *dev)
 {
 	struct mt7996_phy *phy;
@@ -361,6 +357,11 @@ int mt7996_vif_link_add(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 		link->mbssid_idx = link_conf->bssid_index;
 	}
 
+	mt76_dbg(&dev->mt76, MT76_DBG_BSS,
+		 "%s: band=%u, bss_idx=%u, link_id=%u, wcid=%u\n",
+		 __func__, phy->mt76->band_idx, mlink->idx,
+		 link_id, msta_link->wcid.idx);
+
 	return 0;
 error:
 	mt7996_vif_link_remove(mphy, vif, link_conf, mlink);
@@ -666,7 +667,15 @@ static int mt7996_set_key(struct ieee80211_hw *hw, enum set_key_cmd cmd,
 		else
 			add = vif->valid_links ?: BIT(0);
 	}
-	// print_hex_dump(KERN_INFO , "", DUMP_PREFIX_OFFSET, 16, 1, key->key, key->keylen, false);
+
+	if (sta)
+		mt76_dbg(&dev->mt76, MT76_DBG_STA,
+			 "%s: keyidx=%d, link_bitmap=0x%lx (STA %pM)\n",
+			 __func__, key->keyidx, add, sta->addr);
+	else
+		mt76_dbg(&dev->mt76, MT76_DBG_BSS,
+			 "%s: keyidx=%d, link_bitmap=0x%lx\n",
+			 __func__, key->keyidx, add);
 
 	mutex_lock(&dev->mt76.mutex);
 
@@ -2679,6 +2688,10 @@ mt7996_change_vif_links(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	unsigned long rem = old_links & ~new_links & ~vif->dormant_links;
 	unsigned long add = new_links & ~old_links;
 	int link_id, ret = 0;
+
+	mt76_dbg(&dev->mt76, MT76_DBG_MLD,
+		 "%s: old=0x%x, new=0x%x, dormant=0x%x\n",
+		 __func__, old_links, new_links, vif->dormant_links);
 
 	if (old_links == new_links)
 		return 0;

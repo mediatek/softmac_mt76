@@ -13,7 +13,6 @@
 #include "mcu.h"
 #include "vendor.h"
 #include "mt7996_trace.h"
-#include "debug.h"
 
 static const struct mt7996_dfs_radar_spec etsi_radar_specs = {
 	.pulse_th = { 110, -10, -80, 40, 5200, 128, 5200 },

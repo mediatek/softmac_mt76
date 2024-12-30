@@ -2003,6 +2003,11 @@ mt7996_mcu_bss_basic_tlv(struct sk_buff *skb,
 
 	memcpy(bss->bssid, link_conf->bssid, ETH_ALEN);
 
+	mt76_dbg(phy->dev, MT76_DBG_BSS,
+		 "%s: band=%d, omac=%d, wmm_idx=%d, bssid=%pM, link=%d, en=%d\n",
+		 __func__, bss->band_idx, bss->omac_idx,
+		 bss->wmm_idx, bss->bssid, link_conf->link_id, enable);
+
 	bss->bcn_interval = cpu_to_le16(link_conf->beacon_int);
 	bss->dtim_period = link_conf->dtim_period;
 	bss->phymode = mt76_connac_get_phy_mode(phy, vif,
@@ -3591,6 +3596,9 @@ int mt7996_mcu_add_sta(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 	/* starec basic */
 	mt76_connac_mcu_sta_basic_tlv(&dev->mt76, skb, vif, link_conf, link_sta,
 				      conn_state, newly);
+	mt76_dbg(&dev->mt76, MT76_DBG_DEV,
+		 "%s: link=%u, wcid=%u, newly=%d, conn_state=%d\n",
+		   __func__, wcid->link_id, wcid->idx, newly, conn_state);
 
 	if (conn_state == CONN_STATE_DISCONNECT)
 		goto out;
@@ -3786,9 +3794,13 @@ int mt7996_mcu_add_dev_info(struct mt7996_phy *phy, struct ieee80211_vif *vif,
 	if (mlink->omac_idx >= REPEATER_BSSID_START)
 		return mt7996_mcu_muar_config(dev, mlink, link_conf->addr, false, enable);
 
-	if (link_conf)
+	if (link_conf) {
 		memcpy(data.tlv.omac_addr, link_conf->addr, ETH_ALEN);
-
+		mt76_dbg(&dev->mt76, MT76_DBG_DEV,
+			 "%s: band=%u, omac=%u, addr=%pM, en=%d\n",
+			 __func__, data.hdr.band_idx, data.hdr.omac_idx,
+			 data.tlv.omac_addr, enable);
+	}
 	return mt76_mcu_send_msg(&dev->mt76, MCU_WMWA_UNI_CMD(DEV_INFO_UPDATE),
 				 &data, sizeof(data), true);
 }
@@ -8349,10 +8361,10 @@ int mt7996_mcu_set_eml_omn(struct ieee80211_vif *vif,
 		}
 	}
 
-	mlo_dbg(mconf->phy, "link:%u, wcid:%d, control:%x, mode:%d, bmp:%x\n",
-		msta_link->wcid.link_id, msta_link->wcid.idx, eml_omn->control,
-		!!(eml_omn->control & EML_OMN_CONTROL_EMLSR_MODE),
-		eml_op->bitmap);
+	mt76_dbg(&dev->mt76, MT76_DBG_MLD,
+		 "%s: link:%u, wcid:%d, control:%x, mode:%d, bmp:%x\n",
+		 __func__, msta_link->wcid.link_id, msta_link->wcid.idx, eml_omn->control,
+		 !!(eml_omn->control & EML_OMN_CONTROL_EMLSR_MODE), eml_op->bitmap);
 
 	return mt76_mcu_skb_send_msg(&dev->mt76, skb,
 			MCU_WMWA_UNI_CMD(STA_REC_UPDATE), true);
