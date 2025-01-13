@@ -575,6 +575,14 @@ struct mt7996_sta_rc_work_data {
 	u32 changed;
 };
 
+struct mt7996_wmm_params {
+	int ecwmin;
+	int ecwmax;
+	int aifsn;
+	int txop_limit;
+	int acm;
+};
+
 #ifdef CONFIG_MTK_VENDOR
 #define MT7996_AIR_MONITOR_MAX_ENTRY	16
 #define MT7996_AIR_MONITOR_MAX_GROUP	(MT7996_AIR_MONITOR_MAX_ENTRY >> 1)
@@ -1390,6 +1398,9 @@ int mt7996_mcu_set_pp_en(struct mt7996_phy *phy, u8 mode, u16 bitmap);
 int mt7996_mcu_set_pp_sta_dscb(struct mt7996_phy *phy, struct cfg80211_chan_def *chandef,
 			       u8 omac_idx);
 int mt7996_mcu_set_pp_alg_ctrl(struct mt7996_phy *phy, u8 action);
+int mt7996_mcu_epcs_ctrl(u32 cmd, struct mt7996_dev *dev,
+			 struct ieee80211_sta *sta, u8 link_id, bool enable,
+			 u16 wmm_idx, struct mt7996_wmm_params *params);
 int mt7996_mcu_get_tsf_offset(struct mt7996_phy *phy, struct mt7996_vif *mvif,
 			      int rpting_link_id, int rpted_link_id);
 int mt7996_mcu_set_qos_map(struct mt7996_dev *dev, struct ieee80211_vif *vif,

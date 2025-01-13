@@ -1774,7 +1774,8 @@ mt7996_init_eht_caps(struct mt7996_phy *phy, enum nl80211_band band,
 
 	if (iftype == NL80211_IFTYPE_AP)
 		eht_cap_elem->mac_cap_info[0] |=
-			IEEE80211_EHT_MAC_CAP0_SCS_TRAFFIC_DESC;
+			IEEE80211_EHT_MAC_CAP0_SCS_TRAFFIC_DESC |
+			IEEE80211_EHT_MAC_CAP0_EPCS_PRIO_ACCESS;
 
 	eht_cap_elem->mac_cap_info[1] |=
 		IEEE80211_EHT_MAC_CAP1_MAX_AMPDU_LEN_MASK;
@@ -1859,6 +1860,9 @@ mt7996_init_eht_caps(struct mt7996_phy *phy, enum nl80211_band band,
 
 	if (iftype != NL80211_IFTYPE_AP)
 		return;
+
+	eht_cap_elem->mac_cap_info[1] |=
+		IEEE80211_EHT_MAC_CAP1_UNSOL_EPCS_PRIO_ACCESS;
 
 	eht_cap_elem->phy_cap_info[3] |=
 		IEEE80211_EHT_PHY_CAP3_TRIG_SU_BF_FDBK |
