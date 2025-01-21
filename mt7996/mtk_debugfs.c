@@ -2986,8 +2986,8 @@ static const struct file_operations mt7996_txpower_path_fops = {
 static int mt7996_show_eeprom_mode(struct seq_file *s, void *data)
 {
 	struct mt7996_dev *dev = dev_get_drvdata(s->private);
-	struct mt76_dev *mdev = &dev->mt76;
 #ifdef CONFIG_NL80211_TESTMODE
+	struct mt76_dev *mdev = &dev->mt76;
 	const char *mtd_name = mdev->test_mtd.name;
 	u32 mtd_offset = mdev->test_mtd.offset;
 #else

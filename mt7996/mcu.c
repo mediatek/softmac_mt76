@@ -1989,12 +1989,11 @@ mt7996_mcu_bss_basic_tlv(struct sk_buff *skb,
 	bss->hw_bss_idx = idx;
 
 	if (vif->type == NL80211_IFTYPE_MONITOR) {
-		struct mt76_testmode_data *td = &phy->test;
-
-		if (!td->bf_en)
-			memcpy(bss->bssid, phy->macaddr, ETH_ALEN);
-		else
-			memcpy(bss->bssid, td->addr[2], ETH_ALEN);
+		memcpy(bss->bssid, phy->macaddr, ETH_ALEN);
+#ifdef CONFIG_NL80211_TESTMODE
+		if (mt76_testmode_bf_enabled(phy))
+			memcpy(bss->bssid, phy->test.addr[2], ETH_ALEN);
+#endif
 		return 0;
 	}
 

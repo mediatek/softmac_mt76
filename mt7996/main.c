@@ -12,6 +12,7 @@
 
 static void mt7996_testmode_disable_all(struct mt7996_dev *dev)
 {
+#ifdef CONFIG_NL80211_TESTMODE
 	struct mt7996_phy *phy;
 	int i;
 
@@ -20,6 +21,7 @@ static void mt7996_testmode_disable_all(struct mt7996_dev *dev)
 		if (phy)
 			mt76_testmode_set_state(phy->mt76, MT76_TM_STATE_OFF);
 	}
+#endif
 }
 
 int mt7996_run(struct mt7996_phy *phy)
@@ -580,8 +582,10 @@ static void mt7996_remove_interface(struct ieee80211_hw *hw,
 		if (vif == phy->mt76->monitor_vif) {
 			phy->mt76->monitor_vif = NULL;
 
+#ifdef CONFIG_NL80211_TESTMODE
 			if (dev->testmode_enable)
 				kfree(phy->mt76->lists);
+#endif
 		}
 	}
 
@@ -607,7 +611,7 @@ int mt7996_set_channel(struct mt76_phy *mphy)
 	int ret = 0;
 
 	if (mphy->chanctx && mphy->chanctx->state == MT76_CHANCTX_STATE_ADD) {
-		if (!mt76_testmode_enabled(phy->mt76) && !phy->mt76->test.bf_en) {
+		if (!mt76_testmode_enabled(mphy) && !mt76_testmode_bf_enabled(mphy)) {
 			ret = mt7996_mcu_edcca_enable(phy, true);
 			if (ret)
 				goto out;
@@ -635,7 +639,7 @@ int mt7996_set_channel(struct mt76_phy *mphy)
 			goto out;
 	}
 
-	if (mt76_testmode_enabled(phy->mt76) || phy->mt76->test.bf_en) {
+	if (mt76_testmode_enabled(mphy) || mt76_testmode_bf_enabled(mphy)) {
 		mt7996_tm_update_channel(phy);
 		goto out;
 	}

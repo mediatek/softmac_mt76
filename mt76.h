@@ -1708,6 +1708,15 @@ static inline bool mt76_testmode_enabled(struct mt76_phy *phy)
 #endif
 }
 
+static inline bool mt76_testmode_bf_enabled(struct mt76_phy *phy)
+{
+#ifdef CONFIG_NL80211_TESTMODE
+	return phy->test.bf_en;
+#else
+	return false;
+#endif
+}
+
 static inline bool mt76_is_testmode_skb(struct mt76_dev *dev,
 					struct sk_buff *skb,
 					struct ieee80211_hw **hw)
