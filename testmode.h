@@ -90,6 +90,9 @@
  *
  * @MT76_TM_ATTR_RADIO_IDX: radio index used for single multi-radio wiphy (u32)
  *
+ * @MT76_TM_ATTR_FAST_CAL: perform a fast calibration for a channel switch speed boost
+ *	(u8, see &enum mt76_testmode_fast_cal_type)
+ *
  */
 enum mt76_testmode_attr {
 	MT76_TM_ATTR_UNSPEC,
@@ -164,6 +167,8 @@ enum mt76_testmode_attr {
 	MT76_TM_ATTR_LM_SEG_TIMEOUT,
 
 	MT76_TM_ATTR_RADIO_IDX,
+
+	MT76_TM_ATTR_FAST_CAL,
 
 	/* keep last */
 	NUM_MT76_TM_ATTRS,
@@ -404,6 +409,25 @@ enum mt76_testmode_list_act {
 	/* keep last */
 	NUM_MT76_TM_LM_ACT,
 	MT76_TM_LM_ACT_MAX = NUM_MT76_TM_LM_ACT - 1,
+};
+
+/**
+ * enum mt76_testmode_fast_cal_type - fast channel calibration type
+ *
+ * @MT76_TM_FAST_CAL_TYPE_NONE: perform full calibration
+ * @MT76_TM_FAST_CAL_TYPE_TX: fast calibration for TX verification
+ * @MT76_TM_FAST_CAL_TYPE_RX: fast calibration for RX verification
+ * @MT76_TM_FAST_CAL_TYPE_POWER: fast calibration for power calibration
+ */
+enum mt76_testmode_fast_cal_type {
+	MT76_TM_FAST_CAL_TYPE_NONE,
+	MT76_TM_FAST_CAL_TYPE_TX,
+	MT76_TM_FAST_CAL_TYPE_RX,
+	MT76_TM_FAST_CAL_TYPE_POWER,
+
+	/* keep last */
+	NUM_MT76_TM_FAST_CAL_TYPE,
+	MT76_TM_FAST_CAL_TYPE_MAX = NUM_MT76_TM_FAST_CAL_TYPE - 1,
 };
 
 #endif

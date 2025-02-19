@@ -286,6 +286,9 @@ void
 mt7996_tm_update_channel(struct mt7996_phy *phy)
 {
 #define CHAN_FREQ_BW_80P80_TAG		(SET_ID(CHAN_FREQ) | BIT(16))
+#define FAST_CAL_NONE			BIT(20)
+#define FAST_CAL_RX			BIT(21)
+#define FAST_CAL_POWER			BIT(22)
 	struct mt7996_dev *dev = phy->dev;
 	struct mt76_testmode_data *td = &phy->mt76->test;
 	struct cfg80211_chan_def *chandef = &phy->mt76->chandef;
@@ -334,6 +337,26 @@ mt7996_tm_update_channel(struct mt7996_phy *phy)
 	}
 	mt7996_tm_set(dev, SET_ID(PRIMARY_CH), pri_sel);
 	mt7996_tm_set(dev, SET_ID(BAND), mt7996_tm_band_mapping(chan->band));
+
+	if (mt76_testmode_param_present(td, MT76_TM_ATTR_FAST_CAL)) {
+		switch (td->fast_cal) {
+		case MT76_TM_FAST_CAL_TYPE_RX:
+			mt7996_tm_set(dev, SET_ID(CAL_BITMAP), FAST_CAL_RX);
+			dev_info(dev->mt76.dev, "apply RX fast cal (skip TX cal)\n");
+			break;
+		case MT76_TM_FAST_CAL_TYPE_POWER:
+			mt7996_tm_set(dev, SET_ID(CAL_BITMAP), FAST_CAL_POWER);
+			dev_info(dev->mt76.dev, "apply power fast cal (skip DPD cal)\n");
+			break;
+		case MT76_TM_FAST_CAL_TYPE_NONE:
+		case MT76_TM_FAST_CAL_TYPE_TX:
+		default:
+			/* same as not setting any cal bitmap */
+			mt7996_tm_set(dev, SET_ID(CAL_BITMAP), FAST_CAL_NONE);
+			dev_info(dev->mt76.dev, "apply full cal\n");
+			break;
+		}
+	}
 
 	/* trigger switch channel calibration */
 	mt7996_tm_set(dev, SET_ID(CHAN_FREQ), chandef->center_freq1 * 1000);

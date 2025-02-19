@@ -93,6 +93,13 @@ static const char * const testmode_list_act[] = {
 	[MT76_TM_LM_ACT_DUMP_SEGMENT] = "dump_seg",
 };
 
+static const char * const testmode_fast_cal[] = {
+	[MT76_TM_FAST_CAL_TYPE_NONE] = "none",
+	[MT76_TM_FAST_CAL_TYPE_TX] = "tx_verify",
+	[MT76_TM_FAST_CAL_TYPE_RX] = "rx_verify",
+	[MT76_TM_FAST_CAL_TYPE_POWER] = "power_cal",
+};
+
 static void print_enum(const struct tm_field *field, struct nlattr *attr)
 {
 	unsigned int i = nla_get_u8(attr);
@@ -475,6 +482,7 @@ static const struct tm_field testdata_fields[NUM_MT76_TM_ATTRS] = {
 	FIELD_ENUM(LM_CBW, "lm_cbw", testmode_bw),
 	FIELD(u8, LM_STA_IDX, "lm_sta_idx"),
 	FIELD(u32, LM_SEG_TIMEOUT, "lm_seg_timeout"),
+	FIELD_ENUM(FAST_CAL, "fast_cal", testmode_fast_cal),
 	FIELD_MAC(MAC_ADDRS, "mac_addrs"),
 	FIELD_NESTED_RO(STATS, stats, "",
 			.print_extra = print_extra_stats),
@@ -523,6 +531,7 @@ static struct nla_policy testdata_policy[NUM_MT76_TM_ATTRS] = {
 	[MT76_TM_ATTR_LM_CBW] = { .type = NLA_U8 },
 	[MT76_TM_ATTR_LM_STA_IDX] = { .type = NLA_U8 },
 	[MT76_TM_ATTR_LM_SEG_TIMEOUT] = { .type = NLA_U32 },
+	[MT76_TM_ATTR_FAST_CAL] = { .type = NLA_U8 },
 };
 
 const struct tm_field msg_field = {

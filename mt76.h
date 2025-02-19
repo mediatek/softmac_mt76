@@ -918,6 +918,8 @@ struct mt76_testmode_data {
 
 	u16 rx_gain_bitmap;
 	bool rx_gain_done;
+
+	u8 fast_cal;
 };
 
 enum {

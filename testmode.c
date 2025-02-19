@@ -42,6 +42,7 @@ const struct nla_policy mt76_tm_policy[NUM_MT76_TM_ATTRS] = {
 	[MT76_TM_ATTR_LM_CBW] = { .type = NLA_U8 },
 	[MT76_TM_ATTR_LM_STA_IDX] = { .type = NLA_U8 },
 	[MT76_TM_ATTR_LM_SEG_TIMEOUT] = { .type = NLA_U32 },
+	[MT76_TM_ATTR_FAST_CAL] = { .type = NLA_U8 },
 };
 EXPORT_SYMBOL_GPL(mt76_tm_policy);
 
@@ -873,7 +874,9 @@ int mt76_testmode_cmd(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	    mt76_tm_get_u8(tb[MT76_TM_ATTR_OFF_CH_SCAN_BW], &td->offchan_bw,
 			   NL80211_CHAN_WIDTH_20_NOHT, NL80211_CHAN_WIDTH_160) ||
 	    mt76_tm_get_u8(tb[MT76_TM_ATTR_IPI_THRESHOLD], &td->ipi_threshold, 0, 10) ||
-	    mt76_tm_get_u8(tb[MT76_TM_ATTR_IPI_RESET], &td->ipi_reset, 0, 1))
+	    mt76_tm_get_u8(tb[MT76_TM_ATTR_IPI_RESET], &td->ipi_reset, 0, 1) ||
+	    mt76_tm_get_u8(tb[MT76_TM_ATTR_FAST_CAL], &td->fast_cal,
+			   0, MT76_TM_FAST_CAL_TYPE_MAX))
 		goto out;
 
 	if (tb[MT76_TM_ATTR_TX_LENGTH]) {
@@ -1140,7 +1143,9 @@ int mt76_testmode_dump(struct ieee80211_hw *hw, struct sk_buff *msg,
 	    (mt76_testmode_param_present(td, MT76_TM_ATTR_TX_PRI_SEL) &&
 	     nla_put_u8(msg, MT76_TM_ATTR_TX_PRI_SEL, td->tx_pri_sel)) ||
 	    (mt76_testmode_param_present(td, MT76_TM_ATTR_FREQ_OFFSET) &&
-	     nla_put_u32(msg, MT76_TM_ATTR_FREQ_OFFSET, td->freq_offset)))
+	     nla_put_u32(msg, MT76_TM_ATTR_FREQ_OFFSET, td->freq_offset)) ||
+	    (mt76_testmode_param_present(td, MT76_TM_ATTR_FAST_CAL) &&
+	     nla_put_u8(msg, MT76_TM_ATTR_FAST_CAL, td->fast_cal)))
 		goto out;
 
 	if (mt76_testmode_param_present(td, MT76_TM_ATTR_TX_POWER)) {
