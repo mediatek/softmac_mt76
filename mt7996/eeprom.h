@@ -26,7 +26,7 @@ enum mt7996_eeprom_field {
 	MT_EE_TX0_POWER_6G =	0x1310,
 	MT_EE_RX_GAIN_CAL =	0x1830,
 
-	__MT_EE_MAX =	0x1dff,
+	__MT_EE_MAX =		0x1dff,
 	/* 0x1e10 ~ 0x2d644 used to save group cal data */
 	MT_EE_PRECAL =		0x1e10,
 };

@@ -465,7 +465,8 @@ mt7996_ibf_phase_assign(struct mt7996_dev *dev,
 		phase_assign(cal->group, v2, m_t2_h, true);
 		if (cal->group) {
 			phase->v2.phase_5g.m_t3_h = cal->v2.phase_5g.m_t3_h;
-			dev_info(dev->mt76.dev, "m_t3_h = %d\n", phase->v2.phase_5g.m_t3_h);
+			mt76_dbg(&dev->mt76, MT76_DBG_TEST,
+				 "m_t3_h = %d\n", phase->v2.phase_5g.m_t3_h);
 		}
 		phase_assign_rx_ext(cal->group, v2, r0, true);
 		phase_assign_rx_ext(cal->group, v2, r1, true);
@@ -474,12 +475,18 @@ mt7996_ibf_phase_assign(struct mt7996_dev *dev,
 		if (cal->group) {
 			memcpy(&phase->v2.phase_5g.r4, &cal->v2.phase_5g.r4,
 			       sizeof(struct txbf_rx_phase_ext));
-			dev_info(dev->mt76.dev, "r4.rx_uh = %d\n", phase->v2.phase_5g.r4.rx_uh);
-			dev_info(dev->mt76.dev, "r4.rx_h = %d\n", phase->v2.phase_5g.r4.rx_h);
-			dev_info(dev->mt76.dev, "r4.rx_mh = %d\n", phase->v2.phase_5g.r4.rx_mh);
-			dev_info(dev->mt76.dev, "r4.rx_m = %d\n", phase->v2.phase_5g.r4.rx_m);
-			dev_info(dev->mt76.dev, "r4.rx_l = %d\n", phase->v2.phase_5g.r4.rx_l);
-			dev_info(dev->mt76.dev, "r4.rx_ul = %d\n", phase->v2.phase_5g.r4.rx_ul);
+			mt76_dbg(&dev->mt76, MT76_DBG_TEST,
+				 "r4.rx_uh = %d\n", phase->v2.phase_5g.r4.rx_uh);
+			mt76_dbg(&dev->mt76, MT76_DBG_TEST,
+				 "r4.rx_h = %d\n", phase->v2.phase_5g.r4.rx_h);
+			mt76_dbg(&dev->mt76, MT76_DBG_TEST,
+				 "r4.rx_mh = %d\n", phase->v2.phase_5g.r4.rx_mh);
+			mt76_dbg(&dev->mt76, MT76_DBG_TEST,
+				 "r4.rx_m = %d\n", phase->v2.phase_5g.r4.rx_m);
+			mt76_dbg(&dev->mt76, MT76_DBG_TEST,
+				 "r4.rx_l = %d\n", phase->v2.phase_5g.r4.rx_l);
+			mt76_dbg(&dev->mt76, MT76_DBG_TEST,
+				 "r4.rx_ul = %d\n", phase->v2.phase_5g.r4.rx_ul);
 		}
 	}
 }
@@ -800,57 +807,60 @@ mt7996_mcu_rx_bf_event(struct mt7996_dev *dev, struct sk_buff *skb)
 				break;
 			phase = &phase[cal->group];
 			phase->status = cal->status;
-			dev_info(dev->mt76.dev, "Calibrated result = %d\n", phase->status);
-			dev_info(dev->mt76.dev, "Group %d and Group M\n", cal->group);
+			mt76_dbg(&dev->mt76, MT76_DBG_TEST,
+				 "Calibrated result = %d\n", phase->status);
+			mt76_dbg(&dev->mt76, MT76_DBG_TEST,
+				 "Group %d and Group M\n", cal->group);
 			mt7996_ibf_phase_assign(dev, cal, phase);
 			break;
 		case IBF_PHASE_CAL_VERIFY:
 		case IBF_PHASE_CAL_VERIFY_INSTRUMENT:
-			dev_info(dev->mt76.dev, "Verification result = %d\n", cal->status);
+			mt76_dbg(&dev->mt76, MT76_DBG_TEST,
+				 "Verification result = %d\n", cal->status);
 			break;
 		default:
 			break;
 		}
 
 		if (get_ibf_version(dev) == IBF_VER_2) {
-			dev_info(dev->mt76.dev,
+			mt76_dbg(&dev->mt76, MT76_DBG_TEST,
 				 "c0_uh = %d, c1_uh = %d, c2_uh = %d, c3_uh = %d c4_uh = %d\n",
 				 phase_out.v2.c0_uh, phase_out.v2.c1_uh, phase_out.v2.c2_uh,
 				 phase_out.v2.c3_uh, phase_out.v2.c4_uh);
-			dev_info(dev->mt76.dev,
+			mt76_dbg(&dev->mt76, MT76_DBG_TEST,
 				 "c0_h = %d, c1_h = %d, c2_h = %d, c3_h = %d c4_h = %d\n",
 				 phase_out.v2.c0_h, phase_out.v2.c1_h, phase_out.v2.c2_h,
 				 phase_out.v2.c3_h, phase_out.v2.c4_h);
-			dev_info(dev->mt76.dev,
+			mt76_dbg(&dev->mt76, MT76_DBG_TEST,
 				 "c0_mh = %d, c1_mh = %d, c2_mh = %d, c3_mh = %d c4_mh = %d\n",
 				 phase_out.v2.c0_mh, phase_out.v2.c1_mh, phase_out.v2.c2_mh,
 				 phase_out.v2.c3_mh, phase_out.v2.c4_mh);
-			dev_info(dev->mt76.dev,
+			mt76_dbg(&dev->mt76, MT76_DBG_TEST,
 				 "c0_m = %d, c1_m = %d, c2_m = %d, c3_m = %d c4_m = %d\n",
 				 phase_out.v2.c0_m, phase_out.v2.c1_m, phase_out.v2.c2_m,
 				 phase_out.v2.c3_m, phase_out.v2.c4_m);
-			dev_info(dev->mt76.dev,
+			mt76_dbg(&dev->mt76, MT76_DBG_TEST,
 				 "c0_l = %d, c1_l = %d, c2_l = %d, c3_l = %d c4_l = %d\n",
 				 phase_out.v2.c0_l, phase_out.v2.c1_l, phase_out.v2.c2_l,
 				 phase_out.v2.c3_l, phase_out.v2.c4_l);
 		} else {
-			dev_info(dev->mt76.dev,
+			mt76_dbg(&dev->mt76, MT76_DBG_TEST,
 				 "c0_uh = %d, c1_uh = %d, c2_uh = %d, c3_uh = %d\n",
 				 phase_out.v1.c0_uh, phase_out.v1.c1_uh,
 				 phase_out.v1.c2_uh, phase_out.v1.c3_uh);
-			dev_info(dev->mt76.dev,
+			mt76_dbg(&dev->mt76, MT76_DBG_TEST,
 				 "c0_h = %d, c1_h = %d, c2_h = %d, c3_h = %d\n",
 				 phase_out.v1.c0_h, phase_out.v1.c1_h,
 				 phase_out.v1.c2_h, phase_out.v1.c3_h);
-			dev_info(dev->mt76.dev,
+			mt76_dbg(&dev->mt76, MT76_DBG_TEST,
 				 "c0_mh = %d, c1_mh = %d, c2_mh = %d, c3_mh = %d\n",
 				 phase_out.v1.c0_mh, phase_out.v1.c1_mh,
 				 phase_out.v1.c2_mh, phase_out.v1.c3_mh);
-			dev_info(dev->mt76.dev,
+			mt76_dbg(&dev->mt76, MT76_DBG_TEST,
 				 "c0_m = %d, c1_m = %d, c2_m = %d, c3_m = %d\n",
 				 phase_out.v1.c0_m, phase_out.v1.c1_m,
 				 phase_out.v1.c2_m, phase_out.v1.c3_m);
-			dev_info(dev->mt76.dev,
+			mt76_dbg(&dev->mt76, MT76_DBG_TEST,
 				 "c0_l = %d, c1_l = %d, c2_l = %d, c3_l = %d\n",
 				 phase_out.v1.c0_l, phase_out.v1.c1_l,
 				 phase_out.v1.c2_l, phase_out.v1.c3_l);
@@ -863,6 +873,7 @@ mt7996_mcu_rx_bf_event(struct mt7996_dev *dev, struct sk_buff *skb)
 			 __func__, event->tag);
 	}
 
+	wake_up(&dev->mt76.mcu.wait);
 }
 
 

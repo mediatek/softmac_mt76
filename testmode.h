@@ -23,7 +23,6 @@
  * @MT76_TM_ATTR_SKU_EN: config txpower sku is enabled or disabled in testmode (u8)
  * @MT76_TM_ATTR_TX_COUNT: configured number of frames to send when setting
  *	state to MT76_TM_STATE_TX_FRAMES (u32)
- * @MT76_TM_ATTR_TX_PENDING: pending frames during MT76_TM_STATE_TX_FRAMES (u32)
  * @MT76_TM_ATTR_TX_LENGTH: packet tx mpdu length (u32)
  * @MT76_TM_ATTR_TX_RATE_MODE: packet tx mode (u8, see &enum mt76_testmode_tx_mode)
  * @MT76_TM_ATTR_TX_RATE_NSS: packet tx number of spatial streams (u8)
@@ -44,7 +43,7 @@
  *
  * @MT76_TM_ATTR_STATS: statistics (nested, see &enum mt76_testmode_stats_attr)
  *
- * @MT76_TM_ATTR_PRECAL: Pre-cal data (u8)
+ * @MT76_TM_ATTR_PRECAL: pre-cal data (u8)
  * @MT76_TM_ATTR_PRECAL_INFO: group size, dpd size, dpd_info, transmit size,
  *                            eeprom cal indicator (u32),
  *                            dpd_info = [dpd_per_chan_size, chan_num_2g,
@@ -58,6 +57,9 @@
  * @MT76_TM_ATTR_DRV_DATA: driver specific netlink attrs (nested)
  *
  * @MT76_TM_ATTR_MAC_ADDRS: array of nested MAC addresses (nested)
+ * @MT76_TM_ATTR_AID: association index for wtbl (u8)
+ * @MT76_TM_ATTR_RU_ALLOC: resource unit allocation subfield (u8)
+ * @MT76_TM_ATTR_RU_IDX: resource unit index (u8)
  *
  * @MT76_TM_ATTR_EEPROM_ACTION: eeprom setting actions
  *	(u8, see &enum mt76_testmode_eeprom_action)
@@ -79,7 +81,7 @@
  *			     the histogram of specific IPI index (u8)
  * @MT76_TM_ATTR_IPI_ANTENNA_INDEX: config the antenna index for reading
  *				    the histogram of specific IPI index (u8)
- * @MT76_TM_ATTR_IPI_RESET: Reset the IPI counter
+ * @MT76_TM_ATTR_IPI_RESET: reset the IPI counter
  *
  * @MT76_TM_ATTR_LM_ACT: list mode setting actions (u8)
  * @MT76_TM_ATTR_LM_SEG_IDX: segment index used in list mode (u8)
@@ -125,6 +127,7 @@ enum mt76_testmode_attr {
 	MT76_TM_ATTR_FREQ_OFFSET,
 
 	MT76_TM_ATTR_STATS,
+
 	MT76_TM_ATTR_PRECAL,
 	MT76_TM_ATTR_PRECAL_INFO,
 
@@ -180,7 +183,7 @@ enum mt76_testmode_attr {
  *
  * @MT76_TM_STATS_ATTR_TX_PENDING: pending tx frames (u32)
  * @MT76_TM_STATS_ATTR_TX_QUEUED: queued tx frames (u32)
- * @MT76_TM_STATS_ATTR_TX_QUEUED: completed tx frames (u32)
+ * @MT76_TM_STATS_ATTR_TX_DONE: completed tx frames (u32)
  *
  * @MT76_TM_STATS_ATTR_RX_PACKETS: number of rx packets (u64)
  * @MT76_TM_STATS_ATTR_RX_FCS_ERROR: number of rx packets with FCS error (u64)
@@ -241,6 +244,14 @@ enum mt76_testmode_rx_attr {
  * @MT76_TM_STATE_TX_FRAMES: send a fixed number of test frames
  * @MT76_TM_STATE_RX_FRAMES: receive packets and keep statistics
  * @MT76_TM_STATE_TX_CONT: waveform tx without time gap
+ * @MT76_TM_STATE_GROUP_PREK: start group pre-calibration
+ * @MT76_TM_STATE_GROUP_PREK_DUMP: dump the data of group pre-calibration
+ * @MT76_TM_STATE_GROUP_PREK_CLEAN: clear the data group pre-calibration
+ * @MT76_TM_STATE_DPD_2G: start 2G DPD pre-calibration
+ * @MT76_TM_STATE_DPD_5G: start 5G DPD pre-calibration
+ * @MT76_TM_STATE_DPD_6G: start 6G DPD pre-calibration
+ * @MT76_TM_STATE_DPD_DUMP: dump the data of DPD pre-calibration
+ * @MT76_TM_STATE_DPD_CLEAN: clear the data of DPD pre-calibration
  * @MT76_TM_STATE_RX_GAIN_CAL: start RX gain calibration
  * @MT76_TM_STATE_RX_GAIN_CAL_DUMP: dump the data of RX gain calibration
  * @MT76_TM_STATE_RX_GAIN_CAL_CLEAN: clear the data of RX gain calibration

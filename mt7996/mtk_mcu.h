@@ -715,11 +715,13 @@ struct mt7996_txbf_phase {
 	if (group) {										\
 		phase->v.phase_5g.field = cal->v.phase_5g.field;				\
 		if (dump)									\
-			dev_info(dev->mt76.dev, "%s = %d\n", #field, phase->v.phase_5g.field);	\
+			mt76_dbg(&dev->mt76, MT76_DBG_TEST, "%s = %d\n",			\
+				 #field, phase->v.phase_5g.field);				\
 	} else {										\
 		phase->v.phase_2g.field = cal->v.phase_5g.field;				\
 		if (dump)									\
-			dev_info(dev->mt76.dev, "%s = %d\n", #field, phase->v.phase_2g.field);	\
+			mt76_dbg(&dev->mt76, MT76_DBG_TEST, "%s = %d\n",			\
+				 #field, phase->v.phase_2g.field);				\
 	}											\
 })
 
@@ -745,7 +747,8 @@ struct mt7996_txbf_phase {
 		phase_assign(group, v, rx.rx_uh, true);						\
 		phase_assign(group, v, rx.rx_h, true);						\
 		phase->v.phase_5g.rx.rx_mh = cal->v.phase_5g.rx.rx_mh;				\
-		dev_info(dev->mt76.dev, "%s.rx_mh = %d\n", #rx, phase->v.phase_5g.rx.rx_mh);	\
+		mt76_dbg(&dev->mt76, MT76_DBG_TEST, "%s.rx_mh = %d\n",				\
+			 #rx, phase->v.phase_5g.rx.rx_mh);					\
 		phase_assign(group, v, rx.rx_m, true);						\
 		phase_assign(group, v, rx.rx_l, true);						\
 		phase_assign(group, v, rx.rx_ul, true);						\

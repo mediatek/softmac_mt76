@@ -17,7 +17,7 @@
 static bool wed_enable = true;
 module_param(wed_enable, bool, 0644);
 
-unsigned int mt76_debug_mask = 0x1f;
+unsigned int mt76_debug_mask = 0x9f;
 module_param(mt76_debug_mask, uint, 0644);
 MODULE_PARM_DESC(mt76_debug_mask, "Debugging mask");
 

@@ -15,6 +15,7 @@ enum mt76_debug_mask {
 	MT76_DBG_MLD = BIT(4),
 	MT76_DBG_TXRX = BIT(5),
 	MT76_DBG_SCAN = BIT(6),
+	MT76_DBG_TEST = BIT(7),
 
 	MT76_DBG_ALL = 0xffffffff,
 };

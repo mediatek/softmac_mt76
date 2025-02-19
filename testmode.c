@@ -306,7 +306,7 @@ mt76_testmode_tx_config_check(struct mt76_phy *phy)
 
 	return 0;
 fail:
-	dev_err(dev->dev, "Invalid %s\n", invalid_msg[type]);
+	mt76_err(dev, "%s: invalid %s\n", __func__, invalid_msg[type]);
 	return -EINVAL;
 }
 
@@ -469,6 +469,9 @@ __mt76_testmode_set_state(struct mt76_phy *phy, enum mt76_testmode_state state)
 			return err;
 	}
 
+	if (state == MT76_TM_STATE_RX_FRAMES)
+		dev->test_ops->reset_rx_stats(phy);
+
 	err = dev->test_ops->set_state(phy, state);
 	if (err) {
 		if (state == MT76_TM_STATE_TX_FRAMES)
@@ -479,9 +482,8 @@ __mt76_testmode_set_state(struct mt76_phy *phy, enum mt76_testmode_state state)
 
 	if (state == MT76_TM_STATE_TX_FRAMES)
 		mt76_testmode_tx_start(phy);
-	else if (state == MT76_TM_STATE_RX_FRAMES) {
-		dev->test_ops->reset_rx_stats(phy);
-	}
+	else if (state == MT76_TM_STATE_RX_GAIN_CAL)
+		return 0;
 
 	phy->test.state = state;
 
@@ -492,6 +494,7 @@ int mt76_testmode_set_state(struct mt76_phy *phy, enum mt76_testmode_state state
 {
 	struct mt76_testmode_data *td = &phy->test;
 	struct ieee80211_hw *hw = phy->hw;
+	int ret;
 
 	if (state == td->state && state == MT76_TM_STATE_OFF)
 		return 0;
@@ -502,10 +505,18 @@ int mt76_testmode_set_state(struct mt76_phy *phy, enum mt76_testmode_state state
 	      !phy->monitor_vif)))
 		return -ENOTCONN;
 
+	/* keep rx while performing rx gain calibration */
+	if (state == MT76_TM_STATE_RX_GAIN_CAL) {
+		if (td->state != MT76_TM_STATE_RX_FRAMES) {
+			ret = __mt76_testmode_set_state(phy, MT76_TM_STATE_RX_FRAMES);
+			if (ret)
+				return ret;
+		}
+		return __mt76_testmode_set_state(phy, state);
+	}
+
 	if (state != MT76_TM_STATE_IDLE &&
 	    td->state != MT76_TM_STATE_IDLE) {
-		int ret;
-
 		ret = __mt76_testmode_set_state(phy, MT76_TM_STATE_IDLE);
 		if (ret)
 			return ret;

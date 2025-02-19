@@ -4,7 +4,7 @@
 #ifndef __MT7996_TESTMODE_H
 #define __MT7996_TESTMODE_H
 
-enum {
+enum tm_bw {
 	TM_CBW_20MHZ,
 	TM_CBW_40MHZ,
 	TM_CBW_80MHZ,
@@ -15,7 +15,7 @@ enum {
 	TM_CBW_320MHZ = 12,
 };
 
-enum {
+enum bf_bw {
 	BF_CDBW_20MHZ,
 	BF_CDBW_40MHZ,
 	BF_CDBW_80MHZ,
@@ -102,12 +102,12 @@ struct mt7996_tm_event {
 	struct mt7996_tm_rf_test_result result;
 } __packed;
 
-enum rf_test_func_idx {
-	RF_TEST_RE_CAL = 0x01,
-	RF_TEST_RX_GAIN_CAL = 0x14,
+enum rf_test_tag {
+	UNI_RF_TEST_CTRL,
+	UNI_RF_TEST_LIST_MODE,
 };
 
-enum {
+enum rf_test_action {
 	RF_ACTION_SWITCH_TO_RF_TEST,
 	RF_ACTION_IN_RF_TEST,
 	RF_ACTION_SET = 3,
@@ -116,7 +116,7 @@ enum {
 
 #define RF_TEST_ICAP_LEN	120
 
-enum {
+enum rf_test_op_mode {
 	RF_OPER_NORMAL,
 	RF_OPER_RF_TEST,
 	RF_OPER_ICAP,
@@ -124,26 +124,17 @@ enum {
 	RF_OPER_WIFI_SPECTRUM,
 };
 
-enum {
-	UNI_RF_TEST_CTRL,
-	UNI_RF_TEST_LIST_MODE,
-};
-
-#define RF_CMD(cmd)		RF_TEST_CMD_##cmd
-
-enum {
-	RF_TEST_CMD_STOP_TEST = 0,
-	RF_TEST_CMD_START_TX = 1,
-	RF_TEST_CMD_START_RX = 2,
-	RF_TEST_CMD_CONT_WAVE = 10,
-	RF_TEST_CMD_TX_COMMIT = 18,
-	RF_TEST_CMD_RX_COMMIT = 19,
+/* func_idx for RF_ACTION_IN_RF_TEST */
+enum rf_test_func_idx {
+	RF_TEST_RE_CAL = 0x01,
+	RF_TEST_RX_GAIN_CAL = 0x14,
 };
 
 #define SET_ID(id)		RF_TEST_ID_SET_##id
 #define GET_ID(id)		RF_TEST_ID_GET_##id
 
-enum {
+/* func_idx for RF_ACTION_SET & RF_ACTION_GET */
+enum rf_test_id {
 	RF_TEST_ID_SET_COMMAND = 1,
 	RF_TEST_ID_SET_POWER = 2,
 	RF_TEST_ID_SET_TX_RATE = 3,
@@ -191,6 +182,18 @@ enum {
 	RF_TEST_ID_SET_AID_OFFSET = 204,
 };
 
+#define RF_CMD(cmd)		RF_TEST_CMD_##cmd
+
+/* func_data for RF_TEST_ID_SET_COMMAND */
+enum rf_test_cmd {
+	RF_TEST_CMD_STOP_TEST = 0,
+	RF_TEST_CMD_START_TX = 1,
+	RF_TEST_CMD_START_RX = 2,
+	RF_TEST_CMD_CONT_WAVE = 10,
+	RF_TEST_CMD_TX_COMMIT = 18,
+	RF_TEST_CMD_RX_COMMIT = 19,
+};
+
 #define POWER_CTRL(type)	UNI_TXPOWER_##type##_CTRL
 
 struct mt7996_tm_rx_stat_user_ctrl {
@@ -220,7 +223,7 @@ struct mt7996_tm_rx_req {
 	};
 } __packed;
 
-enum {
+enum rx_stat_tag {
 	UNI_TM_RX_STAT_SET_USER_CTRL = 7,
 	UNI_TM_RX_STAT_GET_ALL_V2 = 9,
 };
@@ -330,14 +333,14 @@ struct mt7996_tm_rx_event {
 	};
 } __packed;
 
-enum {
+enum rdd_ipi_cmd {
 	RDD_SET_IPI_CR_INIT,		/* CR initialization */
 	RDD_SET_IPI_HIST_RESET,		/* Reset IPI histogram counter */
 	RDD_SET_IDLE_POWER,		/* Idle power info */
 	RDD_SET_IPI_HIST_NUM
 };
 
-enum {
+enum rdd_ipi_hist {
 	RDD_IPI_HIST_0,			/* IPI count for power <= -92 (dBm) */
 	RDD_IPI_HIST_1,			/* IPI count for -92 < power <= -89 (dBm) */
 	RDD_IPI_HIST_2,			/* IPI count for -89 < power <= -86 (dBm) */

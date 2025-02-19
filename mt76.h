@@ -916,9 +916,6 @@ struct mt76_testmode_data {
 	u32 ipi_period;
 	u8 ipi_reset;
 
-	u16 rx_gain_bitmap;
-	bool rx_gain_done;
-
 	u8 fast_cal;
 };
 
