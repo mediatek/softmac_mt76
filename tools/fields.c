@@ -19,6 +19,9 @@ static const char * const testmode_state[] = {
 	[MT76_TM_STATE_DPD_6G] = "dpd_6g",
 	[MT76_TM_STATE_DPD_DUMP] = "dpd_dump",
 	[MT76_TM_STATE_DPD_CLEAN] = "dpd_clean",
+	[MT76_TM_STATE_RX_GAIN_CAL] = "rx_gain_cal",
+	[MT76_TM_STATE_RX_GAIN_CAL_DUMP] = "rx_gain_dump",
+	[MT76_TM_STATE_RX_GAIN_CAL_CLEAN] = "rx_gain_clean",
 };
 
 static const char * const testmode_tx_mode[] = {

@@ -103,6 +103,20 @@ static u8 mt7996_tm_rate_mapping(u8 tx_rate_mode, enum rate_mapping_type type)
 	return rate_to_phy[tx_rate_mode][type];
 }
 
+static u8 mt7996_tm_band_mapping(enum nl80211_band band)
+{
+	static const u8 ch_band[] = {
+		[NL80211_BAND_2GHZ] = 0,
+		[NL80211_BAND_5GHZ] = 1,
+		[NL80211_BAND_6GHZ] = 2,
+	};
+
+	if (band >= NUM_NL80211_BANDS)
+		return 0;
+
+	return ch_band[band];
+}
+
 static int
 mt7996_tm_check_antenna(struct mt7996_phy *phy)
 {
@@ -278,11 +292,6 @@ mt7996_tm_update_channel(struct mt7996_phy *phy)
 	struct ieee80211_channel *chan = chandef->chan;
 	u8 dbw, width = chandef->width, pri_sel = 0;
 	int width_mhz;
-	static const u8 ch_band[] = {
-		[NL80211_BAND_2GHZ] = 0,
-		[NL80211_BAND_5GHZ] = 1,
-		[NL80211_BAND_6GHZ] = 2,
-	};
 
 	if (!chan) {
 		dev_info(dev->mt76.dev, "no channel found, update failed!\n");
@@ -324,7 +333,7 @@ mt7996_tm_update_channel(struct mt7996_phy *phy)
 		pri_sel = td->tx_pri_sel;
 	}
 	mt7996_tm_set(dev, SET_ID(PRIMARY_CH), pri_sel);
-	mt7996_tm_set(dev, SET_ID(BAND), ch_band[chan->band]);
+	mt7996_tm_set(dev, SET_ID(BAND), mt7996_tm_band_mapping(chan->band));
 
 	/* trigger switch channel calibration */
 	mt7996_tm_set(dev, SET_ID(CHAN_FREQ), chandef->center_freq1 * 1000);
@@ -872,17 +881,166 @@ mt7996_tm_dump_precal(struct mt76_phy *mphy, struct sk_buff *msg, int flag, int 
 	return 0;
 }
 
+static bool
+mt7996_tm_check_rx_gain_ch(struct mt7996_phy *phy)
+{
+	const u32 rx_gain_ch_list_2g[] = {2442};
+	const u32 rx_gain_ch_list_5g[] = {
+		5180, 5260, 5340, 5500, 5580, 5660, 5745, 5825,
+	};
+	const u32 rx_gain_ch_list_6g[] = {
+		5955, 6035, 6115, 6195, 6275, 6355, 6435, 6515,
+		6595, 6675, 6755, 6835, 6915, 6995, 7075,
+	};
+	struct cfg80211_chan_def *chandef = &phy->mt76->chandef;
+	struct mt76_testmode_data *td = &phy->mt76->test;
+	const u32 *ch_list;
+	int i, size;
+
+	if (!chandef->chan || chandef->width > NL80211_CHAN_WIDTH_20)
+		return false;
+
+	switch (chandef->chan->band) {
+	case NL80211_BAND_2GHZ:
+		ch_list = rx_gain_ch_list_2g;
+		size = ARRAY_SIZE(rx_gain_ch_list_2g);
+		break;
+	case NL80211_BAND_5GHZ:
+		ch_list = rx_gain_ch_list_5g;
+		size = ARRAY_SIZE(rx_gain_ch_list_5g);
+		break;
+	case NL80211_BAND_6GHZ:
+		ch_list = rx_gain_ch_list_6g;
+		size = ARRAY_SIZE(rx_gain_ch_list_6g);
+		break;
+	default:
+		return false;
+	}
+
+	for (i = 0; i < size; i++) {
+		if (chandef->chan->center_freq == ch_list[i]) {
+			td->rx_gain_bitmap |= BIT(i);
+			if (hweight16(td->rx_gain_bitmap) == size)
+				td->rx_gain_done = true;
+			return true;
+		}
+	}
+
+	return false;
+}
+
+static void
+mt7996_tm_reset_rx_gain(struct mt7996_phy *phy, bool all)
+{
+	struct mt7996_dev *dev = phy->dev;
+	u8 band_bitmap = 0, *eeprom = dev->mt76.eeprom.data;
+	struct mt76_testmode_data *td;
+	struct mt76_phy *mphy;
+	int i;
+
+	for (i = 0; i < __MT_MAX_BAND; i++) {
+		mphy = dev->mt76.phys[i];
+		if (!mphy || (!all && mphy != phy->mt76))
+			continue;
+
+		td = &mphy->test;
+		td->rx_gain_bitmap = 0;
+		td->rx_gain_done = false;
+		band_bitmap |= BIT(mt7996_tm_band_mapping(mphy->chandef.chan->band));
+	}
+
+	eeprom[MT_EE_DO_RX_GAIN_CAL] &= ~u8_encode_bits(band_bitmap,
+							MT_EE_WIFI_CAL_RX_GAIN);
+}
+
+static int
+mt7996_tm_rx_gain_cal(struct mt7996_phy *phy, enum mt76_testmode_state state)
+{
+	struct mt7996_dev *dev = phy->dev;
+	struct mt76_phy *mphy = phy->mt76;
+	struct cfg80211_chan_def *chandef = &mphy->chandef;
+	struct mt76_testmode_data *td = &mphy->test;
+	struct mt7996_tm_req req = {
+		.rf_test = {
+			.tag = cpu_to_le16(UNI_RF_TEST_CTRL),
+			.len = cpu_to_le16(sizeof(req.rf_test)),
+			.action = RF_ACTION_IN_RF_TEST,
+			.icap_len = RF_TEST_ICAP_LEN,
+			.op.rf.func_idx = cpu_to_le32(RF_TEST_RX_GAIN_CAL),
+			.op.rf.param.cal_param.func_data = cpu_to_le32(RF_RX_GAIN_CAL),
+			.op.rf.param.cal_param.band_idx = mphy->band_idx,
+		},
+	};
+	u8 ch_band, *eeprom = dev->mt76.eeprom.data;
+	u32 i, j, size, *cal;
+	int ret = 0;
+
+	if (!dev->flash_mode) {
+		dev_err(dev->mt76.dev, "Currently not in FLASH or BIN FILE mode, return!\n");
+		return -EOPNOTSUPP;
+	}
+
+	dev->cur_prek_offset = 0;
+	size = MT_EE_CAL_RX_GAIN_SIZE;
+
+	switch (state) {
+	case MT76_TM_STATE_RX_GAIN_CAL:
+		if (!mt7996_tm_check_rx_gain_ch(phy)) {
+			dev_err(dev->mt76.dev, "Invalid calibration channel for RX gain\n");
+			ret = -EINVAL;
+			goto fail;
+		}
+
+		mt7996_tm_set_rx_frames(phy, true);
+		ret = mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(TESTMODE_CTRL), &req,
+					sizeof(req), false);
+		if (ret) {
+			dev_err(dev->mt76.dev,
+				"RX Gain Cal: mcu send msg failed (%d)\n",
+				ret);
+			goto fail;
+		}
+
+		wait_event_timeout(dev->mt76.mcu.wait, dev->cur_prek_offset == size, 30 * HZ);
+
+		/* disable runtime rx gain cal */
+		ch_band = mt7996_tm_band_mapping(chandef->chan->band);
+		if (td->rx_gain_done)
+			eeprom[MT_EE_DO_RX_GAIN_CAL] |= u8_encode_bits(BIT(ch_band),
+								       MT_EE_WIFI_CAL_RX_GAIN);
+		break;
+	case MT76_TM_STATE_RX_GAIN_CAL_DUMP:
+		cal = (u32 *)eeprom;
+		dev_info(dev->mt76.dev, "RX Gain Cal:\n");
+		for (i = 0; i < (size / sizeof(u32)); i += 4) {
+			j = MT_EE_RX_GAIN_CAL / sizeof(u32) + i;
+			dev_info(dev->mt76.dev, "[0x%08lx] 0x%8x 0x%8x 0x%8x 0x%8x\n",
+				 j * sizeof(u32), cal[j], cal[j + 1],
+				 cal[j + 2], cal[j + 3]);
+		}
+		return 0;
+	case MT76_TM_STATE_RX_GAIN_CAL_CLEAN:
+		memset(eeprom + MT_EE_RX_GAIN_CAL, 0, size);
+		mt7996_tm_reset_rx_gain(phy, true);
+		return 0;
+	default:
+		ret = -EINVAL;
+		goto fail;
+	}
+
+	return 0;
+
+fail:
+	mt7996_tm_reset_rx_gain(phy, false);
+	return ret;
+}
+
 static void
 mt7996_tm_re_cal_event(struct mt7996_dev *dev, struct mt7996_tm_rf_test_result *result,
 		       struct mt7996_tm_rf_test_data *data)
 {
-	u32 base, dpd_size_2g, dpd_size_5g, dpd_size_6g, cal_idx, cal_type, len = 0;
-	u8 *pre_cal;
-
-	pre_cal = dev->cal;
-	dpd_size_2g = MT_EE_CAL_DPD_SIZE_2G;
-	dpd_size_5g = MT_EE_CAL_DPD_SIZE_5G;
-	dpd_size_6g = MT_EE_CAL_DPD_SIZE_6G;
+	u32 base, cal_idx, cal_type, len = 0;
+	u8 *cal = dev->cal;
 
 	cal_idx = le32_to_cpu(data->cal_idx);
 	cal_type = le32_to_cpu(data->cal_type);
@@ -890,6 +1048,10 @@ mt7996_tm_re_cal_event(struct mt7996_dev *dev, struct mt7996_tm_rf_test_result *
 	len = len - sizeof(struct mt7996_tm_rf_test_data);
 
 	switch (cal_type) {
+	case RF_RX_GAIN_CAL:
+		cal = dev->mt76.eeprom.data;
+		base = MT_EE_RX_GAIN_CAL;
+		break;
 	case RF_PRE_CAL:
 		base = 0;
 		break;
@@ -898,20 +1060,21 @@ mt7996_tm_re_cal_event(struct mt7996_dev *dev, struct mt7996_tm_rf_test_result *
 		break;
 	case RF_DPD_FLAT_5G_CAL:
 	case RF_DPD_FLAT_5G_MEM_CAL:
-		base = MT_EE_CAL_GROUP_SIZE + dpd_size_2g;
+		base = MT_EE_CAL_GROUP_SIZE + MT_EE_CAL_DPD_SIZE_2G;
 		break;
 	case RF_DPD_FLAT_6G_CAL:
 	case RF_DPD_FLAT_6G_MEM_CAL:
-		base = MT_EE_CAL_GROUP_SIZE + dpd_size_2g + dpd_size_5g;
+		base = MT_EE_CAL_GROUP_SIZE + MT_EE_CAL_DPD_SIZE_2G +
+		       MT_EE_CAL_DPD_SIZE_5G;
 		break;
 	default:
-		dev_info(dev->mt76.dev, "Unknown calibration type!\n");
+		dev_info(dev->mt76.dev, "Unknown calibration type %x\n", cal_type);
 		return;
 	}
-	pre_cal += (base + dev->cur_prek_offset);
 
-	memcpy(pre_cal, data->cal_data, len);
+	memcpy(cal + base + dev->cur_prek_offset, data->cal_data, len);
 	dev->cur_prek_offset += len;
+	wake_up(&dev->mt76.mcu.wait);
 }
 
 void mt7996_tm_rf_test_event(struct mt7996_dev *dev, struct sk_buff *skb)
@@ -1969,6 +2132,8 @@ mt7996_tm_set_state(struct mt76_phy *mphy, enum mt76_testmode_state state)
 		return mt7996_tm_group_prek(phy, state);
 	else if (state >= MT76_TM_STATE_DPD_2G && state <= MT76_TM_STATE_DPD_CLEAN)
 		return mt7996_tm_dpd_prek(phy, state);
+	else if (state >= MT76_TM_STATE_RX_GAIN_CAL && state <= MT76_TM_STATE_RX_GAIN_CAL_CLEAN)
+		return mt7996_tm_rx_gain_cal(phy, state);
 
 	if ((state == MT76_TM_STATE_IDLE &&
 	     prev_state == MT76_TM_STATE_OFF) ||
@@ -2519,11 +2684,6 @@ mt7996_tm_set_list_mode(struct mt76_phy *mphy, int seg_idx,
 		.tag = cpu_to_le16(UNI_RF_TEST_LIST_MODE),
 		.len = cpu_to_le16(sizeof(req.seg)),
 	};
-	static const u8 ch_band[] = {
-		[NL80211_BAND_2GHZ] = 0,
-		[NL80211_BAND_5GHZ] = 1,
-		[NL80211_BAND_6GHZ] = 2,
-	};
 	static const u8 lm_ext_id[] = {
 		[MT76_TM_LM_ACT_SET_TX_SEGMENT] = 16,
 		[MT76_TM_LM_ACT_TX_START] = 17,
@@ -2542,7 +2702,7 @@ mt7996_tm_set_list_mode(struct mt76_phy *mphy, int seg_idx,
 		[LM_STATE_RX] = "rx ongoing",
 	};
 	int seg_param_num = sizeof(req.seg.tx_seg.rf) / sizeof(u32);
-	int ret, state, band = ch_band[chan->band];
+	int ret, state, band = mt7996_tm_band_mapping(chan->band);
 	struct mt7996_tm_list_event *event;
 	struct sk_buff *skb;
 	u8 cbw, dbw;

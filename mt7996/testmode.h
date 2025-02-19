@@ -102,7 +102,10 @@ struct mt7996_tm_event {
 	struct mt7996_tm_rf_test_result result;
 } __packed;
 
-#define RF_TEST_RE_CAL		0x01
+enum rf_test_func_idx {
+	RF_TEST_RE_CAL = 0x01,
+	RF_TEST_RX_GAIN_CAL = 0x14,
+};
 
 enum {
 	RF_ACTION_SWITCH_TO_RF_TEST,

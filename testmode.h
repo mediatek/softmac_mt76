@@ -236,6 +236,9 @@ enum mt76_testmode_rx_attr {
  * @MT76_TM_STATE_TX_FRAMES: send a fixed number of test frames
  * @MT76_TM_STATE_RX_FRAMES: receive packets and keep statistics
  * @MT76_TM_STATE_TX_CONT: waveform tx without time gap
+ * @MT76_TM_STATE_RX_GAIN_CAL: start RX gain calibration
+ * @MT76_TM_STATE_RX_GAIN_CAL_DUMP: dump the data of RX gain calibration
+ * @MT76_TM_STATE_RX_GAIN_CAL_CLEAN: clear the data of RX gain calibration
  * @MT76_TM_STATE_ON: test mode enabled used in offload firmware
  */
 enum mt76_testmode_state {
@@ -252,6 +255,9 @@ enum mt76_testmode_state {
 	MT76_TM_STATE_DPD_6G,
 	MT76_TM_STATE_DPD_DUMP,
 	MT76_TM_STATE_DPD_CLEAN,
+	MT76_TM_STATE_RX_GAIN_CAL,
+	MT76_TM_STATE_RX_GAIN_CAL_DUMP,
+	MT76_TM_STATE_RX_GAIN_CAL_CLEAN,
 	MT76_TM_STATE_ON,
 
 	/* keep last */
