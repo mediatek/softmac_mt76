@@ -1623,13 +1623,10 @@ static int mt7996_vendor_txpower_ctrl(struct wiphy *wiphy,
 	struct mt7996_dev *dev;
 	struct mt7996_phy *phy;
 	struct mt76_phy *mphy;
-	struct mt76_dev *mdev;
 	struct ieee80211_vif *vif = wdev_to_ieee80211_vif(wdev);
 	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
 	struct mt7996_vif_link *mconf;
 	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_TXPOWER_CTRL], *table;
-	struct mt76_power_limits *la;
-	struct mt76_power_path_limits *la_path;
 	int err, current_txpower, delta;
 	u8 val, link_id = 0, idx;
 
@@ -1657,7 +1654,7 @@ static int mt7996_vendor_txpower_ctrl(struct wiphy *wiphy,
 	rcu_read_unlock();
 
 	mphy = phy->mt76;
-	mdev = mphy->dev;
+	dev = phy->dev;
 	delta = mt76_tx_power_path_delta(hweight16(mphy->chainmask));
 
 	if (mphy->cap.has_6ghz &&
@@ -1673,10 +1670,13 @@ static int mt7996_vendor_txpower_ctrl(struct wiphy *wiphy,
 
 		err = mt7996_mcu_set_lpi_psd(phy, val);
 		if (err)
-			goto out;
+			return err;
 	}
 
 	if (tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_IDX]) {
+		struct mt76_power_limits *la = NULL;
+		struct mt76_power_path_limits *la_path = NULL;
+
 		mphy->sku_idx = nla_get_u8(tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_IDX]);
 
 		if (mt76_find_power_limits_node(mphy) == NULL)
@@ -1685,22 +1685,37 @@ static int mt7996_vendor_txpower_ctrl(struct wiphy *wiphy,
 		phy->sku_limit_en = true;
 		phy->sku_path_en = true;
 		la = kzalloc(sizeof(struct mt76_power_limits), GFP_KERNEL);
+		if (!la)
+			return -ENOMEM;
 		la_path = kzalloc(sizeof(struct mt76_power_path_limits), GFP_KERNEL);
+		if (!la_path) {
+			kfree(la);
+			return -ENOMEM;
+		}
 
 		mt76_get_rate_power_limits(mphy, mphy->chandef.chan, la, la_path, 127);
 		if (!la_path->ofdm[0])
 			phy->sku_path_en = false;
 
-		dev = phy->dev;
-		err = mt7996_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_SKU_POWER_LIMIT_CTRL,
-						   dev->dbg.sku_disable ? 0 : phy->sku_limit_en);
-		if (err)
-			goto out;
-		err = mt7996_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_BACKOFF_POWER_LIMIT_CTRL,
-						   dev->dbg.sku_disable ? 0 : phy->sku_path_en);
-		if (err)
-			goto out;
+#ifdef CONFIG_MTK_DEBUG
+		/* To make sure the sku is still enabled when we restart AP. */
+		dev->dbg.sku_disable = false;
+#endif
+		kfree(la);
+		kfree(la_path);
+	} else {
+		phy->sku_limit_en = false;
+		phy->sku_path_en = false;
 	}
+
+	err = mt7996_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_SKU_POWER_LIMIT_CTRL,
+					   phy->sku_limit_en);
+	if (err)
+		return err;
+	err = mt7996_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_BACKOFF_POWER_LIMIT_CTRL,
+					   phy->sku_path_en);
+	if (err)
+		return err;
 
 	if (mphy->cap.has_6ghz &&
 	    tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_LPI_BCN_ENHANCE]) {
@@ -1711,7 +1726,7 @@ static int mt7996_vendor_txpower_ctrl(struct wiphy *wiphy,
 		err = mt7996_mcu_set_fixed_rate_table(phy, idx, FR_RATE_IDX_OFDM_6M,
 						      true);
 		if (err)
-			goto out;
+			return err;
 	}
 
 	if (mphy->cap.has_6ghz) {
@@ -1719,7 +1734,7 @@ static int mt7996_vendor_txpower_ctrl(struct wiphy *wiphy,
 		if (table) {
 			err = mt7996_parse_afc_table(dev, table, delta);
 			if (err)
-				goto out;
+				return err;
 		} else
 			mt7996_free_afc_table(dev);
 	}
@@ -1728,9 +1743,6 @@ static int mt7996_vendor_txpower_ctrl(struct wiphy *wiphy,
 
 	err = mt7996_mcu_set_txpower_sku(phy, current_txpower);
 
-out:
-	kfree(la);
-	kfree(la_path);
 	return err;
 }
 

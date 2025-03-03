@@ -4758,8 +4758,10 @@ void mt7996_mtk_init_dev_debugfs(struct mt7996_dev *dev, struct dentry *dir)
 	debugfs_create_file("red", 0600, dir, dev, &fops_red_config);
 	debugfs_create_file("vow_drr_dbg", 0200, dir, dev, &fops_vow_drr_dbg);
 
+#ifdef CONFIG_MTK_DEBUG
 	dev->dbg.sku_disable = true; /* For SQC */
 	debugfs_create_u8("sku_disable", 0600, dir, &dev->dbg.sku_disable);
+#endif
 
 	debugfs_create_file("muru_prot_thr", 0200, dir, dev, &fops_muru_prot_thr);
 	debugfs_create_file("muru_fixed_rate_enable", 0600, dir, dev,
