@@ -455,6 +455,7 @@ mt7996_tm_set_rx_frames(struct mt7996_phy *phy, bool en)
 #define RX_MU_DISABLE	0xf800
 	struct mt76_testmode_data *td = &phy->mt76->test;
 	struct mt7996_dev *dev = phy->dev;
+	u8 own_mac[ETH_ALEN] = {0};
 	int ret;
 
 	if (!en) {
@@ -482,10 +483,13 @@ mt7996_tm_set_rx_frames(struct mt7996_phy *phy, bool en)
 	mt7996_tm_set(dev, SET_ID(TX_MODE),
 		      mt7996_tm_rate_mapping(td->tx_rate_mode, RATE_MODE_TO_PHY));
 	mt7996_tm_set(dev, SET_ID(GI), td->tx_rate_sgi);
+	mt7996_tm_set_antenna(phy, SET_ID(TX_PATH));
 	mt7996_tm_set_antenna(phy, SET_ID(RX_PATH));
 	mt7996_tm_set(dev, SET_ID(MAX_PE), 2);
 
-	mt7996_tm_set_mac_addr(dev, td->addr[1], SET_ID(SA));
+	if (td->bf_en)
+		memcpy(own_mac, td->addr[1], ETH_ALEN);
+	mt7996_tm_set_mac_addr(dev, own_mac, SET_ID(SA));
 
 	/* trigger firmware to start RX */
 	mt7996_tm_set(dev, SET_ID(COMMAND), RF_CMD(START_RX));
