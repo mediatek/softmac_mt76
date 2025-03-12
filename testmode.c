@@ -1014,7 +1014,9 @@ mt76_testmode_dump_stats(struct mt76_phy *phy, struct sk_buff *msg)
 	struct mt76_testmode_data *td = &phy->test;
 	struct mt76_dev *dev = phy->dev;
 	u64 rx_packets = 0;
+	u64 rx_success = 0;
 	u64 rx_fcs_error = 0;
+	u64 rx_len_mismatch = 0;
 	int i;
 
 	if (dev->test_ops->dump_stats) {
@@ -1025,9 +1027,11 @@ mt76_testmode_dump_stats(struct mt76_phy *phy, struct sk_buff *msg)
 			return ret;
 	}
 
-	for (i = 0; i < ARRAY_SIZE(td->rx_stats.packets); i++) {
-		rx_packets += td->rx_stats.packets[i];
-		rx_fcs_error += td->rx_stats.fcs_error[i];
+	for (i = 0; i < ARRAY_SIZE(td->rx_stats); i++) {
+		rx_packets += td->rx_stats[i].packets;
+		rx_success += td->rx_stats[i].rx_success;
+		rx_fcs_error += td->rx_stats[i].fcs_error;
+		rx_len_mismatch += td->rx_stats[i].len_mismatch;
 	}
 
 	if (nla_put_u32(msg, MT76_TM_STATS_ATTR_TX_PENDING, td->tx_pending) ||
@@ -1035,10 +1039,11 @@ mt76_testmode_dump_stats(struct mt76_phy *phy, struct sk_buff *msg)
 	    nla_put_u32(msg, MT76_TM_STATS_ATTR_TX_DONE, td->tx_done) ||
 	    nla_put_u64_64bit(msg, MT76_TM_STATS_ATTR_RX_PACKETS, rx_packets,
 			      MT76_TM_STATS_ATTR_PAD) ||
+	    nla_put_u64_64bit(msg, MT76_TM_STATS_ATTR_RX_SUCCESS, rx_success,
+			      MT76_TM_STATS_ATTR_PAD) ||
 	    nla_put_u64_64bit(msg, MT76_TM_STATS_ATTR_RX_FCS_ERROR, rx_fcs_error,
 			      MT76_TM_STATS_ATTR_PAD) ||
-	    nla_put_u64_64bit(msg, MT76_TM_STATS_ATTR_RX_LEN_MISMATCH,
-			      td->rx_stats.len_mismatch,
+	    nla_put_u64_64bit(msg, MT76_TM_STATS_ATTR_RX_LEN_MISMATCH, rx_len_mismatch,
 			      MT76_TM_STATS_ATTR_PAD))
 		return -EMSGSIZE;
 

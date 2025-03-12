@@ -185,12 +185,14 @@ enum mt76_testmode_attr {
  * @MT76_TM_STATS_ATTR_TX_QUEUED: queued tx frames (u32)
  * @MT76_TM_STATS_ATTR_TX_DONE: completed tx frames (u32)
  *
- * @MT76_TM_STATS_ATTR_RX_PACKETS: number of rx packets (u64)
+ * @MT76_TM_STATS_ATTR_RX_PACKETS: number of rx mdrdy packets
+ *	with successfully parsed headers (u64)
  * @MT76_TM_STATS_ATTR_RX_FCS_ERROR: number of rx packets with FCS error (u64)
  * @MT76_TM_STATS_ATTR_LAST_RX: information about the last received packet
  *	see &enum mt76_testmode_rx_attr
  * @MT76_TM_STATS_ATTR_RX_LEN_MISMATCH: number of rx packets with length
  *	mismatch error (u64)
+ * @MT76_TM_STATS_ATTR_RX_SUCCESS: number of successfully rx packets (u64)
  */
 enum mt76_testmode_stats_attr {
 	MT76_TM_STATS_ATTR_UNSPEC,
@@ -204,6 +206,7 @@ enum mt76_testmode_stats_attr {
 	MT76_TM_STATS_ATTR_RX_FCS_ERROR,
 	MT76_TM_STATS_ATTR_LAST_RX,
 	MT76_TM_STATS_ATTR_RX_LEN_MISMATCH,
+	MT76_TM_STATS_ATTR_RX_SUCCESS,
 
 	/* keep last */
 	NUM_MT76_TM_STATS_ATTRS,

@@ -2174,8 +2174,9 @@ mt7996_tm_get_rx_stats(struct mt7996_phy *phy)
 	struct sk_buff *skb;
 	enum mt76_rxq_id qid;
 	int i, ret = 0;
-	u32 mac_rx_mdrdy_cnt;
-	u16 mac_rx_len_mismatch, fcs_err_count;
+	u16 fcs_err_count, fcs_ok_count;
+	u16 len_mismatch;
+	u32 mdrdy_count;
 
 	if (td->state != MT76_TM_STATE_RX_FRAMES)
 		return 0;
@@ -2198,20 +2199,21 @@ mt7996_tm_get_rx_stats(struct mt7996_phy *phy)
 		phy->test.last_wb_rssi[i] = rx_stats_all->fagc[i].wb_rssi;
 	}
 
-	if (phy->mt76->band_idx == 2)
+	if (phy->mt76->band_idx == MT_BAND2)
 		qid = MT_RXQ_BAND2;
-	else if (phy->mt76->band_idx == 1)
+	else if (phy->mt76->band_idx == MT_BAND1)
 		qid = MT_RXQ_BAND1;
 	else
 		qid = MT_RXQ_MAIN;
 
+	mdrdy_count = le32_to_cpu(rx_stats_all->band_info.mac_rx_mdrdy_cnt);
+	fcs_ok_count = le16_to_cpu(rx_stats_all->band_info.mac_rx_fcs_ok_cnt);
 	fcs_err_count = le16_to_cpu(rx_stats_all->band_info.mac_rx_fcs_err_cnt);
-	mac_rx_len_mismatch = le16_to_cpu(rx_stats_all->band_info.mac_rx_len_mismatch);
-	mac_rx_mdrdy_cnt = le32_to_cpu(rx_stats_all->band_info.mac_rx_mdrdy_cnt);
-	td->rx_stats.packets[qid] += mac_rx_mdrdy_cnt;
-	td->rx_stats.packets[qid] += fcs_err_count;
-	td->rx_stats.fcs_error[qid] += fcs_err_count;
-	td->rx_stats.len_mismatch += mac_rx_len_mismatch;
+	len_mismatch = le16_to_cpu(rx_stats_all->band_info.mac_rx_len_mismatch);
+	td->rx_stats[qid].packets += mdrdy_count;
+	td->rx_stats[qid].rx_success += fcs_ok_count;
+	td->rx_stats[qid].fcs_error += fcs_err_count;
+	td->rx_stats[qid].len_mismatch += len_mismatch;
 
 	dev_kfree_skb(skb);
 

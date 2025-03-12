@@ -895,10 +895,11 @@ struct mt76_testmode_data {
 	u16 tx_queued_limit;
 	u32 tx_done;
 	struct {
-		u64 packets[__MT_RXQ_MAX];
-		u64 fcs_error[__MT_RXQ_MAX];
+		u64 packets;
+		u64 rx_success;
+		u64 fcs_error;
 		u64 len_mismatch;
-	} rx_stats;
+	} rx_stats[__MT_RXQ_MAX];
 	u8 flag;
 
 	struct {
