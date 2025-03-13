@@ -2190,13 +2190,13 @@ mt7996_tm_get_rx_stats(struct mt7996_phy *phy)
 	rx_stats = (struct mt7996_tm_rx_event *)skb->data;
 	rx_stats_all = &rx_stats->rx_stat_all;
 
-	phy->test.last_freq_offset = le32_to_cpu(rx_stats_all->user_info[0].freq_offset);
-	phy->test.last_snr = le32_to_cpu(rx_stats_all->user_info[0].snr);
-	for (i = 0; i < ARRAY_SIZE(phy->test.last_rcpi); i++) {
-		phy->test.last_rcpi[i] = le16_to_cpu(rx_stats_all->rxv_info[i].rcpi);
-		phy->test.last_rssi[i] = le16_to_cpu(rx_stats_all->rxv_info[i].rssi);
-		phy->test.last_ib_rssi[i] = rx_stats_all->fagc[i].ib_rssi;
-		phy->test.last_wb_rssi[i] = rx_stats_all->fagc[i].wb_rssi;
+	td->last_rx.freq_offset = le32_to_cpu(rx_stats_all->user_info[0].freq_offset);
+	td->last_rx.snr = le32_to_cpu(rx_stats_all->user_info[0].snr);
+	for (i = 0; i < td->last_rx.path; i++) {
+		td->last_rx.rcpi[i] = le16_to_cpu(rx_stats_all->rxv_info[i].rcpi);
+		td->last_rx.rssi[i] = le16_to_cpu(rx_stats_all->rxv_info[i].rssi);
+		td->last_rx.ib_rssi[i] = rx_stats_all->fagc[i].ib_rssi;
+		td->last_rx.wb_rssi[i] = rx_stats_all->fagc[i].wb_rssi;
 	}
 
 	if (phy->mt76->band_idx == MT_BAND2)
@@ -2251,65 +2251,24 @@ mt7996_tm_get_tx_stats(struct mt7996_phy *phy)
 static int
 mt7996_tm_dump_stats(struct mt76_phy *mphy, struct sk_buff *msg)
 {
+	struct mt76_testmode_data *td = &mphy->test;
 	struct mt7996_phy *phy = mphy->priv;
-	void *rx, *rssi;
-	int i;
+	struct mt7996_dev *dev = phy->dev;
+	int band_idx = mphy->band_idx;
 
-	mt7996_tm_set(phy->dev, SET_ID(BAND_IDX), mphy->band_idx);
+	if (!td->last_rx.path) {
+		td->last_rx.path = hweight32(mphy->chainmask >> dev->chainshift[band_idx]);
+		if (phy->has_aux_rx)
+			td->last_rx.path++;
+		td->last_rx.rcpi = devm_kzalloc(dev->mt76.dev, td->last_rx.path, GFP_KERNEL);
+		td->last_rx.rssi = devm_kzalloc(dev->mt76.dev, td->last_rx.path, GFP_KERNEL);
+		td->last_rx.ib_rssi = devm_kzalloc(dev->mt76.dev, td->last_rx.path, GFP_KERNEL);
+		td->last_rx.wb_rssi = devm_kzalloc(dev->mt76.dev, td->last_rx.path, GFP_KERNEL);
+	}
+
+	mt7996_tm_set(dev, SET_ID(BAND_IDX), band_idx);
 	mt7996_tm_get_rx_stats(phy);
 	mt7996_tm_get_tx_stats(phy);
-
-	rx = nla_nest_start(msg, MT76_TM_STATS_ATTR_LAST_RX);
-	if (!rx)
-		return -ENOMEM;
-
-	if (nla_put_s32(msg, MT76_TM_RX_ATTR_FREQ_OFFSET, phy->test.last_freq_offset))
-		return -ENOMEM;
-
-	rssi = nla_nest_start(msg, MT76_TM_RX_ATTR_RCPI);
-	if (!rssi)
-		return -ENOMEM;
-
-	for (i = 0; i < ARRAY_SIZE(phy->test.last_rcpi); i++)
-		if (nla_put_u8(msg, i, phy->test.last_rcpi[i]))
-			return -ENOMEM;
-
-	nla_nest_end(msg, rssi);
-
-	rssi = nla_nest_start(msg, MT76_TM_RX_ATTR_RSSI);
-	if (!rssi)
-		return -ENOMEM;
-
-	for (i = 0; i < ARRAY_SIZE(phy->test.last_rssi); i++)
-		if (nla_put_s8(msg, i, phy->test.last_rssi[i]))
-			return -ENOMEM;
-
-	nla_nest_end(msg, rssi);
-
-	rssi = nla_nest_start(msg, MT76_TM_RX_ATTR_IB_RSSI);
-	if (!rssi)
-		return -ENOMEM;
-
-	for (i = 0; i < ARRAY_SIZE(phy->test.last_ib_rssi); i++)
-		if (nla_put_s8(msg, i, phy->test.last_ib_rssi[i]))
-			return -ENOMEM;
-
-	nla_nest_end(msg, rssi);
-
-	rssi = nla_nest_start(msg, MT76_TM_RX_ATTR_WB_RSSI);
-	if (!rssi)
-		return -ENOMEM;
-
-	for (i = 0; i < ARRAY_SIZE(phy->test.last_wb_rssi); i++)
-		if (nla_put_s8(msg, i, phy->test.last_wb_rssi[i]))
-			return -ENOMEM;
-
-	nla_nest_end(msg, rssi);
-
-	if (nla_put_u8(msg, MT76_TM_RX_ATTR_SNR, phy->test.last_snr))
-		return -ENOMEM;
-
-	nla_nest_end(msg, rx);
 
 	return 0;
 }

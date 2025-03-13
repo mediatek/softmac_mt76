@@ -903,6 +903,16 @@ struct mt76_testmode_data {
 	u8 flag;
 
 	struct {
+		s32 freq_offset;
+		u8 path;
+		u8 *rcpi;
+		s8 *rssi;
+		s8 *ib_rssi;
+		s8 *wb_rssi;
+		u8 snr;
+	} last_rx;
+
+	struct {
 		u8 type;
 		u8 enable;
 	} cfg;

@@ -752,20 +752,6 @@ struct mt7996_phy {
 
 	u8 muru_onoff;
 
-#ifdef CONFIG_NL80211_TESTMODE
-	struct {
-		u32 *reg_backup;
-
-		s32 last_freq_offset;
-		u8 last_rcpi[5];
-		s8 last_rssi[5];
-		s8 last_ib_rssi[5];
-		s8 last_wb_rssi[5];
-		u8 last_snr;
-
-		u8 spe_idx;
-	} test;
-#endif
 #ifdef CONFIG_MTK_VENDOR
 	u8 rts_bw_sig;
 	spinlock_t amnt_lock;

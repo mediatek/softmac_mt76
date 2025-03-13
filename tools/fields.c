@@ -240,17 +240,14 @@ static void print_array(const struct tm_field *field, struct nlattr *attr)
 
 static void print_nested(const struct tm_field *field, struct nlattr *attr)
 {
-	struct nlattr **tb = alloca(field->len * sizeof(struct nlattr *));
 	const struct tm_field *fields = field->fields;
-	int i;
+	struct nlattr *cur;
+	int i, rem;
 
-	nla_parse_nested(tb, field->len - 1, attr, field->policy);
-	for (i = 0; i < field->len; i++) {
+	nla_for_each_nested(cur, attr, rem) {
 		int prefix_len = 0;
 
-		if (!tb[i])
-			continue;
-
+		i = nla_type(cur);
 		if (!fields[i].print)
 			continue;
 
@@ -263,7 +260,7 @@ static void print_nested(const struct tm_field *field, struct nlattr *attr)
 				sizeof(prefix) - prefix_len - 1);
 		}
 
-		fields[i].print(&fields[i], tb[i]);
+		fields[i].print(&fields[i], cur);
 		if (fields[i].prefix)
 			prefix[prefix_len] = 0;
 
@@ -271,8 +268,12 @@ static void print_nested(const struct tm_field *field, struct nlattr *attr)
 			printf("\n");
 	}
 
-	if (field->print_extra)
+	if (field->print_extra) {
+		struct nlattr **tb = alloca(field->len * sizeof(struct nlattr *));
+
+		nla_parse_nested(tb, field->len - 1, attr, field->policy);
 		field->print_extra(field, tb);
+	}
 }
 
 static void print_extra_stats(const struct tm_field *field, struct nlattr **tb)

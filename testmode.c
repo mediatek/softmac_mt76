@@ -1009,6 +1009,68 @@ out:
 EXPORT_SYMBOL(mt76_testmode_cmd);
 
 static int
+mt76_testmode_dump_last_rx_stats(struct mt76_phy *phy, struct sk_buff *msg)
+{
+	struct mt76_testmode_data *td = &phy->test;
+	void *rx, *rssi;
+	int i;
+
+	rx = nla_nest_start(msg, MT76_TM_STATS_ATTR_LAST_RX);
+	if (!rx)
+		return -ENOMEM;
+
+	rssi = nla_nest_start(msg, MT76_TM_RX_ATTR_RSSI);
+	if (!rssi)
+		return -ENOMEM;
+
+	for (i = 0; i < td->last_rx.path; i++)
+		if (nla_put_s8(msg, i, td->last_rx.rssi[i]))
+			return -ENOMEM;
+
+	nla_nest_end(msg, rssi);
+
+	rssi = nla_nest_start(msg, MT76_TM_RX_ATTR_RCPI);
+	if (!rssi)
+		return -ENOMEM;
+
+	for (i = 0; i < td->last_rx.path; i++)
+		if (nla_put_u8(msg, i, td->last_rx.rcpi[i]))
+			return -ENOMEM;
+
+	nla_nest_end(msg, rssi);
+
+	rssi = nla_nest_start(msg, MT76_TM_RX_ATTR_IB_RSSI);
+	if (!rssi)
+		return -ENOMEM;
+
+	for (i = 0; i < td->last_rx.path; i++)
+		if (nla_put_s8(msg, i, td->last_rx.ib_rssi[i]))
+			return -ENOMEM;
+
+	nla_nest_end(msg, rssi);
+
+	rssi = nla_nest_start(msg, MT76_TM_RX_ATTR_WB_RSSI);
+	if (!rssi)
+		return -ENOMEM;
+
+	for (i = 0; i < td->last_rx.path; i++)
+		if (nla_put_s8(msg, i, td->last_rx.wb_rssi[i]))
+			return -ENOMEM;
+
+	nla_nest_end(msg, rssi);
+
+	if (nla_put_s32(msg, MT76_TM_RX_ATTR_FREQ_OFFSET, td->last_rx.freq_offset))
+		return -ENOMEM;
+
+	if (nla_put_u8(msg, MT76_TM_RX_ATTR_SNR, td->last_rx.snr))
+		return -ENOMEM;
+
+	nla_nest_end(msg, rx);
+
+	return 0;
+}
+
+static int
 mt76_testmode_dump_stats(struct mt76_phy *phy, struct sk_buff *msg)
 {
 	struct mt76_testmode_data *td = &phy->test;
@@ -1047,7 +1109,7 @@ mt76_testmode_dump_stats(struct mt76_phy *phy, struct sk_buff *msg)
 			      MT76_TM_STATS_ATTR_PAD))
 		return -EMSGSIZE;
 
-	return 0;
+	return mt76_testmode_dump_last_rx_stats(phy, msg);
 }
 
 int mt76_testmode_dump(struct ieee80211_hw *hw, struct sk_buff *msg,
@@ -1101,6 +1163,7 @@ int mt76_testmode_dump(struct ieee80211_hw *hw, struct sk_buff *msg,
 		goto out;
 	}
 
+	/* the dump order follows the order of nla_put for each attribute */
 	if (tb[MT76_TM_ATTR_STATS]) {
 		err = -EINVAL;
 
