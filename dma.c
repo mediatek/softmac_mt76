@@ -218,9 +218,9 @@ void __mt76_dma_queue_reset(struct mt76_dev *dev, struct mt76_queue *q,
 	mt76_dma_sync_idx(dev, q);
 }
 
-void mt76_dma_queue_reset(struct mt76_dev *dev, struct mt76_queue *q)
+void mt76_dma_queue_reset(struct mt76_dev *dev, struct mt76_queue *q, bool reset)
 {
-	__mt76_dma_queue_reset(dev, q, true);
+	__mt76_dma_queue_reset(dev, q, reset);
 }
 
 static int
@@ -250,12 +250,15 @@ mt76_dma_add_rx_buf(struct mt76_dev *dev, struct mt76_queue *q,
 
 	if (mt76_queue_is_wed_rx(q)) {
 		txwi = mt76_get_rxwi(dev);
-		if (!txwi)
+		if (!txwi) {
+			q->rx_drop[MT_RX_DROP_DMAD_GET_RXWI_FAIL]++;
 			return -ENOMEM;
+		}
 
 		rx_token = mt76_rx_token_consume(dev, data, txwi, buf->addr);
 		if (rx_token < 0) {
 			mt76_put_rxwi(dev, txwi);
+			q->rx_drop[MT_RX_DROP_DMAD_GET_TOKEN_FAIL]++;
 			return -ENOMEM;
 		}
 
@@ -426,6 +429,7 @@ mt76_dma_get_buf(struct mt76_dev *dev, struct mt76_queue *q, int idx,
 	struct mt76_desc *desc = &q->desc[idx];
 	u32 ctrl, desc_info, buf1;
 	void *buf = e->buf;
+	int reason;
 
 	if (mt76_queue_is_wed_rro_ind(q))
 		goto done;
@@ -441,14 +445,43 @@ mt76_dma_get_buf(struct mt76_dev *dev, struct mt76_queue *q, int idx,
 		*info = desc_info;
 
 	buf1 = le32_to_cpu(desc->buf1);
-	mt76_dma_should_drop_buf(drop, ctrl, buf1, desc_info);
+	reason = mt76_dma_should_drop_buf(drop, ctrl, buf1, desc_info);
+	if (drop && *drop && reason >= 0)
+		q->rx_drop[reason]++;
 
 	if (mt76_queue_is_wed_rx(q)) {
+		u32 id, find = 0;
 		u32 token = FIELD_GET(MT_DMA_CTL_TOKEN, buf1);
-		struct mt76_txwi_cache *t = mt76_rx_token_release(dev, token);
+		struct mt76_txwi_cache *t;
 
-		if (!t)
+		if (*more) {
+			spin_lock_bh(&dev->rx_token_lock);
+
+			idr_for_each_entry(&dev->rx_token, t, id) {
+				if (t->dma_addr == le32_to_cpu(desc->buf0)) {
+					find = 1;
+					token = id;
+
+					/* Write correct id back to DMA*/
+					u32p_replace_bits(&buf1, id,
+							  MT_DMA_CTL_TOKEN);
+					WRITE_ONCE(desc->buf1, cpu_to_le32(buf1));
+					break;
+				}
+			}
+
+			spin_unlock_bh(&dev->rx_token_lock);
+			if (!find) {
+				q->rx_drop[MT_RX_DROP_DMAD_ADDR_NOT_FOUND]++;
+				return NULL;
+			}
+		}
+
+		t = mt76_rx_token_release(dev, token);
+		if (!t) {
+			q->rx_drop[MT_RX_DROP_DMAD_TOKEN_NOT_FOUND]++;
 			return NULL;
+		}
 
 		dma_sync_single_for_cpu(dev->dma_dev, t->dma_addr,
 				SKB_WITH_OVERHEAD(q->buf_size),
@@ -458,9 +491,11 @@ mt76_dma_get_buf(struct mt76_dev *dev, struct mt76_queue *q, int idx,
 		t->dma_addr = 0;
 		t->ptr = NULL;
 
-		mt76_put_rxwi(dev, t);
-		if (drop)
+		if (drop) {
 			*drop |= !!(buf1 & MT_DMA_CTL_WO_DROP);
+			if (buf1 & MT_DMA_CTL_WO_DROP)
+				q->rx_drop[MT_RX_DROP_DMAD_WO_FRAG]++;
+		}
 	} else {
 		dma_sync_single_for_cpu(dev->dma_dev, e->dma_addr[0],
 				SKB_WITH_OVERHEAD(q->buf_size),
@@ -482,7 +517,8 @@ mt76_dma_dequeue(struct mt76_dev *dev, struct mt76_queue *q, bool flush,
 	if (!q->queued)
 		return NULL;
 
-	if (mt76_queue_is_wed_rro_data(q))
+	if (mt76_queue_is_wed_rro_data(q) ||
+	    mt76_queue_is_wed_rro_msdu_pg(q))
 		return NULL;
 
 	if (!mt76_queue_is_wed_rro_ind(q)) {
@@ -504,9 +540,12 @@ mt76_dma_tx_queue_skb_raw(struct mt76_dev *dev, struct mt76_queue *q,
 {
 	struct mt76_queue_buf buf = {};
 	dma_addr_t addr;
+	int ret = -ENOMEM;
 
-	if (test_bit(MT76_MCU_RESET, &dev->phy.state))
+	if (test_bit(MT76_MCU_RESET, &dev->phy.state)) {
+		ret = -EAGAIN;
 		goto error;
+	}
 
 	if (q->queued + 1 >= q->ndesc - 1)
 		goto error;
@@ -528,7 +567,7 @@ mt76_dma_tx_queue_skb_raw(struct mt76_dev *dev, struct mt76_queue *q,
 
 error:
 	dev_kfree_skb(skb);
-	return -ENOMEM;
+	return ret;
 }
 
 static int
@@ -550,12 +589,16 @@ mt76_dma_tx_queue_skb(struct mt76_phy *phy, struct mt76_queue *q,
 	dma_addr_t addr;
 	u8 *txwi;
 
-	if (test_bit(MT76_RESET, &phy->state))
+	if (test_bit(MT76_RESET, &phy->state)) {
+		phy->tx_dbg_stats.tx_drop[MT_TX_DROP_RESET_STATE]++;
 		goto free_skb;
+	}
 
 	t = mt76_get_txwi(dev);
-	if (!t)
+	if (!t) {
+		dev->tx_dbg_stats.tx_drop[MT_TX_DROP_GET_TXWI_FAIL]++;
 		goto free_skb;
+	}
 
 	txwi = mt76_get_txwi_ptr(dev, t);
 
@@ -565,8 +608,10 @@ mt76_dma_tx_queue_skb(struct mt76_phy *phy, struct mt76_queue *q,
 
 	len = skb_headlen(skb);
 	addr = dma_map_single(dev->dma_dev, skb->data, len, DMA_TO_DEVICE);
-	if (unlikely(dma_mapping_error(dev->dma_dev, addr)))
+	if (unlikely(dma_mapping_error(dev->dma_dev, addr))) {
+		dev->tx_dbg_stats.tx_drop[MT_TX_DROP_DMA_FAIL]++;
 		goto free;
+	}
 
 	tx_info.buf[n].addr = t->dma_addr;
 	tx_info.buf[n++].len = dev->drv->txwi_size;
@@ -574,13 +619,17 @@ mt76_dma_tx_queue_skb(struct mt76_phy *phy, struct mt76_queue *q,
 	tx_info.buf[n++].len = len;
 
 	skb_walk_frags(skb, iter) {
-		if (n == ARRAY_SIZE(tx_info.buf))
+		if (n == ARRAY_SIZE(tx_info.buf)) {
+			dev->tx_dbg_stats.tx_drop[MT_TX_DROP_AGG_EXCEEDED]++;
 			goto unmap;
+		}
 
 		addr = dma_map_single(dev->dma_dev, iter->data, iter->len,
 				      DMA_TO_DEVICE);
-		if (unlikely(dma_mapping_error(dev->dma_dev, addr)))
+		if (unlikely(dma_mapping_error(dev->dma_dev, addr))) {
+			dev->tx_dbg_stats.tx_drop[MT_TX_DROP_DMA_FAIL]++;
 			goto unmap;
+		}
 
 		tx_info.buf[n].addr = addr;
 		tx_info.buf[n++].len = iter->len;
@@ -589,6 +638,7 @@ mt76_dma_tx_queue_skb(struct mt76_phy *phy, struct mt76_queue *q,
 
 	if (q->queued + (tx_info.nbuf + 1) / 2 >= q->ndesc - 1) {
 		ret = -ENOMEM;
+		phy->tx_dbg_stats.tx_drop[MT_TX_DROP_RING_FULL]++;
 		goto unmap;
 	}
 
@@ -600,6 +650,7 @@ mt76_dma_tx_queue_skb(struct mt76_phy *phy, struct mt76_queue *q,
 	if (ret < 0)
 		goto unmap;
 
+	phy->tx_dbg_stats.tx_to_hw++;
 	return mt76_dma_add_buf(dev, q, tx_info.buf, tx_info.nbuf,
 				tx_info.info, tx_info.skb, t);
 
@@ -631,9 +682,8 @@ free_skb:
 	return ret;
 }
 
-static int
-mt76_dma_rx_fill_buf(struct mt76_dev *dev, struct mt76_queue *q,
-		     bool allow_direct)
+int mt76_dma_rx_fill_buf(struct mt76_dev *dev, struct mt76_queue *q,
+			 bool allow_direct)
 {
 	int len = SKB_WITH_OVERHEAD(q->buf_size);
 	int frames = 0;
@@ -740,7 +790,7 @@ mt76_dma_alloc_queue(struct mt76_dev *dev, struct mt76_queue *q,
 			return 0;
 	}
 
-	mt76_dma_queue_reset(dev, q);
+	mt76_dma_queue_reset(dev, q, true);
 
 	return 0;
 }
@@ -821,16 +871,19 @@ mt76_add_fragment(struct mt76_dev *dev, struct mt76_queue *q, void *data,
 		skb_add_rx_frag(skb, nr_frags, page, offset, len, q->buf_size);
 	} else {
 		mt76_put_page_pool_buf(data, allow_direct);
+		q->rx_drop[MT_RX_DROP_FRAG]++;
 	}
 
 	if (more)
 		return;
 
 	q->rx_head = NULL;
-	if (nr_frags < ARRAY_SIZE(shinfo->frags))
+	if (nr_frags < ARRAY_SIZE(shinfo->frags)) {
 		dev->drv->rx_skb(dev, q - dev->q_rx, skb, &info);
-	else
+	} else {
+		q->rx_drop[MT_RX_DROP_FRAG]++;
 		dev_kfree_skb(skb);
+	}
 }
 
 static int
@@ -866,7 +919,7 @@ mt76_dma_rx_process(struct mt76_dev *dev, struct mt76_queue *q, int budget)
 		if (!data)
 			break;
 
-		if (drop)
+		if (drop || (len == 0))
 			goto free_frag;
 
 		if (q->rx_head)
@@ -875,6 +928,7 @@ mt76_dma_rx_process(struct mt76_dev *dev, struct mt76_queue *q, int budget)
 			data_len = SKB_WITH_OVERHEAD(q->buf_size);
 
 		if (data_len < len + q->buf_offset) {
+			q->rx_drop[MT_RX_DROP_FRAG]++;
 			dev_kfree_skb(q->rx_head);
 			q->rx_head = NULL;
 			goto free_frag;
@@ -891,8 +945,10 @@ mt76_dma_rx_process(struct mt76_dev *dev, struct mt76_queue *q, int budget)
 			goto free_frag;
 
 		skb = napi_build_skb(data, q->buf_size);
-		if (!skb)
+		if (!skb) {
+			q->rx_drop[MT_RX_DROP_BUILD_SKB_FAIL]++;
 			goto free_frag;
+		}
 
 		skb_reserve(skb, q->buf_offset);
 		skb_mark_for_recycle(skb);

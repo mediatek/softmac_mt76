@@ -22,6 +22,8 @@
 #define EEPROM_FILE_PATH_FMT	"/tmp/mt76-test-%s"
 #define EEPROM_PART_SIZE	20480
 
+#define FWLOG_BUF_SIZE	1504
+
 struct nl_msg;
 struct nlattr;
 
@@ -61,5 +63,6 @@ extern unsigned char *eeprom_data;
 void usage(void);
 int mt76_eeprom(int phy, int argc, char **argv);
 int mt76_fwlog(const char *phyname, int argc, char **argv);
+int mt76_idxlog(const char *phyname, int argc, char **argv);
 
 #endif

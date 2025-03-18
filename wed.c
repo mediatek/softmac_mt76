@@ -9,6 +9,7 @@
 void mt76_wed_release_rx_buf(struct mtk_wed_device *wed)
 {
 	struct mt76_dev *dev = container_of(wed, struct mt76_dev, mmio.wed);
+	struct page *page;
 	int i;
 
 	for (i = 0; i < dev->rx_token_size; i++) {
@@ -25,6 +26,26 @@ void mt76_wed_release_rx_buf(struct mtk_wed_device *wed)
 	}
 
 	mt76_free_pending_rxwi(dev);
+
+	mt76_for_each_q_rx(dev, i) {
+		struct mt76_queue *q = &dev->q_rx[i];
+
+		if (mt76_queue_is_wed_rx(q)) {
+			if (!q->rx_page.va)
+				continue;
+
+			page = virt_to_page(q->rx_page.va);
+			__page_frag_cache_drain(page, q->rx_page.pagecnt_bias);
+			memset(&q->rx_page, 0, sizeof(q->rx_page));
+		}
+	}
+
+	if (!wed->rx_buf_ring.rx_page.va)
+		return;
+
+	page = virt_to_page(wed->rx_buf_ring.rx_page.va);
+	__page_frag_cache_drain(page, wed->rx_buf_ring.rx_page.pagecnt_bias);
+	memset(&wed->rx_buf_ring.rx_page, 0, sizeof(wed->rx_buf_ring.rx_page));
 }
 EXPORT_SYMBOL_GPL(mt76_wed_release_rx_buf);
 
@@ -83,7 +104,7 @@ int mt76_wed_offload_enable(struct mtk_wed_device *wed)
 	struct mt76_dev *dev = container_of(wed, struct mt76_dev, mmio.wed);
 
 	spin_lock_bh(&dev->token_lock);
-	dev->token_size = wed->wlan.token_start;
+	dev->token_size = MT76_WED_SW_TOKEN_SIZE;
 	spin_unlock_bh(&dev->token_lock);
 
 	return !wait_event_timeout(dev->tx_wait, !dev->wed_token_count, HZ);
@@ -118,8 +139,8 @@ int mt76_wed_dma_setup(struct mt76_dev *dev, struct mt76_queue *q, bool reset)
 	case MT76_WED_Q_TXFREE:
 		/* WED txfree queue needs ring to be initialized before setup */
 		q->flags = 0;
-		mt76_dma_queue_reset(dev, q);
-		mt76_dma_rx_fill(dev, q, false);
+		mt76_dma_queue_reset(dev, q, true);
+		mt76_dma_rx_fill_buf(dev, q, false);
 
 		ret = mtk_wed_device_txfree_ring_setup(q->wed, q->regs);
 		if (!ret)
@@ -147,8 +168,8 @@ int mt76_wed_dma_setup(struct mt76_dev *dev, struct mt76_queue *q, bool reset)
 		break;
 	case MT76_WED_RRO_Q_IND:
 		q->flags &= ~MT_QFLAG_WED;
-		mt76_dma_queue_reset(dev, q);
-		mt76_dma_rx_fill(dev, q, false);
+		mt76_dma_queue_reset(dev, q, true);
+		mt76_dma_rx_fill_buf(dev, q, false);
 		mtk_wed_device_ind_rx_ring_setup(q->wed, q->regs);
 		break;
 	default:
@@ -167,7 +188,7 @@ void mt76_wed_offload_disable(struct mtk_wed_device *wed)
 	struct mt76_dev *dev = container_of(wed, struct mt76_dev, mmio.wed);
 
 	spin_lock_bh(&dev->token_lock);
-	dev->token_size = dev->drv->token_size;
+	dev->token_size = MT76_WED_SW_TOKEN_SIZE;
 	spin_unlock_bh(&dev->token_lock);
 }
 EXPORT_SYMBOL_GPL(mt76_wed_offload_disable);

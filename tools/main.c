@@ -13,6 +13,7 @@
 #include <poll.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <net/if.h>
 #include "mt76-test.h"
 
 struct unl unl;
@@ -25,6 +26,7 @@ static int phy_lookup_idx(const char *name)
 	FILE *f;
 	int len;
 
+	/* TODO: Handle single wiphy radio index */
 	snprintf(buf, sizeof(buf), "/sys/class/ieee80211/%s/index", name);
 	f = fopen(buf, "r");
 	if (!f)
@@ -43,12 +45,15 @@ static int phy_lookup_idx(const char *name)
 void usage(void)
 {
 	static const char *const commands[] = {
+		"add <interface>",
+		"del <interface>",
 		"set <var>=<val> [...]",
 		"dump [stats]",
 		"eeprom file",
 		"eeprom set <addr>=<val> [...]",
 		"eeprom changes",
 		"eeprom reset",
+		"fwlog <ip> <fw_debug_bin input> <fwlog name>",
 	};
 	int i;
 
@@ -164,6 +169,122 @@ static int mt76_set(int phy, int argc, char **argv)
 	return ret;
 }
 
+static int mt76_set_state(int phy, char *state)
+{
+	const struct tm_field *fields = msg_field.fields;
+	struct nl_msg *msg;
+	void *data;
+	int ret, i;
+
+	msg = unl_genl_msg(&unl, NL80211_CMD_TESTMODE, false);
+	nla_put_u32(msg, NL80211_ATTR_WIPHY, phy);
+
+	data = nla_nest_start(msg, NL80211_ATTR_TESTDATA);
+	for (i = 0; i < msg_field.len; i++) {
+		if (!fields[i].parse)
+			continue;
+
+		if (!strcmp(fields[i].name, "state"))
+			break;
+	}
+
+	if (!fields[i].parse(&fields[i], i, msg, state))
+		return 1;
+
+	tm_set_changed(i);
+	nla_nest_end(msg, data);
+
+	ret = unl_genl_request(&unl, msg, NULL, NULL);
+	if (ret)
+		fprintf(stderr, "Failed to set state %s: %s\n", state, strerror(-ret));
+
+	return ret;
+}
+
+static void mt76_set_tm_reg(void)
+{
+	struct nl_msg *msg;
+	char reg[3] = "VV\0";
+	int ret;
+
+	msg = unl_genl_msg(&unl, NL80211_CMD_REQ_SET_REG, false);
+	nla_put_string(msg, NL80211_ATTR_REG_ALPHA2, reg);
+
+	ret = unl_genl_request(&unl, msg, NULL, NULL);
+	if (ret)
+		fprintf(stderr, "Failed to set reg %s: %s\n", reg, strerror(-ret));
+}
+
+static int mt76_add_iface(int phy, int argc, char **argv)
+{
+	struct nl_msg *msg;
+	char *name, cmd[64];
+	int ret;
+
+	mt76_set_tm_reg();
+
+	if (argc < 1)
+		return 1;
+
+	name = argv[0];
+	msg = unl_genl_msg(&unl, NL80211_CMD_NEW_INTERFACE, false);
+	/* TODO: Handle single wiphy radio index */
+	nla_put_u32(msg, NL80211_ATTR_WIPHY, phy);
+	nla_put_u32(msg, NL80211_ATTR_IFTYPE, NL80211_IFTYPE_MONITOR);
+	nla_put_string(msg, NL80211_ATTR_IFNAME, name);
+
+	ret = unl_genl_request(&unl, msg, NULL, NULL);
+	if (ret) {
+		fprintf(stderr, "nl80211 call failed: %s\n", strerror(-ret));
+		return ret;
+	}
+
+	snprintf(cmd, sizeof(cmd), "ifconfig %s up", name);
+	system(cmd);
+
+	/* turn on testmode */
+	ret = mt76_set_state(phy, "idle");
+	return ret;
+}
+
+static int mt76_delete_iface(int phy, int argc, char **argv)
+{
+	unsigned int devidx;
+	struct nl_msg *msg;
+	char *name, cmd[64];
+	int ret;
+
+	if (argc < 1)
+		return 1;
+
+	name = argv[0];
+	devidx = if_nametoindex(name);
+	if (!devidx) {
+		fprintf(stderr, "Failed to find ifindex for %s: %s\n",
+			name, strerror(errno));
+		return 2;
+	}
+
+	/* turn off testmode before deleting interface */
+	ret = mt76_set_state(phy, "off");
+	if (ret)
+		return ret;
+
+	snprintf(cmd, sizeof(cmd), "ifconfig %s down", name);
+	system(cmd);
+
+	/* delete interface */
+	msg = unl_genl_msg(&unl, NL80211_CMD_DEL_INTERFACE, false);
+	nla_put_u32(msg, NL80211_ATTR_WIPHY, phy);
+	nla_put_u32(msg, NL80211_ATTR_IFINDEX, devidx);
+
+	ret = unl_genl_request(&unl, msg, NULL, NULL);
+	if (ret)
+		fprintf(stderr, "nl80211 call failed: %s\n", strerror(-ret));
+
+	return ret;
+}
+
 int main(int argc, char **argv)
 {
 	const char *cmd, *phyname;
@@ -194,10 +315,16 @@ int main(int argc, char **argv)
 		ret = mt76_dump(phy, argc, argv);
 	else if (!strcmp(cmd, "set"))
 		ret = mt76_set(phy, argc, argv);
+	else if (!strcmp(cmd, "add"))
+		ret = mt76_add_iface(phy, argc, argv);
+	else if (!strcmp(cmd, "del"))
+		ret = mt76_delete_iface(phy, argc, argv);
 	else if (!strcmp(cmd, "eeprom"))
 		ret = mt76_eeprom(phy, argc, argv);
 	else if (!strcmp(cmd, "fwlog"))
 		ret = mt76_fwlog(phyname, argc, argv);
+	else if (!strcmp(cmd, "idxlog"))
+		ret = mt76_idxlog(phyname, argc, argv);
 	else
 		usage();
 

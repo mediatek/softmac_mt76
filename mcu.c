@@ -4,6 +4,7 @@
  */
 
 #include "mt76.h"
+#include "mt76_connac.h"
 
 struct sk_buff *
 __mt76_mcu_msg_alloc(struct mt76_dev *dev, const void *data,
@@ -74,7 +75,7 @@ int mt76_mcu_skb_send_and_get_msg(struct mt76_dev *dev, struct sk_buff *skb,
 				  struct sk_buff **ret_skb)
 {
 	unsigned int retry = 0;
-	struct sk_buff *orig_skb = NULL;
+	struct sk_buff *skb_tmp;
 	unsigned long expires;
 	int ret, seq;
 
@@ -87,48 +88,49 @@ int mt76_mcu_skb_send_and_get_msg(struct mt76_dev *dev, struct sk_buff *skb,
 
 	mutex_lock(&dev->mcu.mutex);
 
-	if (dev->mcu_ops->mcu_skb_prepare_msg) {
-		orig_skb = skb;
-		ret = dev->mcu_ops->mcu_skb_prepare_msg(dev, skb, cmd, &seq);
-		if (ret < 0)
+	while (retry < dev->mcu_ops->max_retry) {
+		skb_tmp = mt76_mcu_msg_alloc(dev, skb->data, skb->len);
+		if (!skb_tmp)
 			goto out;
-	}
 
-retry:
-	/* orig skb might be needed for retry, mcu_skb_send_msg consumes it */
-	if (orig_skb)
-		skb_get(orig_skb);
-	ret = dev->mcu_ops->mcu_skb_send_msg(dev, skb, cmd, &seq);
-	if (ret < 0)
-		goto out;
-
-	if (!wait_resp) {
-		ret = 0;
-		goto out;
-	}
-
-	expires = jiffies + dev->mcu.timeout;
-
-	do {
-		skb = mt76_mcu_get_response(dev, expires);
-		if (!skb && !test_bit(MT76_MCU_RESET, &dev->phy.state) &&
-		    orig_skb && retry++ < dev->mcu_ops->max_retry) {
+		if (wait_resp && retry) {
+			if (test_bit(MT76_MCU_RESET, &dev->phy.state))
+				usleep_range(200000, 500000);
 			dev_err(dev->dev, "Retry message %08x (seq %d)\n",
 				cmd, seq);
-			skb = orig_skb;
-			goto retry;
 		}
 
-		ret = dev->mcu_ops->mcu_parse_response(dev, cmd, skb, seq);
-		if (!ret && ret_skb)
-			*ret_skb = skb;
-		else
-			dev_kfree_skb(skb);
-	} while (ret == -EAGAIN);
+		ret = dev->mcu_ops->mcu_skb_send_msg(dev, skb_tmp, cmd, &seq);
+		if (ret < 0 && ret != -EAGAIN)
+			goto out;
 
+		if (!wait_resp) {
+			ret = 0;
+			goto out;
+		}
+
+		expires = jiffies + dev->mcu.timeout;
+
+		do {
+			skb_tmp = mt76_mcu_get_response(dev, expires);
+			ret = dev->mcu_ops->mcu_parse_response(dev, cmd, skb_tmp, seq);
+			if (ret == -ETIMEDOUT)
+				break;
+
+			if (!ret && ret_skb)
+				*ret_skb = skb_tmp;
+			else
+				dev_kfree_skb(skb_tmp);
+
+			if (ret != -EAGAIN)
+				goto out;
+		} while (ret == -EAGAIN);
+
+		retry++;
+	}
 
 out:
-	dev_kfree_skb(orig_skb);
+	dev_kfree_skb(skb);
 	mutex_unlock(&dev->mcu.mutex);
 
 	return ret;

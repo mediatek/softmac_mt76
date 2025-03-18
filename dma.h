@@ -81,39 +81,43 @@ void mt76_dma_attach(struct mt76_dev *dev);
 void mt76_dma_cleanup(struct mt76_dev *dev);
 int mt76_dma_rx_fill(struct mt76_dev *dev, struct mt76_queue *q,
 		     bool allow_direct);
+int mt76_dma_rx_fill_buf(struct mt76_dev *dev, struct mt76_queue *q,
+			 bool allow_direct);
 void __mt76_dma_queue_reset(struct mt76_dev *dev, struct mt76_queue *q,
 			    bool reset_idx);
-void mt76_dma_queue_reset(struct mt76_dev *dev, struct mt76_queue *q);
+void mt76_dma_queue_reset(struct mt76_dev *dev, struct mt76_queue *q, bool reset);
 
 static inline void
 mt76_dma_reset_tx_queue(struct mt76_dev *dev, struct mt76_queue *q)
 {
-	dev->queue_ops->reset_q(dev, q);
+	dev->queue_ops->reset_q(dev, q, true);
 	if (mtk_wed_device_active(&dev->mmio.wed))
 		mt76_wed_dma_setup(dev, q, true);
 }
 
-static inline void
+static inline int
 mt76_dma_should_drop_buf(bool *drop, u32 ctrl, u32 buf1, u32 info)
 {
 	if (!drop)
-		return;
+		return -1;
 
 	*drop = !!(ctrl & (MT_DMA_CTL_TO_HOST_A | MT_DMA_CTL_DROP));
 	if (!(ctrl & MT_DMA_CTL_VER_MASK))
-		return;
+		return MT_RX_DROP_DMAD_WO_DROP;
 
 	switch (FIELD_GET(MT_DMA_WED_IND_REASON, buf1)) {
 	case MT_DMA_WED_IND_REASON_REPEAT:
 		*drop = true;
-		break;
+		return MT_RX_DROP_DMAD_RRO_REPEAT;
 	case MT_DMA_WED_IND_REASON_OLDPKT:
 		*drop = !(info & MT_DMA_INFO_DMA_FRAG);
-		break;
+		return MT_RX_DROP_DMAD_RRO_OLDPKT;
 	default:
 		*drop = !!(ctrl & MT_DMA_CTL_PN_CHK_FAIL);
-		break;
+		return MT_RX_DROP_DMAD_RRO_PN_CHK_FAIL;
 	}
+
+	return -1;
 }
 
 #endif

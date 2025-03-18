@@ -314,6 +314,7 @@ enum tx_frag_idx {
 #define MT_TXFREE_INFO_MSDU_ID		GENMASK(14, 0)
 #define MT_TXFREE_INFO_COUNT		GENMASK(27, 24)
 #define MT_TXFREE_INFO_STAT		GENMASK(29, 28)
+#define MT_TXFREE_INFO_REASON		GENMASK(4, 0)
 
 #define MT_TXS_HDR_SIZE			4 /* Unit: DW */
 #define MT_TXS_SIZE			12 /* Unit: DW */

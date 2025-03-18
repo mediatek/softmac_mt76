@@ -8,6 +8,7 @@
 
 #include <linux/interrupt.h>
 #include <linux/ktime.h>
+#include <linux/pci.h>
 #include "../mt76_connac.h"
 #include "regs.h"
 
@@ -43,22 +44,32 @@
 #define MT7996_FIRMWARE_WA		"mediatek/mt7996/mt7996_wa.bin"
 #define MT7996_FIRMWARE_WM		"mediatek/mt7996/mt7996_wm.bin"
 #define MT7996_FIRMWARE_DSP		"mediatek/mt7996/mt7996_dsp.bin"
+#define MT7996_FIRMWARE_WM_TM		"mediatek/mt7996/mt7996_wm_tm.bin"
 #define MT7996_ROM_PATCH		"mediatek/mt7996/mt7996_rom_patch.bin"
 
 #define MT7996_FIRMWARE_WA_233		"mediatek/mt7996/mt7996_wa_233.bin"
 #define MT7996_FIRMWARE_WM_233		"mediatek/mt7996/mt7996_wm_233.bin"
 #define MT7996_FIRMWARE_DSP_233		MT7996_FIRMWARE_DSP
+#define MT7996_FIRMWARE_WM_TM_233	"mediatek/mt7996/mt7996_wm_tm_233.bin"
 #define MT7996_ROM_PATCH_233		"mediatek/mt7996/mt7996_rom_patch_233.bin"
 
 #define MT7992_FIRMWARE_WA		"mediatek/mt7996/mt7992_wa.bin"
 #define MT7992_FIRMWARE_WM		"mediatek/mt7996/mt7992_wm.bin"
 #define MT7992_FIRMWARE_DSP		"mediatek/mt7996/mt7992_dsp.bin"
+#define MT7992_FIRMWARE_WM_TM		"mediatek/mt7996/mt7992_wm_tm.bin"
 #define MT7992_ROM_PATCH		"mediatek/mt7996/mt7992_rom_patch.bin"
 
 #define MT7992_FIRMWARE_WA_23		"mediatek/mt7996/mt7992_wa_23.bin"
 #define MT7992_FIRMWARE_WM_23		"mediatek/mt7996/mt7992_wm_23.bin"
 #define MT7992_FIRMWARE_DSP_23		"mediatek/mt7996/mt7992_dsp_23.bin"
+#define MT7992_FIRMWARE_WM_TM_23	"mediatek/mt7996/mt7992_wm_tm_23.bin"
 #define MT7992_ROM_PATCH_23		"mediatek/mt7996/mt7992_rom_patch_23.bin"
+
+#define MT7992_FIRMWARE_WA_24		"mediatek/mt7996/mt7992_wa_24.bin"
+#define MT7992_FIRMWARE_WM_24		"mediatek/mt7996/mt7992_wm_24.bin"
+#define MT7992_FIRMWARE_DSP_24		"mediatek/mt7996/mt7992_dsp_24.bin"
+#define MT7992_FIRMWARE_WM_TM_24	"mediatek/mt7996/mt7992_wm_tm_24.bin"
+#define MT7992_ROM_PATCH_24		"mediatek/mt7996/mt7992_rom_patch_24.bin"
 
 #define MT7990_FIRMWARE_WA		""
 #define MT7990_FIRMWARE_WM		"mediatek/mt7996/mt7990_wm.bin"
@@ -69,12 +80,14 @@
 #define MT7996_EEPROM_DEFAULT_INT	"mediatek/mt7996/mt7996_eeprom_2i5i6i.bin"
 #define MT7996_EEPROM_DEFAULT_233	"mediatek/mt7996/mt7996_eeprom_233.bin"
 #define MT7996_EEPROM_DEFAULT_233_INT	"mediatek/mt7996/mt7996_eeprom_233_2i5i6i.bin"
+#define MT7996_EEPROM_DEFAULT_404	"mediatek/mt7996/mt7996_eeprom_dual_404.bin"
 
 #define MT7992_EEPROM_DEFAULT		"mediatek/mt7996/mt7992_eeprom.bin"
 #define MT7992_EEPROM_DEFAULT_INT	"mediatek/mt7996/mt7992_eeprom_2i5i.bin"
 #define MT7992_EEPROM_DEFAULT_MIX	"mediatek/mt7996/mt7992_eeprom_2i5e.bin"
 #define MT7992_EEPROM_DEFAULT_23	"mediatek/mt7996/mt7992_eeprom_23.bin"
 #define MT7992_EEPROM_DEFAULT_23_INT	"mediatek/mt7996/mt7992_eeprom_23_2i5i.bin"
+#define MT7992_EEPROM_DEFAULT_24	"mediatek/mt7996/mt7992_eeprom_24_2i5i.bin"
 
 #define MT7990_EEPROM_DEFAULT		"mediatek/mt7996/mt7990_eeprom.bin"
 #define MT7990_EEPROM_DEFAULT_INT	"mediatek/mt7996/mt7990_eeprom_2i5i.bin"
@@ -83,6 +96,7 @@
 #define MT7996_EEPROM_BLOCK_SIZE	16
 #define MT7996_TOKEN_SIZE		16384
 #define MT7996_HW_TOKEN_SIZE		8192
+#define MT7996_SW_TOKEN_SIZE		15360
 
 #define MT7996_CFEND_RATE_DEFAULT	0x49	/* OFDM 24M */
 #define MT7996_CFEND_RATE_11B		0x03	/* 11B LP, 11M */
@@ -112,6 +126,9 @@
 #define MT7996_CRIT_TEMP		110
 #define MT7996_MAX_TEMP			120
 
+#define MT7996_BUILD_TIME_LEN		24
+
+#define MT7996_RRO_MSDU_PG_HASH_SIZE	127
 #define MT7996_RRO_MAX_SESSION		1024
 #define MT7996_RRO_WINDOW_MAX_LEN	1024
 #define MT7996_RRO_ADDR_ELEM_LEN	128
@@ -128,6 +145,25 @@
 #define MT7996_RX_MSDU_PAGE_SIZE	(128 + \
 					 SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
 
+#define MT7996_DRR_STA_BSS_GRP_MASK	GENMASK(5, 0)
+#define MT7996_DRR_STA_AC0_QNTM_MASK	GENMASK(10, 8)
+#define MT7996_DRR_STA_AC1_QNTM_MASK	GENMASK(14, 12)
+#define MT7996_DRR_STA_AC2_QNTM_MASK	GENMASK(18, 16)
+#define MT7996_DRR_STA_AC3_QNTM_MASK	GENMASK(22, 20)
+
+/* RRO 3.1 */
+#define MT7996_RRO_MSDU_PG_CR_CNT 8
+#define MT7996_RRO_MSDU_PG_SIZE_PER_CR 0x10000
+
+#define to_rssi(field, rcpi)	((FIELD_GET(field, rcpi) - 220) / 2)
+
+#define MT7996_MAX_BEACON_LOSS		20
+#define MT7996_MAX_PROBE_TIMEOUT	500
+#define MT7996_MAX_PROBE_TRIES		2
+
+#define MT7996_HW_DROP_STAT	4
+#define MT7996_HW_DROP_REASON	0x20
+
 struct mt7996_vif;
 struct mt7996_sta;
 struct mt7996_dfs_pulse;
@@ -135,18 +171,22 @@ struct mt7996_dfs_pattern;
 
 enum mt7996_ram_type {
 	MT7996_RAM_TYPE_WM,
+	MT7996_RAM_TYPE_WM_TM = MT7996_RAM_TYPE_WM,
 	MT7996_RAM_TYPE_WA,
 	MT7996_RAM_TYPE_DSP,
+	__MT7996_RAM_TYPE_MAX,
 };
 
 enum mt7996_var_type {
 	MT7996_VAR_TYPE_444,
 	MT7996_VAR_TYPE_233,
+	MT7996_VAR_TYPE_404,
 };
 
 enum mt7992_var_type {
 	MT7992_VAR_TYPE_44,
 	MT7992_VAR_TYPE_23,
+	MT7992_VAR_TYPE_24,
 };
 
 enum mt7990_var_type {
@@ -157,6 +197,14 @@ enum mt7996_fem_type {
 	MT7996_FEM_EXT,
 	MT7996_FEM_INT,
 	MT7996_FEM_MIX,
+};
+
+enum mt7996_coredump_state {
+	MT7996_COREDUMP_IDLE = 0,
+	MT7996_COREDUMP_MANUAL_WA,
+	MT7996_COREDUMP_MANUAL_WM,
+	MT7996_COREDUMP_AUTO,
+	__MT7996_COREDUMP_TYPE_MAX,
 };
 
 enum mt7996_txq_id {
@@ -178,7 +226,7 @@ enum mt7996_rxq_id {
 	MT7996_RXQ_BAND1 = 5, /* for mt7992 */
 	MT7996_RXQ_BAND2 = 5,
 	MT7996_RXQ_RRO_BAND0 = 8,
-	MT7996_RXQ_RRO_BAND1 = 8,/* unused */
+	MT7996_RXQ_RRO_BAND1 = 9,
 	MT7996_RXQ_RRO_BAND2 = 6,
 	MT7996_RXQ_MSDU_PG_BAND0 = 10,
 	MT7996_RXQ_MSDU_PG_BAND1 = 11,
@@ -209,13 +257,98 @@ struct mt7996_twt_flow {
 
 DECLARE_EWMA(avg_signal, 10, 8)
 
+enum mt7996_dpd_ch_num {
+	DPD_CH_NUM_BW20_2G,
+	DPD_CH_NUM_BW20_5G,
+	DPD_CH_NUM_BW20_5G_SKIP,
+	DPD_CH_NUM_BW80_5G,
+	DPD_CH_NUM_BW160_5G,
+	DPD_CH_NUM_BW20_6G,
+	DPD_CH_NUM_BW80_6G,
+	DPD_CH_NUM_BW160_6G,
+	DPD_CH_NUM_BW320_6G,
+	DPD_CH_NUM_TYPE_MAX,
+};
+
+enum {
+	VOW_SEARCH_AC_FIRST,
+	VOW_SEARCH_WMM_FIRST
+};
+
+enum {
+	VOW_REFILL_PERIOD_1US,
+	VOW_REFILL_PERIOD_2US,
+	VOW_REFILL_PERIOD_4US,
+	VOW_REFILL_PERIOD_8US,
+	VOW_REFILL_PERIOD_16US,
+	VOW_REFILL_PERIOD_32US,
+	VOW_REFILL_PERIOD_64US,
+	VOW_REFILL_PERIOD_128US
+};
+
+/* Default DRR airtime quantum of each level */
+enum {
+	VOW_DRR_QUANTUM_L0 = 6,
+	VOW_DRR_QUANTUM_L1 = 12,
+	VOW_DRR_QUANTUM_L2 = 16,
+	VOW_DRR_QUANTUM_L3 = 20,
+	VOW_DRR_QUANTUM_L4 = 24,
+	VOW_DRR_QUANTUM_L5 = 28,
+	VOW_DRR_QUANTUM_L6 = 32,
+	VOW_DRR_QUANTUM_L7 = 36
+};
+
+enum {
+	VOW_DRR_QUANTUM_IDX0,
+	VOW_DRR_QUANTUM_IDX1,
+	VOW_DRR_QUANTUM_IDX2,
+	VOW_DRR_QUANTUM_IDX3,
+	VOW_DRR_QUANTUM_IDX4,
+	VOW_DRR_QUANTUM_IDX5,
+	VOW_DRR_QUANTUM_IDX6,
+	VOW_DRR_QUANTUM_IDX7,
+	VOW_DRR_QUANTUM_NUM
+};
+
+enum {
+	VOW_SCH_TYPE_FOLLOW_POLICY,
+	VOW_SCH_TYPE_FOLLOW_HW
+};
+
+enum {
+	VOW_SCH_POLICY_SRR, /* Shared Round-Robin */
+	VOW_SCH_POLICY_WRR /* Weighted Round-Robin */
+};
+
+enum vow_drr_ctrl_id {
+	VOW_DRR_CTRL_STA_ALL,
+	VOW_DRR_CTRL_STA_BSS_GROUP,
+	VOW_DRR_CTRL_AIRTIME_DEFICIT_BOUND = 0x10,
+	VOW_DRR_CTRL_AIRTIME_QUANTUM_ALL = 0x28,
+	VOW_DRR_CTRL_STA_PAUSE = 0x30
+};
+
+struct mt7996_vow_ctrl {
+	bool atf_enable;
+	bool watf_enable;
+	u8 drr_quantum[VOW_DRR_QUANTUM_NUM];
+	u8 max_deficit;
+	u8 sch_type;
+	u8 sch_policy;
+};
+
+struct mt7996_vow_sta_ctrl {
+	bool paused;
+	u8 bss_grp_idx;
+	u8 drr_quantum[IEEE80211_NUM_ACS];
+};
+
 struct mt7996_sta_link {
 	struct mt76_wcid wcid; /* must be first */
 
 	struct mt7996_sta *sta;
 
 	struct list_head rc_list;
-	u32 airtime_ac[8];
 
 	int ack_signal;
 	struct ewma_avg_signal avg_ack_signal;
@@ -230,6 +363,7 @@ struct mt7996_sta_link {
 	} twt;
 
 	struct rcu_head rcu_head;
+	struct mt7996_vow_sta_ctrl vow;
 };
 
 struct mt7996_sta {
@@ -238,6 +372,7 @@ struct mt7996_sta {
 	u8 deflink_id;
 
 	struct mt7996_vif *vif;
+	u8 sec_link;
 };
 
 struct mt7996_vif_link {
@@ -245,7 +380,6 @@ struct mt7996_vif_link {
 
 	struct mt7996_sta_link msta_link;
 	struct mt7996_phy *phy;
-
 	struct ieee80211_tx_queue_params queue_params[IEEE80211_NUM_ACS];
 	struct cfg80211_bitrate_mask bitrate_mask;
 
@@ -258,12 +392,23 @@ struct mt7996_vif {
 
 	u8 mld_group_idx;
 	u8 mld_remap_idx;
+	struct mt7996_sta sta;
+	struct mt7996_dev *dev;
+
+	/* for beacon monitoring */
+	struct delayed_work beacon_mon_work;
+	unsigned long beacon_received_time[__MT_MAX_BAND];
+	u16 lost_links;
+	void *probe[__MT_MAX_BAND];
+	unsigned long probe_send_time[__MT_MAX_BAND];
+	int probe_send_count[__MT_MAX_BAND];
 };
 
 /* crash-dump */
 struct mt7996_crash_data {
 	guid_t guid;
 	struct timespec64 timestamp;
+	bool supported;
 
 	u8 *memdump_buf;
 	size_t memdump_buf_len;
@@ -275,6 +420,18 @@ struct mt7996_hif {
 	struct device *dev;
 	void __iomem *regs;
 	int irq;
+	enum pci_bus_speed speed;
+	enum pcie_link_width width;
+};
+
+struct mt7996_scs_ctrl {
+	u8 scs_enable;
+	s8 sta_min_rssi;
+};
+
+enum {
+	SCS_DISABLE = 0,
+	SCS_ENABLE,
 };
 
 struct mt7996_wed_rro_addr {
@@ -289,6 +446,95 @@ struct mt7996_wed_rro_addr {
 struct mt7996_wed_rro_session_id {
 	struct list_head list;
 	u16 id;
+};
+
+struct mt7996_sta_rc_work_data {
+	unsigned int link_id;
+	u32 changed;
+};
+
+#ifdef CONFIG_MTK_VENDOR
+#define MT7996_AIR_MONITOR_MAX_ENTRY	16
+#define MT7996_AIR_MONITOR_MAX_GROUP	(MT7996_AIR_MONITOR_MAX_ENTRY >> 1)
+
+struct mt7996_air_monitor_group {
+	bool enable;
+	bool used[2];
+};
+
+struct mt7996_air_monitor_entry {
+	bool enable;
+
+	u8 group_idx;
+	u8 group_used_idx;
+	u8 muar_idx;
+	u8 addr[ETH_ALEN];
+	u32 last_seen;
+	s8 rssi[4];
+	struct ieee80211_sta *sta;
+};
+
+struct mt7996_air_monitor_ctrl {
+	u8 enable;
+	struct mt7996_air_monitor_group group[MT7996_AIR_MONITOR_MAX_GROUP];
+	struct mt7996_air_monitor_entry entry[MT7996_AIR_MONITOR_MAX_ENTRY];
+};
+
+enum {
+	CSI_BW20,
+	CSI_BW40,
+	CSI_BW80,
+	CSI_BW160,
+	CSI_BW320
+};
+
+#define CSI_BW20_DATA_COUNT	64
+#define CSI_BW40_DATA_COUNT	128
+#define CSI_BW80_DATA_COUNT	256
+#define CSI_BW160_DATA_COUNT	512
+#define CSI_BW320_DATA_COUNT	1024
+
+struct csi_data {
+	u8 fw_ver;
+	u8 ch_bw;
+	u16 data_num;
+	s16 data_i[CSI_BW320_DATA_COUNT];
+	s16 data_q[CSI_BW320_DATA_COUNT];
+	u8 band;
+	s8 rssi;
+	u8 snr;
+	u32 ts;
+	u8 data_bw;
+	u8 pri_ch_idx;
+	u8 ta[ETH_ALEN];
+	u32 ext_info;
+	u16 rx_mode;
+	u16 rx_rate;
+	u32 chain_info;
+	u16 tx_idx;
+	u16 rx_idx;
+	u32 segment_num;
+	u8 remain_last;
+	u16 pkt_sn;
+	u8 tr_stream;
+
+	struct list_head node;
+};
+#endif
+
+struct mt7996_rro_ba_session {
+	u32 ack_sn         :12;
+	u32 win_sz         :3;
+	u32 bn             :1;
+	u32 last_in_sn     :12;
+	u32 bc             :1;
+	u32 bd             :1;
+	u32 sat            :1;
+	u32 cn             :1;
+	u32 within_cnt     :12;
+	u32 to_sel         :3;
+	u32 rsv            :1;
+	u32 last_in_rxtime :12;
 };
 
 struct mt7996_phy {
@@ -318,12 +564,61 @@ struct mt7996_phy {
 
 	struct mt76_mib_stats mib;
 	struct mt76_channel_state state_ts;
+	struct delayed_work ipi_work;
 
 	u16 orig_chainmask;
 	u16 orig_antenna_mask;
 
 	bool has_aux_rx;
 	bool counter_reset;
+
+	u8 pp_mode;
+	u16 punct_bitmap;
+
+	struct mt7996_scs_ctrl scs_ctrl;
+	u32 hw_drop[MT7996_HW_DROP_STAT][MT7996_HW_DROP_REASON];
+
+	bool sku_limit_en;
+	bool sku_path_en;
+
+	u8 muru_onoff;
+
+#ifdef CONFIG_NL80211_TESTMODE
+	struct {
+		u32 *reg_backup;
+
+		s32 last_freq_offset;
+		u8 last_rcpi[4];
+		s8 last_rssi[4];
+		s8 last_ib_rssi[4];
+		s8 last_wb_rssi[4];
+		u8 last_snr;
+
+		u8 spe_idx;
+	} test;
+#endif
+#ifdef CONFIG_MTK_VENDOR
+	u8 rts_bw_sig;
+	spinlock_t amnt_lock;
+	struct mt7996_air_monitor_ctrl amnt_ctrl;
+
+	struct {
+		struct list_head list;
+		spinlock_t lock;
+		u32 count;
+		bool enable;
+
+		struct csi_data buffered_csi;
+		u32 active_bitmap;
+		u32 interval;
+		u32 last_record;
+	} csi;
+#endif
+#ifdef CONFIG_MTK_DEBUG
+	bool sr_enable:1;
+	bool enhanced_sr_enable:1;
+	bool thermal_protection_enable:1;
+#endif
 };
 
 struct mt7996_dev {
@@ -360,9 +655,12 @@ struct mt7996_dev {
 	struct work_struct rc_work;
 	struct work_struct dump_work;
 	struct work_struct reset_work;
+	struct delayed_work scs_work;
 	wait_queue_head_t reset_wait;
 	struct {
 		u32 state;
+		u32 l1_reset;
+		u32 l1_reset_last;
 		u32 wa_reset_count;
 		u32 wm_reset_count;
 		bool hw_full_reset:1;
@@ -372,11 +670,14 @@ struct mt7996_dev {
 
 	/* protects coredump data */
 	struct mutex dump_mutex;
+	u8 dump_state;
 #ifdef CONFIG_DEV_COREDUMP
 	struct {
-		struct mt7996_crash_data *crash_data;
+		struct mt7996_crash_data *crash_data[__MT7996_RAM_TYPE_MAX];
 	} coredump;
 #endif
+	char patch_build_date[MT7996_BUILD_TIME_LEN];
+	char ram_build_date[__MT7996_RAM_TYPE_MAX][MT7996_BUILD_TIME_LEN];
 
 	struct list_head sta_rc_list;
 	struct list_head twt_list;
@@ -400,20 +701,44 @@ struct mt7996_dev {
 			void *ptr;
 			dma_addr_t phy_addr;
 		} session;
+		struct {
+			void *ptr;
+			dma_addr_t phy_addr;
+		} msdu_pg[MT7996_RRO_MSDU_PG_CR_CNT];
 
 		struct work_struct work;
 		struct list_head poll_list;
 		spinlock_t lock;
+
+		struct list_head pg_addr_cache;
+		struct list_head pg_hash_head[MT7996_RRO_MSDU_PG_HASH_SIZE];
 	} wed_rro;
+
+	bool testmode_enable;
+	bool bin_file_mode;
+	u8 eeprom_mode;
+	u32 bg_nxt_freq;
+
+	u32 option_type;
 
 	bool ibf;
 	u8 fw_debug_wm;
 	u8 fw_debug_wa;
 	u8 fw_debug_bin;
 	u16 fw_debug_seq;
+	bool fw_debug_muru_disable;
+	bool idxlog_enable;
 
 	struct dentry *debugfs_dir;
 	struct rchan *relay_fwlog;
+	struct rchan *relay_idxlog;
+
+	void *cal;
+	u32 cur_prek_offset;
+	struct {
+		const u32 *rev;
+		u8 dpd_ch_num[DPD_CH_NUM_TYPE_MAX];
+	} prek;
 
 	struct {
 		u16 table_mask;
@@ -427,6 +752,46 @@ struct mt7996_dev {
 		u8 type:4;
 		u8 fem:4;
 	} var;
+
+	struct mt7996_vow_ctrl vow;
+
+	bool wmm_pbc_enable;
+	struct work_struct wmm_pbc_work;
+#ifdef CONFIG_MTK_DEBUG
+	u16 wlan_idx;
+	struct {
+		u8 sku_disable;
+		u32 fw_dbg_module;
+		u8 fw_dbg_lv;
+		u32 bcn_total_cnt[__MT_MAX_BAND];
+		u32 sid;
+
+		bool dump_mcu_pkt:1;
+		bool dump_mcu_event:1;
+		bool dump_txd:1;
+		bool dump_tx_pkt:1;
+		bool dump_rx_pkt:1;
+		bool dump_rx_raw:1;
+		u8 dump_ple_txd;
+		u32 token_idx;
+		u32 rxd_read_cnt;
+		u32 txd_read_cnt;
+		u32 fid_idx;
+	} dbg;
+	const struct mt7996_dbg_reg_desc *dbg_reg;
+	bool red_enable:1;
+#endif
+#ifdef CONFIG_MTK_VENDOR
+	bool cert_mode;
+#endif
+
+#if defined CONFIG_NL80211_TESTMODE || defined CONFIG_MTK_DEBUG
+	struct {
+		void *txbf_phase_cal;
+		void *txbf_pfmu_data;
+		void *txbf_pfmu_tag;
+	} test;
+#endif
 };
 
 enum {
@@ -456,6 +821,7 @@ enum mt7996_rdd_cmd {
 	RDD_READ_PULSE,
 	RDD_RESUME_BF,
 	RDD_IRQ_OFF,
+	RDD_DISABLE_ZW_TIMER,
 };
 
 static inline int
@@ -510,6 +876,9 @@ mt7996_band_valid(struct mt7996_dev *dev, u8 band)
 	if (!is_mt7996(&dev->mt76))
 		return band <= MT_BAND1;
 
+	if (dev->var.type == MT7996_VAR_TYPE_404 && band == MT_BAND1)
+		return false;
+
 	return band <= MT_BAND2;
 }
 
@@ -557,10 +926,12 @@ mt7996_vif_conf_link(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 extern const struct ieee80211_ops mt7996_ops;
 extern struct pci_driver mt7996_pci_driver;
 extern struct pci_driver mt7996_hif_driver;
+extern const struct mt76_testmode_ops mt7996_testmode_ops;
 
 struct mt7996_dev *mt7996_mmio_probe(struct device *pdev,
 				     void __iomem *mem_base, u32 device_id);
 void mt7996_wfsys_reset(struct mt7996_dev *dev);
+void mt7996_rro_hw_init(struct mt7996_dev *dev);
 irqreturn_t mt7996_irq_handler(int irq, void *dev_instance);
 u64 __mt7996_get_tsf(struct ieee80211_hw *hw, struct mt7996_vif_link *link);
 int mt7996_register_device(struct mt7996_dev *dev);
@@ -571,7 +942,9 @@ int mt7996_vif_link_add(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 void mt7996_vif_link_remove(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 			    struct ieee80211_bss_conf *link_conf,
 			    struct mt76_vif_link *mlink);
+const char *mt7996_eeprom_name(struct mt7996_dev *dev);
 int mt7996_eeprom_init(struct mt7996_dev *dev);
+int mt7996_eeprom_check_fw_mode(struct mt7996_dev *dev);
 int mt7996_eeprom_parse_hw_cap(struct mt7996_dev *dev, struct mt7996_phy *phy);
 int mt7996_eeprom_get_target_power(struct mt7996_dev *dev,
 				   struct ieee80211_channel *chan);
@@ -586,7 +959,9 @@ int mt7996_init_tx_queues(struct mt7996_phy *phy, int idx,
 			  int n_desc, int ring_base, struct mtk_wed_device *wed);
 void mt7996_init_txpower(struct mt7996_phy *phy);
 int mt7996_txbf_init(struct mt7996_dev *dev);
+int mt7996_get_chip_sku(struct mt7996_dev *dev);
 void mt7996_reset(struct mt7996_dev *dev);
+void mt7996_coredump(struct mt7996_dev *dev, u8 state);
 int mt7996_run(struct mt7996_phy *phy);
 int mt7996_mcu_init(struct mt7996_dev *dev);
 int mt7996_mcu_init_firmware(struct mt7996_dev *dev);
@@ -620,7 +995,7 @@ int mt7996_mcu_update_bss_color(struct mt7996_dev *dev,
 				struct mt76_vif_link *mlink,
 				struct cfg80211_he_bss_color *he_bss_color);
 int mt7996_mcu_add_beacon(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
-			  struct ieee80211_bss_conf *link_conf);
+			  struct ieee80211_bss_conf *link_conf, int en);
 int mt7996_mcu_beacon_inband_discov(struct mt7996_dev *dev,
 				    struct ieee80211_bss_conf *link_conf,
 				    struct mt7996_vif_link *link, u32 changed);
@@ -657,8 +1032,11 @@ int mt7996_mcu_get_chan_mib_info(struct mt7996_phy *phy, bool chan_switch);
 int mt7996_mcu_get_temperature(struct mt7996_phy *phy);
 int mt7996_mcu_set_thermal_throttling(struct mt7996_phy *phy, u8 state);
 int mt7996_mcu_set_thermal_protect(struct mt7996_phy *phy, bool enable);
-int mt7996_mcu_set_txpower_sku(struct mt7996_phy *phy);
+int mt7996_mcu_set_txpower_sku(struct mt7996_phy *phy,
+			       struct ieee80211_bss_conf *conf);
 int mt7996_mcu_rdd_cmd(struct mt7996_dev *dev, int cmd, u8 rdd_idx, u8 val);
+int mt7996_mcu_rdd_background_disable_timer(struct mt7996_dev *dev,
+					    bool disable_timer);
 int mt7996_mcu_rdd_background_enable(struct mt7996_phy *phy,
 				     struct cfg80211_chan_def *chandef);
 int mt7996_mcu_set_fixed_rate_table(struct mt7996_phy *phy, u8 table_idx,
@@ -667,14 +1045,35 @@ int mt7996_mcu_rf_regval(struct mt7996_dev *dev, u32 regidx, u32 *val, bool set)
 int mt7996_mcu_set_hdr_trans(struct mt7996_dev *dev, bool hdr_trans);
 int mt7996_mcu_set_rro(struct mt7996_dev *dev, u16 tag, u16 val);
 int mt7996_mcu_wa_cmd(struct mt7996_dev *dev, int cmd, u32 a1, u32 a2, u32 a3);
+int mt7996_mcu_red_config(struct mt7996_dev *dev, bool enable);
 int mt7996_mcu_fw_log_2_host(struct mt7996_dev *dev, u8 type, u8 ctrl);
 int mt7996_mcu_fw_dbg_ctrl(struct mt7996_dev *dev, u32 module, u8 level);
+int mt7996_mcu_fw_time_sync(struct mt76_dev *dev);
 int mt7996_mcu_trigger_assert(struct mt7996_dev *dev);
 void mt7996_mcu_rx_event(struct mt7996_dev *dev, struct sk_buff *skb);
 void mt7996_mcu_exit(struct mt7996_dev *dev);
-int mt7996_mcu_get_all_sta_info(struct mt7996_phy *phy, u16 tag);
+int mt7996_mcu_get_per_sta_info(struct mt76_dev *dev, u16 tag,
+	                        u16 sta_num, u16 *sta_list);
+int mt7996_mcu_get_rssi(struct mt76_dev *dev);
+int mt7996_mcu_get_all_sta_info(struct mt76_dev *dev, u16 tag);
 int mt7996_mcu_wed_rro_reset_sessions(struct mt7996_dev *dev, u16 id);
 int mt7996_mcu_set_sniffer_mode(struct mt7996_phy *phy, bool enabled);
+int mt7996_mcu_set_tx_power_ctrl(struct mt7996_phy *phy, u8 power_ctrl_id, u8 data);
+int mt7996_mcu_get_tx_power_info(struct mt7996_phy *phy, u8 category, void *event);
+int mt7996_mcu_apply_group_cal(struct mt7996_dev *dev);
+int mt7996_mcu_apply_tx_dpd(struct mt7996_phy *phy);
+#ifdef CONFIG_NL80211_TESTMODE
+void mt7996_tm_rf_test_event(struct mt7996_dev *dev, struct sk_buff *skb);
+#endif
+int mt7996_mcu_set_scs(struct mt7996_phy *phy, u8 enable);
+void mt7996_mcu_scs_sta_poll(struct work_struct *work);
+int mt7996_mcu_set_band_confg(struct mt7996_phy *phy, u16 option, bool enable);
+int mt7996_mcu_set_vow_drr_ctrl(struct mt7996_phy *phy,
+				struct mt7996_vif_link *mconf,
+				struct mt7996_sta_link *msta_link,
+				enum vow_drr_ctrl_id id);
+int mt7996_mcu_set_vow_feature_ctrl(struct mt7996_phy *phy);
+void mt7996_mcu_wmm_pbc_work(struct work_struct *work);
 
 static inline u8 mt7996_max_interface_num(struct mt7996_dev *dev)
 {
@@ -729,6 +1128,14 @@ static inline bool mt7996_has_wa(struct mt7996_dev *dev)
 	return !is_mt7990(&dev->mt76);
 }
 
+static inline bool
+mt7996_vow_should_enable(struct mt7996_dev *dev)
+{
+	return !wiphy_ext_feature_isset(mt76_hw(dev)->wiphy,
+	                                NL80211_EXT_FEATURE_AIRTIME_FAIRNESS) ||
+	       mtk_wed_device_active(&dev->mt76.mmio.wed);
+}
+
 void mt7996_mac_init(struct mt7996_dev *dev);
 u32 mt7996_mac_wtbl_lmac_addr(struct mt7996_dev *dev, u16 wcid, u8 dw);
 bool mt7996_mac_wtbl_update(struct mt7996_dev *dev, int idx, u32 mask);
@@ -762,15 +1169,17 @@ void mt7996_queue_rx_skb(struct mt76_dev *mdev, enum mt76_rxq_id q,
 			 struct sk_buff *skb, u32 *info);
 bool mt7996_rx_check(struct mt76_dev *mdev, void *data, int len);
 void mt7996_stats_work(struct work_struct *work);
+void mt7996_beacon_mon_work(struct work_struct *work);
 int mt76_dfs_start_rdd(struct mt7996_dev *dev, bool force);
 int mt7996_dfs_init_radar_detector(struct mt7996_phy *phy);
 void mt7996_set_stream_he_eht_caps(struct mt7996_phy *phy);
 void mt7996_set_stream_vht_txbf_caps(struct mt7996_phy *phy);
 void mt7996_update_channel(struct mt76_phy *mphy);
-int mt7996_init_debugfs(struct mt7996_dev *dev);
+int mt7996_init_dev_debugfs(struct mt7996_phy *phy);
+int mt7996_init_band_debugfs(struct mt7996_phy *phy);
 void mt7996_debugfs_rx_fw_monitor(struct mt7996_dev *dev, const void *data, int len);
 bool mt7996_debugfs_rx_log(struct mt7996_dev *dev, const void *data, int len);
-int mt7996_mcu_add_key(struct mt76_dev *dev, struct ieee80211_vif *vif,
+int mt7996_mcu_add_key(struct mt76_dev *dev, struct mt7996_vif_link *mconf,
 		       struct ieee80211_key_conf *key, int mcu_cmd,
 		       struct mt76_wcid *wcid, enum set_key_cmd cmd);
 int mt7996_mcu_bcn_prot_enable(struct mt7996_dev *dev,
@@ -782,16 +1191,88 @@ int mt7996_mcu_wtbl_update_hdr_trans(struct mt7996_dev *dev,
 				     struct mt7996_vif_link *link,
 				     struct mt7996_sta_link *msta_link);
 int mt7996_mcu_cp_support(struct mt7996_dev *dev, u8 mode);
+int mt7996_mcu_set_pp_en(struct mt7996_phy *phy, u8 mode, u16 bitmap);
 #ifdef CONFIG_MAC80211_DEBUGFS
 void mt7996_sta_add_debugfs(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 			    struct ieee80211_sta *sta, struct dentry *dir);
+void mt7996_vif_add_debugfs(struct ieee80211_hw *hw, struct ieee80211_vif *vif);
+void mt7996_link_sta_add_debugfs(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+				 struct ieee80211_link_sta *link_sta,
+				 struct dentry *dir);
+void mt7996_link_add_debugfs(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+			     struct ieee80211_bss_conf *link_conf, struct dentry *dir);
 #endif
 int mt7996_mmio_wed_init(struct mt7996_dev *dev, void *pdev_ptr,
 			 bool hif2, int *irq);
 u32 mt7996_wed_init_buf(void *ptr, dma_addr_t phys, int token_id);
 
+#ifdef CONFIG_MTK_VENDOR
+void mt7996_set_wireless_vif(void *data, u8 *mac, struct ieee80211_vif *vif);
+void mt7996_vendor_register(struct mt7996_phy *phy);
+void mt7996_vendor_amnt_fill_rx(struct mt7996_phy *phy, struct sk_buff *skb);
+int mt7996_vendor_amnt_sta_remove(struct mt7996_phy *phy,
+				  struct ieee80211_sta *sta);
+void mt7996_set_wireless_amsdu(struct ieee80211_hw *hw, u8 en);
+void mt7996_mcu_set_mimo(struct mt7996_phy *phy);
+int mt7996_set_muru_cfg(struct mt7996_phy *phy, u8 action, u8 val);
+int mt7996_mcu_set_muru_cfg(struct mt7996_phy *phy, void *data);
+void mt7996_set_beacon_vif(struct ieee80211_vif *vif, u8 val);
+int mt7996_mcu_set_csi(struct mt7996_phy *phy, u8 mode,
+		       u8 cfg, u8 v1, u32 v2, u8 *mac_addr);
+#endif
+
+int mt7996_mcu_edcca_enable(struct mt7996_phy *phy, bool enable);
+int mt7996_mcu_edcca_threshold_ctrl(struct mt7996_phy *phy, u8 *value, bool set);
+
+enum edcca_bw_id {
+	EDCCA_BW_20 = 0,
+	EDCCA_BW_40,
+	EDCCA_BW_80,
+	EDCCA_BW_160,
+	EDCCA_MAX_BW_NUM,
+};
+
 #ifdef CONFIG_MTK_DEBUG
-int mt7996_mtk_init_debugfs(struct mt7996_phy *phy, struct dentry *dir);
+void mt7996_mtk_init_dev_debugfs(struct mt7996_dev *dev, struct dentry *dir);
+void mt7996_mtk_init_band_debugfs(struct mt7996_phy *phy, struct dentry *dir);
+int mt7996_mcu_muru_dbg_info(struct mt7996_dev *dev, u16 item, u8 val);
+int mt7996_mcu_set_sr_enable(struct mt7996_phy *phy, u8 action, u64 val, bool set);
+void mt7996_mcu_rx_sr_event(struct mt7996_dev *dev, struct sk_buff *skb);
+int mt7996_mcu_set_dup_wtbl(struct mt7996_dev *dev);
+int mt7996_mcu_set_txbf_internal(struct mt7996_phy *phy, u8 action, int idx, bool bfer);
+void mt7996_mcu_rx_bf_event(struct mt7996_dev *dev, struct sk_buff *skb);
+int mt7996_mcu_set_muru_fixed_rate_enable(struct mt7996_dev *dev, u8 action, int val);
+int mt7996_mcu_set_muru_fixed_rate_parameter(struct mt7996_dev *dev, u8 action, void *para);
+int mt7996_mcu_set_txbf_snd_info(struct mt7996_phy *phy, void *para);
+int mt7996_mcu_set_muru_cmd(struct mt7996_dev *dev, u16 action, int val);
+int mt7996_mcu_muru_set_prot_frame_thr(struct mt7996_dev *dev, u32 val);
+int mt7996_mcu_set_bypass_smthint(struct mt7996_phy *phy, u8 val);
+int mt7996_mcu_set_rfeature_trig_type(struct mt7996_phy *phy, u8 enable, u8 trig_type);
+void mt7996_mcu_set_ppdu_tx_type(struct mt7996_phy *phy, u8 ppdu_type);
+void mt7996_mcu_set_nusers_ofdma(struct mt7996_phy *phy, u8 type, u8 ofdma_user_cnt);
+void mt7996_mcu_set_cert(struct mt7996_phy *phy, u8 type);
+void mt7996_tm_update_channel(struct mt7996_phy *phy);
+
+int mt7996_mcu_set_vow_drr_dbg(struct mt7996_dev *dev, u32 val);
+int mt7996_mcu_thermal_debug(struct mt7996_dev *dev, u8 mode, u8 action);
+
+#define PKT_BIN_DEBUG_MAGIC	0xc8763123
+enum {
+	PKT_BIN_DEBUG_MCU,
+	PKT_BIN_DEBUG_TXD,
+	PKT_BIN_DEBUG_TX,
+	PKT_BIN_DEBUG_RX,
+	PKT_BIN_DEBUG_RX_RAW,
+	PKT_BIN_DEBUG_MCU_EVENT,
+};
+
+void mt7996_packet_log_to_host(struct mt7996_dev *dev, const void *data, int len, int type, int des_len);
+void mt7996_dump_bmac_rxd_info(struct mt7996_dev *dev, __le32 *rxd);
+void mt7996_dump_bmac_txd_info(struct seq_file *s, struct mt7996_dev *dev,
+			       __le32 *txd, bool is_hif_txd, bool dump_txp);
+int mt7996_mtk_init_dev_debugfs_internal(struct mt7996_phy *phy, struct dentry *dir);
+int mt7996_mtk_init_band_debugfs_internal(struct mt7996_phy *phy, struct dentry *dir);
+int mt7996_mcu_mlo_agc(struct mt7996_dev *dev, const void *data, int len);
 #endif
 
 #ifdef CONFIG_NET_MEDIATEK_SOC_WED

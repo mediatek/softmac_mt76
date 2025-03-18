@@ -3,6 +3,7 @@
  * Copyright (C) 2018 Felix Fietkau <nbd@nbd.name>
  */
 #include "mt76.h"
+#include "trace.h"
 
 static unsigned long mt76_aggr_tid_to_timeo(u8 tidno)
 {
@@ -151,6 +152,7 @@ void mt76_rx_aggr_reorder(struct sk_buff *skb, struct sk_buff_head *frames)
 	struct mt76_wcid *wcid = status->wcid;
 	struct ieee80211_sta *sta;
 	struct mt76_rx_tid *tid;
+	struct mt76_phy *phy;
 	bool sn_less;
 	u16 seqno, head, size, idx;
 	u8 tidno = status->qos_ctl & IEEE80211_QOS_CTL_TID_MASK;
@@ -179,6 +181,8 @@ void mt76_rx_aggr_reorder(struct sk_buff *skb, struct sk_buff_head *frames)
 	if (!tid)
 		return;
 
+	phy = mt76_dev_phy(tid->dev, wcid->phy_idx);
+
 	status->flag |= RX_FLAG_DUP_VALIDATED;
 	spin_lock_bh(&tid->lock);
 
@@ -189,6 +193,7 @@ void mt76_rx_aggr_reorder(struct sk_buff *skb, struct sk_buff_head *frames)
 	seqno = status->seqno;
 	size = tid->size;
 	sn_less = ieee80211_sn_less(seqno, head);
+	trace_mt76_rx_aggr_reorder(tid->dev, wcid, head, seqno, sn_less);
 
 	if (!tid->started) {
 		if (sn_less)
@@ -200,6 +205,9 @@ void mt76_rx_aggr_reorder(struct sk_buff *skb, struct sk_buff_head *frames)
 	if (sn_less) {
 		__skb_unlink(skb, frames);
 		dev_kfree_skb(skb);
+		spin_lock_bh(&phy->rx_dbg_stats.lock);
+		phy->rx_dbg_stats.rx_drop[MT_RX_DROP_AGG_SN_LESS]++;
+		spin_unlock_bh(&phy->rx_dbg_stats.lock);
 		goto out;
 	}
 
@@ -226,6 +234,9 @@ void mt76_rx_aggr_reorder(struct sk_buff *skb, struct sk_buff_head *frames)
 	/* Discard if the current slot is already in use */
 	if (tid->reorder_buf[idx]) {
 		dev_kfree_skb(skb);
+		spin_lock_bh(&phy->rx_dbg_stats.lock);
+		phy->rx_dbg_stats.rx_drop[MT_RX_DROP_AGG_DUP]++;
+		spin_unlock_bh(&phy->rx_dbg_stats.lock);
 		goto out;
 	}
 
