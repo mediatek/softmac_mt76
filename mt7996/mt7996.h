@@ -377,6 +377,18 @@ enum mt7996_dpd_ch_num {
 	DPD_CH_NUM_TYPE_MAX,
 };
 
+enum {
+	LOW_POWER_PCIE_L1SS,
+	LOW_POWER_TX_TPO_POWER_BOOST,		/* PB-TPO */
+	LOW_POWER_TX_TPO_POWER_REDUCE,		/* LP-TPO */
+	LOW_POWER_TX_TPO_ANTENNA_REDUCE,	/* Min Tx TPO */
+	LOW_POWER_RX_ULTRA_SAVE,
+	LOW_POWER_TX_PST,
+};
+#define LOW_POWER_TPO (LOW_POWER_TX_TPO_POWER_BOOST | \
+		       LOW_POWER_TX_TPO_POWER_REDUCE | \
+		       LOW_POWER_TX_TPO_ANTENNA_REDUCE)
+
 struct mt7996_sta_link {
 	struct mt76_wcid wcid; /* must be first */
 
@@ -889,6 +901,20 @@ struct mt7996_dev {
 		u32 token_idx;
 		u32 txd_read_cnt;
 		u32 fid_idx;
+		struct {
+			bool pcie_l1ss_enable:1;
+			bool ultra_save:1;
+			bool one_rpd:1;
+			bool mmps:1;
+			bool mdpc:1;
+			bool dcm:1;
+			bool alpl:1;
+			u8 tpo;
+			u8 pb_tpo;
+			u8 lp_tpo;
+			u8 min_tx_tpo;
+			u8 pst;
+		} lp;
 
 		bool beacon_loss_keep_conn;
 		bool ignore_radar_event;
@@ -1313,6 +1339,7 @@ static inline bool mt7996_has_ext_eeprom(struct mt7996_dev *dev)
 	return !is_mt7996(&dev->mt76);
 }
 
+void mt7996_set_pcie_l1ss(struct mt7996_dev *dev, bool en);
 void mt7996_mac_init(struct mt7996_dev *dev);
 u32 mt7996_mac_wtbl_lmac_addr(struct mt7996_dev *dev, u16 wcid, u8 dw);
 bool mt7996_mac_wtbl_update(struct mt7996_dev *dev, int idx, u32 mask);
@@ -1464,6 +1491,9 @@ int mt7996_vendor_tsf_offset_event(struct mt7996_phy *phy, s64 *tsf_offset, int 
 
 int mt7996_mcu_edcca_enable(struct mt7996_phy *phy, bool enable);
 int mt7996_mcu_edcca_threshold_ctrl(struct mt7996_phy *phy, u8 *value, bool set);
+int mt7996_mcu_set_tpo(struct mt7996_dev *dev, u8 type, u8 val);
+int mt7996_mcu_set_lp_option(struct mt7996_dev *dev, u8 *arg);
+int mt7996_mcu_set_pst(struct mt7996_dev *dev, u32 band, u32 cmd, u32 val);
 int mt7996_mcu_flush_ple(struct mt7996_dev *dev, u16 threshold,
 			 u8 *sta_bitmap, u16 sta_cnt);
 
