@@ -982,6 +982,10 @@ enum {
 	UNI_RA_FIXED_RATE = 0xf,
 };
 
+enum {
+	UNI_MURU_PST_LOW_POWER = 0x6e,
+};
+
 #define MT7996_HDR_TRANS_MAX_SIZE	(sizeof(struct hdr_trans_en) +	 \
 					 sizeof(struct hdr_trans_vlan) + \
 					 sizeof(struct hdr_trans_blacklist))
@@ -1137,6 +1141,7 @@ enum {
 
 enum {
 	UNI_POWER_OFF,
+	UNI_POWER_LOW_POWER = 0x6,
 };
 
 enum {
@@ -1578,6 +1583,17 @@ struct mt7996_mlo_agc_set {
 	u8 order;
 	__le16 mgf;
 } __packed;
+
+enum {
+	UNI_CMD_TPO_CTRL,
+};
+
+enum {
+	MT7996_LP_TPO_ALL,
+	MT7996_LP_TPO_PB,
+	MT7996_LP_TPO_LP,
+	MT7996_LP_TPO_MIN_TX,
+};
 
 #define MT7996_PATCH_SEC		GENMASK(31, 24)
 #define MT7996_PATCH_SCRAMBLE_KEY	GENMASK(15, 8)

@@ -1345,6 +1345,7 @@ enum {
 	MCU_UNI_CMD_EPCS = 0x79,
 	MCU_UNI_CMD_RADIO_STATUS = 0x80,
 	MCU_UNI_CMD_SDO = 0x88,
+	MCU_UNI_CMD_TPO = 0x8b,
 };
 
 enum {
