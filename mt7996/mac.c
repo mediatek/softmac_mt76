@@ -1632,7 +1632,13 @@ void mt7996_queue_rx_skb(struct mt76_dev *mdev, enum mt76_rxq_id q,
 	__le32 *rxd = (__le32 *)skb->data;
 	__le32 *end = (__le32 *)&skb->data[skb->len];
 	enum rx_pkt_type type;
-	u8 band_idx;
+	u8 band_idx = 0;
+	int len;
+
+	/* drop the skb when rxd is corrupted */
+	len = le32_get_bits(rxd[0], MT_RXD0_LENGTH);
+	if (unlikely(len != skb->len))
+		goto drop;
 
 	type = le32_get_bits(rxd[0], MT_RXD0_PKT_TYPE);
 	if (type != PKT_TYPE_NORMAL) {
@@ -1679,14 +1685,17 @@ void mt7996_queue_rx_skb(struct mt76_dev *mdev, enum mt76_rxq_id q,
 		}
 		fallthrough;
 	default:
-		band_idx = le32_get_bits(rxd[1], MT_RXD1_NORMAL_BAND_IDX);
-		phy = mt76_dev_phy(mdev, band_idx);
-		spin_lock_bh(&phy->rx_dbg_stats.lock);
-		phy->rx_dbg_stats.rx_drop[MT_RX_DROP_RXD_ERR]++;
-		spin_unlock_bh(&phy->rx_dbg_stats.lock);
-		dev_kfree_skb(skb);
-		break;
+		goto drop;
 	}
+
+	return;
+
+drop:
+	phy = mt76_dev_phy(mdev, band_idx);
+	spin_lock_bh(&phy->rx_dbg_stats.lock);
+	phy->rx_dbg_stats.rx_drop[MT_RX_DROP_RXD_ERR]++;
+	spin_unlock_bh(&phy->rx_dbg_stats.lock);
+	dev_kfree_skb(skb);
 }
 
 static struct mt7996_msdu_pg_addr *
