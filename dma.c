@@ -186,6 +186,32 @@ mt76_free_pending_rxwi(struct mt76_dev *dev)
 EXPORT_SYMBOL_GPL(mt76_free_pending_rxwi);
 
 static void
+mt76_dma_queue_init_magic_cnt(struct mt76_dev *dev, struct mt76_queue *q)
+{
+	if (!q || !q->ndesc)
+		return;
+	/*  at queue alloc or queue reset stage. we need to initialize
+	    the magic_cnt of the queue which use magic cnt to instead of ddone */
+	q->magic_cnt = 0;
+
+	if (mt76_queue_is_wed_rro_ind(q)) {
+		struct mt76_wed_rro_desc *rro_desc;
+		int i;
+
+		rro_desc = (struct mt76_wed_rro_desc *)q->desc;
+		for (i = 0; i < q->ndesc; i++) {
+			struct mt76_wed_rro_ind *cmd;
+
+			cmd = (struct mt76_wed_rro_ind *)&rro_desc[i];
+			cmd->magic_cnt = MT_DMA_WED_IND_CMD_CNT - 1;
+		}
+	}
+
+	if (mt76_queue_is_wed_rro_rxdmad_c(q) && dev->drv->rx_init_rxdmad_c)
+		dev->drv->rx_init_rxdmad_c(dev, q);
+}
+
+static void
 mt76_dma_sync_idx(struct mt76_dev *dev, struct mt76_queue *q)
 {
 	Q_WRITE(q, desc_base, q->desc_dma);
@@ -211,8 +237,14 @@ void __mt76_dma_queue_reset(struct mt76_dev *dev, struct mt76_queue *q,
 			q->desc[i].ctrl = cpu_to_le32(MT_DMA_CTL_DMA_DONE);
 	}
 
+	if (mt76_queue_is_wed_rro(q))
+		mt76_dma_queue_init_magic_cnt(dev, q);
+
 	if (reset_idx) {
-		Q_WRITE(q, cpu_idx, 0);
+		if (q->flags & MT_QFLAG_EMI_EN)
+			*q->emi_cidx_addr = 0;
+		else
+			Q_WRITE(q, cpu_idx, 0);
 		Q_WRITE(q, dma_idx, 0);
 	}
 	mt76_dma_sync_idx(dev, q);
@@ -393,7 +425,10 @@ static void
 mt76_dma_kick_queue(struct mt76_dev *dev, struct mt76_queue *q)
 {
 	wmb();
-	Q_WRITE(q, cpu_idx, q->head);
+	if (q->flags & MT_QFLAG_EMI_EN)
+		*q->emi_cidx_addr = cpu_to_le16(q->head);
+	else
+		Q_WRITE(q, cpu_idx, q->head);
 }
 
 static void
@@ -537,8 +572,7 @@ mt76_dma_dequeue(struct mt76_dev *dev, struct mt76_queue *q, bool flush,
 		return NULL;
 
 	if (mt76_queue_is_wed_rro_data(q) ||
-	    mt76_queue_is_wed_rro_msdu_pg(q) ||
-	    mt76_queue_is_wed_rro_rxdmad_c(q))
+	    mt76_queue_is_wed_rro_msdu_pg(q))
 		goto done;
 
 	if (mt76_queue_is_wed_rro_ind(q)) {
@@ -553,6 +587,18 @@ mt76_dma_dequeue(struct mt76_dev *dev, struct mt76_queue *q, bool flush,
 
 		if (q->tail == q->ndesc - 1)
 			q->magic_cnt = (q->magic_cnt + 1) % MT_DMA_WED_IND_CMD_CNT;
+	} else if (mt76_queue_is_wed_rro_rxdmad_c(q)) {
+		struct mt76_rro_rxdmad_c *dmad;
+
+		if (flush)
+			goto done;
+
+		dmad = q->entry[idx].buf;
+		if (dmad->magic_cnt != q->magic_cnt)
+			return NULL;
+
+		if (q->tail == q->ndesc - 1)
+			q->magic_cnt = (q->magic_cnt + 1) % MT_DMA_MAGIC_CNT;
 	} else {
 		if (flush)
 			q->desc[idx].ctrl |= cpu_to_le32(MT_DMA_CTL_DMA_DONE);
@@ -791,18 +837,8 @@ mt76_dma_alloc_queue(struct mt76_dev *dev, struct mt76_queue *q,
 	if (!q->desc)
 		return -ENOMEM;
 
-	if (mt76_queue_is_wed_rro_ind(q)) {
-		struct mt76_wed_rro_desc *rro_desc;
-		int i;
-
-		rro_desc = (struct mt76_wed_rro_desc *)q->desc;
-		for (i = 0; i < q->ndesc; i++) {
-			struct mt76_wed_rro_ind *cmd;
-
-			cmd = (struct mt76_wed_rro_ind *)&rro_desc[i];
-			cmd->magic_cnt = MT_DMA_WED_IND_CMD_CNT - 1;
-		}
-	}
+	if (mt76_queue_is_wed_rro(q))
+		mt76_dma_queue_init_magic_cnt(dev, q);
 
 	size = q->ndesc * sizeof(*q->entry);
 	q->entry = devm_kzalloc(dev->dev, size, GFP_KERNEL);
@@ -955,6 +991,9 @@ mt76_dma_rx_process(struct mt76_dev *dev, struct mt76_queue *q, int budget)
 
 		if (mt76_queue_is_wed_rro_ind(q) && dev->drv->rx_rro_ind_process)
 			dev->drv->rx_rro_ind_process(dev, data);
+
+		if(mt76_queue_is_wed_rro_rxdmad_c(q) && dev->drv->rx_rro_rxdmadc_process)
+			dev->drv->rx_rro_rxdmadc_process(dev, data);
 
 		if (mt76_queue_is_wed_rro(q)) {
 			done++;

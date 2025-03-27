@@ -62,6 +62,7 @@
 #define MT_QFLAG_WED		BIT(5)
 #define MT_QFLAG_WED_RRO	BIT(6)
 #define MT_QFLAG_WED_RRO_EN	BIT(7)
+#define MT_QFLAG_EMI_EN		BIT(8)
 
 #define __MT_WED_Q(_type, _n)	(MT_QFLAG_WED | \
 				 FIELD_PREP(MT_QFLAG_WED_TYPE, _type) | \
@@ -301,6 +302,7 @@ struct mt76_queue {
 	u8 buf_offset;
 	u16 flags;
 	u8 magic_cnt;
+	u16 *emi_cidx_addr;
 
 	struct mtk_wed_device *wed;
 	u32 wed_regs;
@@ -497,6 +499,39 @@ struct mt76_wed_rro_ind {
 	u32 magic_cnt	: 3;
 };
 
+struct mt76_rro_rxdmad_c {
+	u32 sdp0_31_0;
+	u32 header_ofst     :7;
+	u32 ver             :1;
+	u32 to_host         :1;
+	u32 ring_info       :2;
+	u32 dst_sel         :2;
+	u32 pn_chk_fail     :1;
+	u32 rsv             :2;
+	u32 sdl0            :14;
+	u32 ls              :1;
+	u32 rsv2            :1;
+	u32 sdp0_35_32      :4;
+	u32 rsv3            :2;
+	u32 sca_gat         :1;
+	u32 par_se          :1;
+	u32 rss_hash        :4;
+	u32 ind_reason      :4;
+	u32 rx_token_id     :16;
+	u32 cs_status       :4;
+	u32 cs_type         :4;
+	u32 c               :1;
+	u32 f               :1;
+	u32 un              :1;
+	u32 is_fc_data      :1;
+	u32 uc              :1;
+	u32 mc              :1;
+	u32 bc              :1;
+	u32 rsv4            :1;
+	u32 wcid            :12;
+	u32 magic_cnt       :4;
+};
+
 struct mt76_txwi_cache {
 	struct list_head list;
 	dma_addr_t dma_addr;
@@ -629,6 +664,9 @@ struct mt76_driver_ops {
 	void (*rx_rro_ind_process)(struct mt76_dev *dev, void *data);
 	int (*rx_rro_fill_msdu_pg)(struct mt76_dev *dev, struct mt76_queue *q,
 				   dma_addr_t p, void *data);
+
+	void (*rx_init_rxdmad_c)(struct mt76_dev *dev, struct mt76_queue *q);
+	void (*rx_rro_rxdmadc_process)(struct mt76_dev *mdev, void *data);
 
 	void (*rx_poll_complete)(struct mt76_dev *dev, enum mt76_rxq_id q);
 

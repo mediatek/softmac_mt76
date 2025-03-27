@@ -1009,6 +1009,15 @@ void mt7996_rro_hw_init(struct mt7996_dev *dev)
 				   MT_RRO_3_0_EMU_CONF_EN_MASK);
 			mt76_set(dev, MT_RRO_3_1_GLOBAL_CONFIG,
 				 MT_RRO_3_1_GLOBAL_CONFIG_RXDMAD_SEL);
+			if (!mtk_wed_device_active(&dev->mt76.mmio.wed)) {
+				mt76_set(dev, MT_RRO_3_1_GLOBAL_CONFIG,
+					 MT_RRO_3_1_GLOBAL_CONFIG_RX_DIDX_WR_EN |
+					 MT_RRO_3_1_GLOBAL_CONFIG_RX_CIDX_RD_EN);
+				mt76_wr(dev, MT_RRO_RX_RING_AP_CIDX_ADDR,
+					dev->wed_rro.ap_rx_ring_cidx.phy_addr >> 4);
+				mt76_wr(dev, MT_RRO_RX_RING_AP_DIDX_ADDR,
+					dev->wed_rro.ap_rx_ring_didx.phy_addr >> 4);
+			}
 		} else {
 			/* set emul 3.0 function */
 			mt76_wr(dev, MT_RRO_3_0_EMU_CONF,
@@ -1115,6 +1124,26 @@ static int mt7996_wed_rro_init(struct mt7996_dev *dev)
 		memset(dev->wed_rro.msdu_pg[i].ptr, 0, MT7996_RRO_MSDU_PG_SIZE_PER_CR);
 	}
 
+	if (!mtk_wed_device_active(wed) && dev->mt76.hwrro_mode == MT76_HWRRO_V3_1) {
+		ptr = dmam_alloc_coherent(dev->mt76.dma_dev,
+					  sizeof(struct mt7996_rro_cidx_didx_emi),
+					  &dev->wed_rro.ap_rx_ring_cidx.phy_addr,
+					  GFP_KERNEL);
+		if (!ptr)
+			return -ENOMEM;
+
+		dev->wed_rro.ap_rx_ring_cidx.ptr = ptr;
+
+		ptr = dmam_alloc_coherent(dev->mt76.dma_dev,
+					  sizeof(struct mt7996_rro_cidx_didx_emi),
+					  &dev->wed_rro.ap_rx_ring_didx.phy_addr,
+					  GFP_KERNEL);
+		if (!ptr)
+			return -ENOMEM;
+
+		dev->wed_rro.ap_rx_ring_didx.ptr = ptr;
+	}
+
 	ptr = dmam_alloc_coherent(dev->mt76.dma_dev,
 				  MT7996_RRO_WINDOW_MAX_LEN * sizeof(*addr),
 				  &dev->wed_rro.session.phy_addr,
@@ -1172,6 +1201,18 @@ static void mt7996_wed_rro_free(struct mt7996_dev *dev)
 				   dev->wed_rro.msdu_pg[i].ptr,
 				   dev->wed_rro.msdu_pg[i].phy_addr);
 	}
+
+	if (dev->wed_rro.ap_rx_ring_cidx.ptr)
+		dmam_free_coherent(dev->mt76.dma_dev,
+				   sizeof(struct mt7996_rro_cidx_didx_emi),
+				   dev->wed_rro.ap_rx_ring_cidx.ptr,
+				   dev->wed_rro.ap_rx_ring_cidx.phy_addr);
+
+	if (dev->wed_rro.ap_rx_ring_didx.ptr)
+		dmam_free_coherent(dev->mt76.dma_dev,
+				   sizeof(struct mt7996_rro_cidx_didx_emi),
+				   dev->wed_rro.ap_rx_ring_didx.ptr,
+				   dev->wed_rro.ap_rx_ring_didx.phy_addr);
 
 	if (!dev->wed_rro.session.ptr)
 		return;

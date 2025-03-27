@@ -165,6 +165,8 @@ static int mt7996_pci_probe(struct pci_dev *pdev,
 		break;
 	}
 
+	mdev->rx_token_size = mt7996_has_hwrro(dev) ? 32768 : 0;
+
 	mt7996_wfsys_reset(dev);
 	hif2 = mt7996_pci_init_hif2(pdev);
 	if (hif2)

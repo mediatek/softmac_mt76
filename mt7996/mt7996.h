@@ -571,6 +571,15 @@ struct mt7996_sta_rc_work_data {
 	u32 changed;
 };
 
+#define MT7996_MAX_RRO_RRS_RING 4
+
+struct mt7996_rro_cidx_didx_emi {
+	struct {
+		u16 idx;
+		u16 rsv;
+	} ring[MT7996_MAX_RRO_RRS_RING];
+};
+
 #ifdef CONFIG_MTK_VENDOR
 #define MT7996_AIR_MONITOR_MAX_ENTRY	16
 #define MT7996_AIR_MONITOR_MAX_GROUP	(MT7996_AIR_MONITOR_MAX_ENTRY >> 1)
@@ -865,6 +874,14 @@ struct mt7996_dev {
 			void *ptr;
 			dma_addr_t phy_addr;
 		} msdu_pg[MT7996_RRO_MSDU_PG_CR_CNT];
+		struct {
+			void *ptr;
+			dma_addr_t phy_addr;
+		} ap_rx_ring_cidx;
+		struct {
+			void *ptr;
+			dma_addr_t phy_addr;
+		} ap_rx_ring_didx;
 
 		struct work_struct work;
 		struct list_head poll_list;
@@ -1403,6 +1420,8 @@ void mt7996_rro_msdu_pg_free(struct mt7996_dev *dev);
 void mt7996_rro_rx_process(struct mt76_dev *mdev, void *data);
 int mt7996_rro_fill_msdu_page(struct mt76_dev *mdev, struct mt76_queue *q,
 			      dma_addr_t p, void *data);
+void mt7996_rx_init_rxdmad_c(struct mt76_dev *mdev, struct mt76_queue *q);
+void mt7996_rro_rxdamdc_process(struct mt76_dev *mdev, void *data);
 bool mt7996_rx_check(struct mt76_dev *mdev, void *data, int len);
 void mt7996_stats_work(struct work_struct *work);
 void mt7996_beacon_mon_work(struct work_struct *work);

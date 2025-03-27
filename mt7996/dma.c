@@ -528,6 +528,9 @@ int mt7996_dma_rro_init(struct mt7996_dev *dev)
 		mdev->q_rx[MT_RXQ_RRO_RXDMAD_C].flags = MT_WED_RRO_Q_RXDMAD_C;
 		if (mt76_wed_check_rx_cap(&mdev->mmio.wed))
 			mdev->q_rx[MT_RXQ_RRO_RXDMAD_C].wed = &mdev->mmio.wed;
+		else
+			mdev->q_rx[MT_RXQ_RRO_RXDMAD_C].flags |= MT_QFLAG_EMI_EN;
+
 		ret = mt76_queue_alloc(dev, &mdev->q_rx[MT_RXQ_RRO_RXDMAD_C],
 				       MT_RXQ_ID(MT_RXQ_RRO_RXDMAD_C),
 				       MT7996_RX_RING_SIZE,
@@ -613,9 +616,13 @@ start_hw_rro:
 		}
 
 		mt76_queue_rx_init(dev, MT_RXQ_RRO_BAND0, mt76_dma_rx_poll);
-		mt76_queue_rx_init(dev, MT_RXQ_RRO_IND, mt76_dma_rx_poll);
-		mt76_queue_rx_init(dev, MT_RXQ_MSDU_PAGE_BAND0, mt76_dma_rx_poll);
 
+		if (dev->mt76.hwrro_mode == MT76_HWRRO_V3_1) {
+			mt76_queue_rx_init(dev, MT_RXQ_RRO_RXDMAD_C, mt76_dma_rx_poll);
+		} else {
+			mt76_queue_rx_init(dev, MT_RXQ_RRO_IND, mt76_dma_rx_poll);
+			mt76_queue_rx_init(dev, MT_RXQ_MSDU_PAGE_BAND0, mt76_dma_rx_poll);
+		}
 		mt7996_irq_enable(dev, MT_INT_RRO_RX_DONE);
 	}
 

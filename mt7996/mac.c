@@ -2090,6 +2090,105 @@ update_ack_sn:
 			FIELD_PREP(MT_RRO_ACK_SN_CTRL_SN_MASK, sn));
 }
 
+void mt7996_rx_init_rxdmad_c(struct mt76_dev *mdev, struct mt76_queue *q)
+{
+	struct mt7996_dev *dev = container_of(mdev, struct mt7996_dev, mt76);
+	struct mt7996_rro_cidx_didx_emi *cidx = dev->wed_rro.ap_rx_ring_cidx.ptr;
+	struct mt76_desc *desc;
+	int i;
+
+	q->magic_cnt = 0;
+	desc = (struct mt76_desc *)q->desc;
+	for (i = 0; i < q->ndesc; i++) {
+		struct mt76_rro_rxdmad_c *dmad;
+
+		dmad = (struct mt76_rro_rxdmad_c *)&desc[i];
+		dmad->magic_cnt = MT_DMA_MAGIC_CNT - 1;
+	}
+
+	if (q->flags & MT_QFLAG_EMI_EN)
+		q->emi_cidx_addr = &cidx->ring[0].idx;
+}
+
+void mt7996_rro_rxdamdc_process(struct mt76_dev *mdev, void *data)
+{
+	struct mt76_rro_rxdmad_c *dmad = (struct mt76_rro_rxdmad_c *)data;
+	struct mt76_txwi_cache *t;
+	struct mt76_queue *q;
+	struct sk_buff *skb;
+	int len, data_len;
+	void *buf;
+	u8 more, qid;
+	u32 info = 0;
+
+	t = mt76_rx_token_release(mdev, dmad->rx_token_id);
+	len = dmad->sdl0;
+	more = !dmad->ls;
+	if (!t)
+		return;
+
+	qid = t->qid;
+	buf = t->ptr;
+	q = &mdev->q_rx[qid];
+	dma_sync_single_for_cpu(mdev->dma_dev, t->dma_addr,
+				SKB_WITH_OVERHEAD(q->buf_size),
+				page_pool_get_dma_dir(q->page_pool));
+
+	t->dma_addr = 0;
+	t->ptr = NULL;
+	mt76_put_rxwi(mdev, t);
+	if (!buf)
+		return;
+
+	if (q->rx_head)
+		data_len = q->buf_size;
+	else
+		data_len = SKB_WITH_OVERHEAD(q->buf_size);
+
+	if (data_len < len + q->buf_offset) {
+		dev_kfree_skb(q->rx_head);
+		q->rx_head = NULL;
+		goto free_frag;
+	}
+
+	if (q->rx_head) {
+		/* TDO: fragment error, skip handle */
+		//mt76_add_fragment(mdev, q, buf, len, more, info);
+		if (!more) {
+			dev_kfree_skb(q->rx_head);
+			q->rx_head = NULL;
+		}
+		goto free_frag;
+	}
+
+	if (!more && !mt7996_rx_check(mdev, buf, len))
+		goto free_frag;
+
+	if (dmad->ind_reason == MT_DMA_WED_IND_REASON_REPEAT ||
+	    dmad->ind_reason == MT_DMA_WED_IND_REASON_OLDPKT)
+		goto free_frag;
+
+	skb = build_skb(buf, q->buf_size);
+	if (!skb)
+		goto free_frag;
+
+	skb_reserve(skb, q->buf_offset);
+	skb_mark_for_recycle(skb);
+	__skb_put(skb, len);
+
+	if (more) {
+		q->rx_head = skb;
+		goto free_frag;
+	}
+
+	mt7996_queue_rx_skb(mdev, qid, skb, &info);
+
+	return;
+free_frag:
+	mt76_put_page_pool_buf(buf, false);
+
+}
+
 void mt7996_mac_cca_stats_reset(struct mt7996_phy *phy)
 {
 	struct mt7996_dev *dev = phy->dev;

@@ -900,7 +900,8 @@ static void mt76_rx_release_amsdu(struct mt76_phy *phy, enum mt76_rxq_id q)
 	}
 
 	if (mt76_queue_is_wed_rro_data(rxq))
-		q = MT_RXQ_RRO_IND;
+		q = (dev->hwrro_mode == MT76_HWRRO_V3) ?
+		    MT_RXQ_RRO_IND : MT_RXQ_RRO_RXDMAD_C;
 
 	__skb_queue_tail(&dev->rx_skb[q], skb);
 }
