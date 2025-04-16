@@ -692,6 +692,7 @@ static int mt7996_set_key(struct ieee80211_hw *hw, enum set_key_cmd cmd,
 	int err = 0;
 	unsigned long add;
 	unsigned int link_id;
+	bool is_bigtk = idx == 6 || idx == 7;
 
 	if (cmd != SET_KEY && cmd != DISABLE_KEY)
 		return -EINVAL;
@@ -739,7 +740,7 @@ static int mt7996_set_key(struct ieee80211_hw *hw, enum set_key_cmd cmd,
 		case WLAN_CIPHER_SUITE_BIP_CMAC_256:
 		case WLAN_CIPHER_SUITE_BIP_GMAC_128:
 		case WLAN_CIPHER_SUITE_BIP_GMAC_256:
-			if (key->keyidx == 6 || key->keyidx == 7) {
+			if (is_bigtk) {
 				wcid_keyidx = &msta_link->wcid.hw_key_idx2;
 				key->flags |= IEEE80211_KEY_FLAG_GENERATE_MMIE;
 				break;
@@ -765,7 +766,7 @@ static int mt7996_set_key(struct ieee80211_hw *hw, enum set_key_cmd cmd,
 		}
 
 		/* To remove BIGTK independently, FW needs an extra inband command */
-		if (cmd == DISABLE_KEY && !(idx == 6 || idx == 7))
+		if (cmd == DISABLE_KEY && !is_bigtk)
 			goto out;
 
 		mt76_wcid_key_setup(&dev->mt76, &msta_link->wcid, key);
@@ -773,6 +774,12 @@ static int mt7996_set_key(struct ieee80211_hw *hw, enum set_key_cmd cmd,
 		err = mt7996_mcu_add_key(&dev->mt76, mconf, key,
 					 MCU_WMWA_UNI_CMD(STA_REC_UPDATE),
 					 &msta_link->wcid, cmd);
+
+		if (cmd == SET_KEY && is_bigtk && conf && conf->enable_beacon) {
+			/* Remove beacon first to update beacon Txd for beacon protection */
+			mt7996_mcu_add_beacon(hw, vif, conf, false);
+			mt7996_mcu_add_beacon(hw, vif, conf, true);
+		}
 	}
 out:
 	mutex_unlock(&dev->mt76.mutex);
