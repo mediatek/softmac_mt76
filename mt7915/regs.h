@@ -948,6 +948,7 @@ enum offs_rev {
 #define MT_ADIE_XTAL_TRIM1_40M_OSC	0x399
 #define MT_ADIE_WRI_CK_SEL		0x4ac
 #define MT_ADIE_RG_STRAP_PIN_IN		0x4fc
+#define MT_ADIE_RG_TOP_XO_08		0x600
 #define MT_ADIE_XTAL_C1			0x654
 #define MT_ADIE_XTAL_C2			0x658
 #define MT_ADIE_RG_XO_01		0x65c

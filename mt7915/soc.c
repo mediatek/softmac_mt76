@@ -506,6 +506,7 @@ static int mt798x_wmac_adie_patch_7976(struct mt7915_dev *dev, u8 adie)
 {
 	u32 id, version, rg_xo_01, rg_xo_03;
 	int ret;
+	bool need_adie_patch = false;
 
 	ret = mt76_wmac_spi_read(dev, adie, MT_ADIE_CHIP_ID, &id);
 	if (ret)
@@ -525,6 +526,7 @@ static int mt798x_wmac_adie_patch_7976(struct mt7915_dev *dev, u8 adie)
 		if (is_mt7981(&dev->mt76)) {
 			rg_xo_01 = 0x1959c80f;
 		} else if (is_mt7986(&dev->mt76)) {
+			need_adie_patch = true;
 			rg_xo_01 = 0x1959f80f;
 		} else {
 			WARN_ON(1);
@@ -537,7 +539,14 @@ static int mt798x_wmac_adie_patch_7976(struct mt7915_dev *dev, u8 adie)
 	if (ret)
 		return ret;
 
-	return mt76_wmac_spi_write(dev, adie, MT_ADIE_RG_XO_03, rg_xo_03);
+	ret = mt76_wmac_spi_write(dev, adie, MT_ADIE_RG_XO_03, rg_xo_03);
+	if (ret)
+		return ret;
+
+	if (!need_adie_patch)
+		return 0;
+
+	return mt76_wmac_spi_write(dev, adie, MT_ADIE_RG_TOP_XO_08, 0);
 }
 
 static int
