@@ -1136,6 +1136,8 @@ struct mt76_phy {
 	struct mt76_tx_debug tx_dbg_stats;
 	struct mt76_rx_debug rx_dbg_stats;
 	int tokens;
+
+	bool rdd_txq_paused;
 };
 
 struct mt76_dev {
