@@ -1098,6 +1098,28 @@ int mt7996_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
 	t->wcid = wcid->idx;
 
 	id = mt76_token_consume(mdev, &t, mconf->mt76.band_idx);
+
+	if (id == -EBUSY && sta && sta->mlo) {
+		unsigned long valid_links = vif->valid_links ?: BIT(0);
+		struct mt7996_vif_link *mconf_temp;
+		unsigned int link_id_temp;
+
+		/* For MLO station, try to get token from affiliated link */
+		for_each_set_bit(link_id_temp, &valid_links,
+				 IEEE80211_MLD_MAX_NUM_LINKS) {
+			mconf_temp = (struct mt7996_vif_link *)
+				     rcu_dereference(mvif->mt76.link[link_id_temp]);
+
+			if (!mconf_temp)
+				continue;
+
+			id = mt76_token_consume(mdev, &t, mconf_temp->mt76.band_idx);
+			if (id >= 0)
+				break;
+		}
+	}
+
+
 	if (id < 0) {
 		mdev->tx_dbg_stats.tx_drop[MT_TX_DROP_GET_TOKEN_FAIL]++;
 		return id;

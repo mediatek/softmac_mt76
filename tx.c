@@ -858,7 +858,7 @@ EXPORT_SYMBOL_GPL(__mt76_set_tx_blocked);
 int mt76_token_consume(struct mt76_dev *dev, struct mt76_txwi_cache **ptxwi,
 		       u8 phy_idx)
 {
-	int token = -EINVAL, start = 0;
+	int token = -EBUSY, start = 0;
 	struct mt76_phy *phy = mt76_dev_phy(dev, phy_idx);
 
 	if (mtk_wed_device_active(&dev->mmio.wed))
