@@ -737,6 +737,7 @@ struct mt7996_phy {
 	u8 cdev_state;
 	u8 throttle_state;
 	u32 throttle_temp[2]; /* 0: critical high, 1: maximum */
+	u8 throttle_level[4];
 
 	u32 rxfilter;
 	u64 omac_mask;
@@ -1287,6 +1288,7 @@ int mt7996_mcu_get_chan_mib_info(struct mt7996_phy *phy, bool chan_switch);
 int mt7996_mcu_get_temperature(struct mt7996_phy *phy);
 int mt7996_mcu_set_thermal_throttling(struct mt7996_phy *phy, u8 state);
 int mt7996_mcu_set_thermal_protect(struct mt7996_phy *phy, bool enable);
+int mt7996_mcu_set_thermal_info_query(struct mt7996_phy *phy);
 int mt7996_mcu_set_txpower_sku(struct mt7996_phy *phy,
 			       int txpower_setting);
 int mt7996_mcu_rdd_resume_tx(struct mt7996_phy *phy);

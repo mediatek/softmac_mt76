@@ -1182,19 +1182,19 @@ mt7996_mcu_csi_report_event(struct mt7996_dev *dev, struct sk_buff *skb)
 }
 
 static void
-mt7996_mcu_rx_thermal_notify(struct mt7996_dev *dev, struct sk_buff *skb)
+mt7996_mcu_rx_thermal_info_query(struct mt7996_dev *dev, struct sk_buff *skb)
 {
-#define THERMAL_NOTIFY_TAG 0x6
+#define THERMAL_QUERY_TAG 0x3
 	struct mt76_phy *mphy = &dev->mt76.phy;
-	struct mt7996_mcu_thermal_notify *n;
+	struct mt7996_mcu_thermal_query_info *n;
 	struct mt7996_phy *phy;
 
-	n = (struct mt7996_mcu_thermal_notify *)skb->data;
+	n = (struct mt7996_mcu_thermal_query_info *)skb->data;
 
-	if (le16_to_cpu(n->tag) != THERMAL_NOTIFY_TAG)
+	if (le16_to_cpu(n->tag) != THERMAL_QUERY_TAG)
 		return;
 
-	if (n->event_id != THERMAL_NOTIFY_TAG)
+	if (n->event_id != THERMAL_QUERY_TAG)
 		return;
 
 	if (n->band_idx > MT_BAND2)
@@ -1203,9 +1203,8 @@ mt7996_mcu_rx_thermal_notify(struct mt7996_dev *dev, struct sk_buff *skb)
 	mphy = dev->mt76.phys[n->band_idx];
 	if (!mphy)
 		return;
-
 	phy = (struct mt7996_phy *)mphy->priv;
-	phy->throttle_state = n->duty_percent;
+	phy->throttle_state = phy->throttle_level[n->state];
 }
 
 void mt7996_mcu_wmm_pbc_work(struct work_struct *work)
@@ -1673,7 +1672,7 @@ mt7996_mcu_uni_rx_unsolicited_event(struct mt7996_dev *dev, struct sk_buff *skb)
 		break;
 #endif
 	case MCU_UNI_EVENT_THERMAL:
-		mt7996_mcu_rx_thermal_notify(dev, skb);
+		mt7996_mcu_rx_thermal_info_query(dev, skb);
 		break;
 #ifdef CONFIG_NL80211_TESTMODE
 	case MCU_UNI_EVENT_TESTMODE_CTRL:
@@ -6414,15 +6413,15 @@ int mt7996_mcu_set_thermal_throttling(struct mt7996_phy *phy, u8 state)
 	for (level = 0; level < 4; level++) {
 		req.ctrl.duty.duty_level = level;
 		req.ctrl.duty.duty_cycle = state;
-		state /= 2;
 
 		ret = mt76_mcu_send_msg(&phy->dev->mt76, MCU_WM_UNI_CMD(THERMAL),
 					&req, sizeof(req), false);
 		if (ret)
 			return ret;
-	}
 
-	phy->throttle_state = state;
+		phy->throttle_level[level] = state;
+		state /= 2;
+	}
 
 	return 0;
 }
@@ -6465,6 +6464,29 @@ int mt7996_mcu_set_thermal_protect(struct mt7996_phy *phy, bool enable)
 
 	return mt76_mcu_send_msg(&phy->dev->mt76, MCU_WM_UNI_CMD(THERMAL),
 				 &req, sizeof(req), false);
+}
+
+int mt7996_mcu_set_thermal_info_query(struct mt7996_phy *phy)
+{
+#define PROTECT_INFO_QUERY 0x9
+	struct {
+		u8 _rsv[4];
+
+		__le16 tag;
+		__le16 len;
+
+		u8 action;
+		u8 band_idx;
+		u8 __rsv[2];
+	} __packed req = {
+		.tag = cpu_to_le16(UNI_CMD_THERMAL_PROTECT_INFO),
+		.len = cpu_to_le16(sizeof(req) - 4),
+		.action = PROTECT_INFO_QUERY,
+		.band_idx = phy->mt76->band_idx,
+	};
+
+	return mt76_mcu_send_msg(&phy->dev->mt76, MCU_WM_UNI_CMD(THERMAL),
+			&req, sizeof(req), false);
 }
 
 int mt7996_mcu_set_ser(struct mt7996_dev *dev, u8 action, u8 val, u8 band)
