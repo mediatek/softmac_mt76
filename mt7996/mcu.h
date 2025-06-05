@@ -602,12 +602,17 @@ struct bss_bcn_ml_reconf_offset {
 	u8 rsv;
 } __packed;
 
+#define MAX_ATTLM_NUM 1
 struct bss_bcn_attlm_offset_tlv {
 	__le16 tag;
 	__le16 len;
 	u8 valid_id_bitmap;
 	u8 rsv;
-	__le16 offset;
+	__le16 offset[MAX_ATTLM_NUM];
+	__le16 non_tx_bitmap;
+	u8 rsv_2[2];
+	u8 non_tx_valid_id_bitmap[MAX_BEACON_NUM];
+	__le16 non_tx_offsets[MAX_BEACON_NUM][MAX_ATTLM_NUM];
 } __packed;
 
 struct bss_txcmd_tlv {

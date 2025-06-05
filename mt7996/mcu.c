@@ -4404,7 +4404,7 @@ mt7996_mcu_beacon_ttlm(struct mt7996_dev *dev, struct ieee80211_bss_conf *conf,
 				     sizeof(*attlm_offset));
 	attlm_offset = (struct bss_bcn_attlm_offset_tlv *)tlv;
 	attlm_offset->valid_id_bitmap = BIT(0);
-	attlm_offset->offset = cpu_to_le16(offset);
+	attlm_offset->offset[0] = cpu_to_le16(offset);
 }
 
 static bool
