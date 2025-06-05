@@ -231,14 +231,15 @@ struct mt7996_mcu_mib {
 
 struct per_sta_rssi {
 	__le16 wlan_idx;
-	u8 __rsv[2];
-	u8 rcpi[IEEE80211_MAX_CHAINS];
+	u8 rcpi_wf4;
+	u8 __rsv;
+	u8 rcpi[4];
 } __packed;
 
 struct per_sta_snr {
 	__le16 wlan_idx;
 	u8 __rsv[2];
-	s8 val[IEEE80211_MAX_CHAINS];
+	s8 val[4];
 } __packed;
 
 struct per_sta_msdu_cnt {

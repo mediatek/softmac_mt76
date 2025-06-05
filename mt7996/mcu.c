@@ -7246,20 +7246,33 @@ int mt7996_mcu_get_per_sta_info(struct mt76_dev *dev, u16 tag,
 	switch (tag) {
 	case UNI_PER_STA_RSSI:
 		for (i = 0; i < sta_num; ++i) {
-			wlan_idx = le16_to_cpu(res->rssi[i].wlan_idx);
+			struct per_sta_rssi *rssi = &res->rssi[i];
+			struct mt76_phy *mphy;
+			struct mt7996_phy *phy;
+			u8 *rcpi = rssi->rcpi;
+			u16 rx_mask;
+
+			wlan_idx = le16_to_cpu(rssi->wlan_idx);
 			wcid = rcu_dereference(dev->wcid[wlan_idx]);
 			msta_link = container_of(wcid, struct mt7996_sta_link, wcid);
-			if (msta_link) {
-				struct mt76_phy *phy = dev->phys[wcid->phy_idx];
-				u8 *rcpi = res->rssi[i].rcpi;
+			if (!msta_link)
+				continue;
 
-				for (j = 0; j < IEEE80211_MAX_CHAINS; ++j)
-					msta_link->chain_ack_signal[j] = to_rssi(MT_PRXV_RCPI0, rcpi[j]);
+			mphy = dev->phys[wcid->phy_idx];
+			phy = mphy->priv;
+			rx_mask = mt7996_rx_chainmask(phy);
 
-				msta_link->ack_signal = mt76_rx_signal(phy->antenna_mask,
-								       msta_link->chain_ack_signal);
-				ewma_avg_signal_add(&msta_link->avg_ack_signal, -msta_link->ack_signal);
+			for (j = 0; j < ARRAY_SIZE(rssi->rcpi); ++j)
+				msta_link->chain_ack_signal[j] = to_rssi(MT_PRXV_RCPI0, rcpi[j]);
+			if (rx_mask & BIT(4)) {
+				msta_link->chain_signal_wf4 = to_rssi(MT_PRXV_RCPI0,
+								      rssi->rcpi_wf4);
+				msta_link->chain_ack_signal[4] = msta_link->chain_signal_wf4;
 			}
+
+			msta_link->ack_signal = mt76_rx_signal(rx_mask,
+							       msta_link->chain_ack_signal);
+			ewma_avg_signal_add(&msta_link->avg_ack_signal, -msta_link->ack_signal);
 		}
 		break;
 	case UNI_PER_STA_SNR:
@@ -7269,7 +7282,7 @@ int mt7996_mcu_get_per_sta_info(struct mt76_dev *dev, u16 tag,
 			msta_link = container_of(wcid, struct mt7996_sta_link, wcid);
 			if (msta_link)
 				memcpy(msta_link->chain_ack_snr, res->snr[i].val,
-				       IEEE80211_MAX_CHAINS);
+				       sizeof(res->snr[i].val));
 		}
 		break;
 	case UNI_PER_STA_PKT_CNT:

@@ -434,6 +434,8 @@ struct mt7996_sta_link {
 	int ack_signal;
 	struct ewma_avg_signal avg_ack_signal;
 
+	s8 chain_signal_wf4;
+
 	s8 chain_ack_snr[IEEE80211_MAX_CHAINS];
 
 	unsigned long changed;

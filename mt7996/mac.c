@@ -554,21 +554,28 @@ mt7996_mac_fill_rx(struct mt7996_dev *dev, enum mt76_rxq_id q,
 
 		v3 = le32_to_cpu(rxv[3]);
 
-		status->chains = mphy->antenna_mask;
+		status->chains = mt7996_rx_chainmask(phy);
 		status->chain_signal[0] = to_rssi(MT_PRXV_RCPI0, v3);
 		status->chain_signal[1] = to_rssi(MT_PRXV_RCPI1, v3);
 		status->chain_signal[2] = to_rssi(MT_PRXV_RCPI2, v3);
 		status->chain_signal[3] = to_rssi(MT_PRXV_RCPI3, v3);
+		/* no 5th rx info in rxd for data frame */
+		status->chain_signal[4] = -128;
 
 		if (msta_link) {
+			u16 rx_mask = status->chains;
 			int i;
+
+			/* use the value read from rxv for 5th rx */
+			if (rx_mask & BIT(4))
+				status->chain_signal[4] = msta_link->chain_signal_wf4;
 
 			memcpy(msta_link->chain_signal, status->chain_signal,
 			       IEEE80211_MAX_CHAINS);
-			msta_link->signal = mt76_rx_signal(mphy->antenna_mask,
+			msta_link->signal = mt76_rx_signal(rx_mask,
 							   msta_link->chain_signal);
 
-			for (i = 0; i < IEEE80211_MAX_CHAINS; ++i)
+			for (i = 0; i < hweight16(rx_mask); ++i)
 				ewma_avg_signal_add(msta_link->chain_signal_avg + i,
 						    -msta_link->chain_signal[i]);
 			ewma_avg_signal_add(&msta_link->signal_avg, -msta_link->signal);
