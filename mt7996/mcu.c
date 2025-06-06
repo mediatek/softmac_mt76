@@ -401,14 +401,20 @@ int mt7996_mcu_wa_cmd(struct mt7996_dev *dev, int cmd, u32 a1, u32 a2, u32 a3)
 static void
 mt7996_mcu_csa_finish(void *priv, u8 *mac, struct ieee80211_vif *vif)
 {
-	struct mt76_phy *mphy = (struct mt76_phy *)priv;
+	struct mt7996_countdown_notify *notify = (struct mt7996_countdown_notify *)priv;
 	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
+	struct mt76_phy *mphy = notify->mphy;
 	struct ieee80211_bss_conf *link_conf;
+	struct mt7996_vif_link *mconf;
 	unsigned long valid_links = vif->valid_links ?: BIT(0);
 	int link_id, band_idx = mphy->band_idx;
 
 	link_id = mvif->mt76.band_to_link[band_idx];
 	if (link_id == IEEE80211_LINK_UNSPECIFIED)
+		return;
+
+	mconf = mt7996_vif_link(mvif->dev, vif, link_id);
+	if (!mconf || mconf->mt76.omac_idx != notify->omac_idx)
 		return;
 
 	link_conf = rcu_dereference(vif->link_conf[link_id]);
@@ -520,13 +526,19 @@ out:
 static void
 mt7996_mcu_cca_finish(void *priv, u8 *mac, struct ieee80211_vif *vif)
 {
-	struct mt76_phy *mphy = (struct mt76_phy *)priv;
+	struct mt7996_countdown_notify *notify = (struct mt7996_countdown_notify *)priv;
 	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
+	struct mt76_phy *mphy = notify->mphy;
 	struct ieee80211_bss_conf *link_conf;
+	struct mt7996_vif_link *mconf;
 	u8 link_id;
 
 	link_id = mvif->mt76.band_to_link[mphy->band_idx];
 	if (link_id == IEEE80211_LINK_UNSPECIFIED)
+		return;
+
+	mconf = mt7996_vif_link(mvif->dev, vif, link_id);
+	if (!mconf || mconf->mt76.omac_idx != notify->omac_idx)
 		return;
 
 	link_conf = rcu_dereference(vif->link_conf[link_id]);
@@ -551,6 +563,8 @@ mt7996_mcu_ie_countdown(struct mt7996_dev *dev, struct sk_buff *skb)
 	const char *data = (char *)&rxd[1], *tail;
 	struct header *hdr = (struct header *)data;
 	struct tlv *tlv = (struct tlv *)(data + 4);
+	struct mt7996_mcu_countdown_notify *event;
+	struct mt7996_countdown_notify notify;
 
 	if (hdr->band >= ARRAY_SIZE(dev->mt76.phys))
 		return;
@@ -561,16 +575,21 @@ mt7996_mcu_ie_countdown(struct mt7996_dev *dev, struct sk_buff *skb)
 	tail = skb->data + skb->len;
 	data += sizeof(struct header);
 	while (data + sizeof(struct tlv) < tail && le16_to_cpu(tlv->len)) {
+		event = (struct mt7996_mcu_countdown_notify *)tlv->data;
+
+		notify.mphy = mphy;
+		notify.omac_idx = event->omac_idx;
+
 		switch (le16_to_cpu(tlv->tag)) {
 		case UNI_EVENT_IE_COUNTDOWN_CSA:
 			ieee80211_iterate_active_interfaces_atomic(mphy->hw,
 					IEEE80211_IFACE_ITER_RESUME_ALL,
-					mt7996_mcu_csa_finish, mphy);
+					mt7996_mcu_csa_finish, &notify);
 			break;
 		case UNI_EVENT_IE_COUNTDOWN_BCC:
 			ieee80211_iterate_active_interfaces_atomic(mphy->hw,
 					IEEE80211_IFACE_ITER_RESUME_ALL,
-					mt7996_mcu_cca_finish, mphy);
+					mt7996_mcu_cca_finish, &notify);
 			break;
 		}
 
