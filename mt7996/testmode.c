@@ -122,11 +122,9 @@ mt7996_tm_check_antenna(struct mt7996_phy *phy)
 {
 	struct mt76_testmode_data *td = &phy->mt76->test;
 	struct mt7996_dev *dev = phy->dev;
-	u8 band_idx = phy->mt76->band_idx;
 	u32 chainmask = phy->mt76->chainmask;
 	u32 aux_rx_mask;
 
-	chainmask = chainmask >> dev->chainshift[band_idx];
 	aux_rx_mask = BIT(fls(chainmask)) * phy->has_aux_rx;
 	if (td->tx_antenna_mask & ~(chainmask | aux_rx_mask)) {
 		mt76_err(&dev->mt76,
@@ -1375,7 +1373,7 @@ mt7996_tm_txbf_init(struct mt7996_phy *phy, u16 *val)
 
 			td->tx_ipg = 999;
 			td->tx_mpdu_len = 1024;
-			td->tx_antenna_mask = phy->mt76->chainmask >> dev->chainshift[band_idx];
+			td->tx_antenna_mask = phy->mt76->chainmask;
 			nss = hweight8(td->tx_antenna_mask);
 			if (nss > 1 && nss <= 4)
 				td->tx_rate_idx = 15 + 8 * (nss - 2);
@@ -1403,8 +1401,8 @@ mt7996_tm_txbf_init(struct mt7996_phy *phy, u16 *val)
 		if (td->is_txbf_dut) {
 			/* Enable ETxBF Capability */
 			mt7996_mcu_set_txbf(dev, BF_HW_EN_UPDATE);
-			td->tx_antenna_mask = phy->mt76->chainmask >> dev->chainshift[band_idx];
-			td->tx_spe_idx = 24 + phy->mt76->band_idx;
+			td->tx_antenna_mask = phy->mt76->chainmask;
+			td->tx_spe_idx = 24 + band_idx;
 			if (td->tx_rate_mode == MT76_TM_TX_MODE_VHT ||
 			    td->tx_rate_mode == MT76_TM_TX_MODE_HE_SU)
 				mt7996_tm_set(dev, SET_ID(NSS), td->tx_rate_nss);
@@ -2257,7 +2255,7 @@ mt7996_tm_dump_stats(struct mt76_phy *mphy, struct sk_buff *msg)
 	int band_idx = mphy->band_idx;
 
 	if (!td->last_rx.path) {
-		td->last_rx.path = hweight32(mphy->chainmask >> dev->chainshift[band_idx]);
+		td->last_rx.path = hweight16(mphy->chainmask);
 		if (phy->has_aux_rx)
 			td->last_rx.path++;
 		td->last_rx.rcpi = devm_kzalloc(dev->mt76.dev, td->last_rx.path, GFP_KERNEL);
