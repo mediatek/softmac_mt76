@@ -1025,7 +1025,6 @@ int __mt76_set_channel(struct mt76_phy *phy, struct cfg80211_chan_def *chandef,
 	struct mt76_dev *dev = phy->dev;
 	int timeout = HZ / 5;
 	int ret;
-	unsigned long was_scanning = ieee80211_get_scanning(phy->hw);
 
 	set_bit(MT76_RESET, &phy->state);
 
@@ -1044,7 +1043,8 @@ int __mt76_set_channel(struct mt76_phy *phy, struct cfg80211_chan_def *chandef,
 	if (!offchannel)
 		phy->main_chandef = *chandef;
 
-	if (chandef->chan != phy->main_chandef.chan || was_scanning)
+	if (chandef->chan != phy->main_chandef.chan ||
+	    test_bit(MT76_SCANNING, &phy->state))
 		memset(phy->chan_state, 0, sizeof(*phy->chan_state));
 
 	ret = dev->drv->set_channel(phy);
