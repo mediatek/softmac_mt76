@@ -979,8 +979,7 @@ mt7996_vif_cfg_changed(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 						&link->mt76, &link->msta_link,
 						true);
 			mt7996_mcu_add_sta(dev, vif, link_conf, NULL, link, NULL,
-					   CONN_STATE_PORT_SECURE,
-					   !!(changed & BSS_CHANGED_BSSID));
+					   CONN_STATE_PORT_SECURE, false);
 		}
 	}
 
@@ -1046,6 +1045,9 @@ mt7996_link_info_changed(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 				   CONN_STATE_PORT_SECURE,
 				   !!(changed & BSS_CHANGED_BSSID));
 	}
+	if (changed & BSS_CHANGED_BSSID && is_zero_ether_addr(info->bssid))
+		mt7996_mcu_add_sta(dev, vif, info, NULL, link, &link->msta_link,
+				   CONN_STATE_DISCONNECT, false);
 
 	if (changed & BSS_CHANGED_ERP_SLOT) {
 		int slottime = info->use_short_slot ? 9 : 20;
@@ -1365,6 +1367,12 @@ mt7996_mac_sta_add_links(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 
 		if (!mconf || !conf || !link_sta)
 			continue;
+
+		/* Update bss capability after associated and before add station */
+		if (vif->type == NL80211_IFTYPE_STATION)
+			mt7996_mcu_add_bss_info(mconf->phy, vif, conf,
+						&mconf->mt76, &mconf->msta_link,
+						true);
 
 		ret = mt7996_mac_sta_init_link(dev, conf, link_sta, mconf, assoc);
 		if (ret)
