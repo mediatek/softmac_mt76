@@ -387,6 +387,9 @@ void mt76_connac_mcu_sta_basic_tlv(struct mt76_dev *dev, struct sk_buff *skb,
 		basic->extra_info |= cpu_to_le16(EXTRA_INFO_NEW);
 	basic->conn_state = conn_state;
 
+	if (link_sta && link_sta->sta->vendor_mtk)
+		basic->extra_info |= cpu_to_le16(EXTRA_INFO_MTK_STA);
+
 	if (!link_sta) {
 		basic->conn_type = cpu_to_le32(CONNECTION_INFRA_BC);
 

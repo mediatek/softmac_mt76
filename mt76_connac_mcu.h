@@ -296,6 +296,7 @@ struct sta_rec_basic {
 	u8 peer_addr[ETH_ALEN];
 #define EXTRA_INFO_VER	BIT(0)
 #define EXTRA_INFO_NEW	BIT(1)
+#define EXTRA_INFO_MTK_STA BIT(3)
 	__le16 extra_info;
 } __packed;
 
