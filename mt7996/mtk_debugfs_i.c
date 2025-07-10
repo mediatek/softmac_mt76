@@ -1256,6 +1256,23 @@ mt7996_mru_probe_enable_set(void *data, u64 val)
 DEFINE_DEBUGFS_ATTRIBUTE(fops_mru_probe_enable, mt7996_mru_probe_enable_get,
 			 mt7996_mru_probe_enable_set, "%lld\n");
 
+static int
+mt7996_cp_mode_set(void *data, u64 val)
+{
+	struct mt7996_dev *dev = data;
+
+	/* mt7996 does not support configuring the critical packet mode
+	 * due to hardware limitations.
+	 */
+	if (is_mt7996(&dev->mt76) || val > IEEE80211_AC_BK)
+		return -EINVAL;
+
+	return mt7996_mcu_cp_support(dev, val);
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(fops_cp_mode, NULL,
+			 mt7996_cp_mode_set, "%llu\n");
+
 int mt7996_mtk_init_dev_debugfs_internal(struct mt7996_phy *phy, struct dentry *dir)
 {
 	struct mt7996_dev *dev = phy->dev;
@@ -1276,6 +1293,7 @@ int mt7996_mtk_init_dev_debugfs_internal(struct mt7996_phy *phy, struct dentry *
 
 	debugfs_create_u8("dump_ple_txd", 0600, dir, &dev->dbg.dump_ple_txd);
 	debugfs_create_file("txop", 0600, dir, dev, &fops_mt7996_txop);
+	debugfs_create_file("cp_mode", 0200, dir, dev, &fops_cp_mode);
 
 	/* MLO related Table */
 	debugfs_create_file("mat_table", 0400, dir, dev, &mt7996_mat_table_fops);
