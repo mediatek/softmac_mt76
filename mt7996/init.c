@@ -488,6 +488,7 @@ mt7996_init_wiphy(struct ieee80211_hw *hw, struct mtk_wed_device *wed)
 	wiphy->mbssid_max_interfaces = 16;
 	wiphy->iftype_ext_capab = iftypes_ext_capa;
 	wiphy->num_iftype_ext_capab = ARRAY_SIZE(iftypes_ext_capa);
+	wiphy->max_ap_assoc_sta = mt7996_wtbl_size(dev) - MT7996_WTBL_BMC_SIZE - 1;
 
 	wiphy_ext_feature_set(wiphy, NL80211_EXT_FEATURE_BSS_COLOR);
 	wiphy_ext_feature_set(wiphy, NL80211_EXT_FEATURE_VHT_IBSS);
