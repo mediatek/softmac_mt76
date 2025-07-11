@@ -262,7 +262,11 @@ mt7996_radar_trigger(void *data, u64 val)
 #define RADAR_BACKGROUND	2
 	struct mt7996_phy *phy = data;
 	struct mt7996_dev *dev = phy->dev;
-	int rdd_idx;
+	struct cfg80211_chan_def *chandef = &phy->mt76->chandef;
+	int rdd_idx, ret;
+
+	if (test_bit(MT76_SCANNING, &phy->mt76->state))
+		return -EBUSY;
 
 	if (!val || val > RADAR_BACKGROUND)
 		return -EINVAL;
@@ -275,6 +279,17 @@ mt7996_radar_trigger(void *data, u64 val)
 	rdd_idx = mt7996_get_rdd_idx(phy, val == RADAR_BACKGROUND);
 	if (rdd_idx < 0) {
 		dev_err(dev->mt76.dev, "No RDD found\n");
+		return -EINVAL;
+	}
+
+	ret = cfg80211_chandef_dfs_required(dev->mt76.hw->wiphy, chandef, NL80211_IFTYPE_AP);
+	if (ret <= 0) {
+		if (ret < 0)
+			return ret;
+
+		dev_err(dev->mt76.dev,
+			"Cannot trigger radar detection on non-DFS channel %d width %d\n",
+			chandef->chan->hw_value, chandef->width);
 		return -EINVAL;
 	}
 
