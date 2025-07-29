@@ -2234,8 +2234,8 @@ static int mt7915_mac_check_twt_req(struct ieee80211_twt_setup *twt)
 
 	exp = FIELD_GET(IEEE80211_TWT_REQTYPE_WAKE_INT_EXP,
 			le16_to_cpu(twt_agrt->req_type));
-	mantissa = le16_to_cpu(twt_agrt->mantissa);
-	duration = twt_agrt->min_twt_dur << 8;
+	mantissa = le16_to_cpu(twt_agrt->indiv.mantissa);
+	duration = twt_agrt->indiv.min_twt_dur << 8;
 
 	interval = (u64)mantissa << exp;
 	if (interval < duration)
@@ -2260,8 +2260,8 @@ mt7915_mac_twt_param_equal(struct mt7915_sta *msta,
 			continue;
 
 		f = &msta->twt.flow[i];
-		if (f->duration == twt_agrt->min_twt_dur &&
-		    f->mantissa == twt_agrt->mantissa &&
+		if (f->duration == twt_agrt->indiv.min_twt_dur &&
+		    f->mantissa == twt_agrt->indiv.mantissa &&
 		    f->exp == exp &&
 		    f->protection == !!(type & IEEE80211_TWT_REQTYPE_PROTECTION) &&
 		    f->flowtype == !!(type & IEEE80211_TWT_REQTYPE_FLOWTYPE) &&
@@ -2272,9 +2272,9 @@ mt7915_mac_twt_param_equal(struct mt7915_sta *msta,
 	return false;
 }
 
-void mt7915_mac_add_twt_setup(struct ieee80211_hw *hw,
-			      struct ieee80211_sta *sta,
-			      struct ieee80211_twt_setup *twt)
+int mt7915_mac_add_twt_setup(struct ieee80211_hw *hw,
+			     struct ieee80211_sta *sta,
+			     struct ieee80211_twt_setup *twt)
 {
 	enum ieee80211_twt_setup_cmd setup_cmd = TWT_SETUP_CMD_REJECT;
 	struct mt7915_sta *msta = (struct mt7915_sta *)sta->drv_priv;
@@ -2285,6 +2285,7 @@ void mt7915_mac_add_twt_setup(struct ieee80211_hw *hw,
 	struct mt7915_twt_flow *flow;
 	int flowid, table_id;
 	u8 exp;
+	int ret = -EINVAL;
 
 	if (mt7915_mac_check_twt_req(twt))
 		goto out;
@@ -2297,9 +2298,9 @@ void mt7915_mac_add_twt_setup(struct ieee80211_hw *hw,
 	if (hweight8(msta->twt.flowid_mask) == ARRAY_SIZE(msta->twt.flow))
 		goto unlock;
 
-	if (twt_agrt->min_twt_dur < MT7915_MIN_TWT_DUR) {
+	if (twt_agrt->indiv.min_twt_dur < MT7915_MIN_TWT_DUR) {
 		setup_cmd = TWT_SETUP_CMD_DICTATE;
-		twt_agrt->min_twt_dur = MT7915_MIN_TWT_DUR;
+		twt_agrt->indiv.min_twt_dur = MT7915_MIN_TWT_DUR;
 		goto unlock;
 	}
 
@@ -2321,8 +2322,8 @@ void mt7915_mac_add_twt_setup(struct ieee80211_hw *hw,
 	flow->wcid = msta->wcid.idx;
 	flow->table_id = table_id;
 	flow->id = flowid;
-	flow->duration = twt_agrt->min_twt_dur;
-	flow->mantissa = twt_agrt->mantissa;
+	flow->duration = twt_agrt->indiv.min_twt_dur;
+	flow->mantissa = twt_agrt->indiv.mantissa;
 	flow->exp = exp;
 	flow->protection = !!(req_type & IEEE80211_TWT_REQTYPE_PROTECTION);
 	flow->flowtype = !!(req_type & IEEE80211_TWT_REQTYPE_FLOWTYPE);
@@ -2330,7 +2331,7 @@ void mt7915_mac_add_twt_setup(struct ieee80211_hw *hw,
 
 	if (sta_setup_cmd == TWT_SETUP_CMD_REQUEST ||
 	    sta_setup_cmd == TWT_SETUP_CMD_SUGGEST) {
-		u64 interval = (u64)le16_to_cpu(twt_agrt->mantissa) << exp;
+		u64 interval = (u64)le16_to_cpu(twt_agrt->indiv.mantissa) << exp;
 		u64 flow_tsf, curr_tsf;
 		u32 rem;
 
@@ -2339,11 +2340,11 @@ void mt7915_mac_add_twt_setup(struct ieee80211_hw *hw,
 		curr_tsf = __mt7915_get_tsf(hw, msta->vif);
 		div_u64_rem(curr_tsf - flow->start_tsf, interval, &rem);
 		flow_tsf = curr_tsf + interval - rem;
-		twt_agrt->twt = cpu_to_le64(flow_tsf);
+		twt_agrt->indiv.twt = cpu_to_le64(flow_tsf);
 	} else {
 		list_add_tail(&flow->list, &dev->twt_list);
 	}
-	flow->tsf = le64_to_cpu(twt_agrt->twt);
+	flow->tsf = le64_to_cpu(twt_agrt->indiv.twt);
 
 	if (mt7915_mcu_twt_agrt_update(dev, msta->vif, flow, MCU_TWT_AGRT_ADD))
 		goto unlock;
@@ -2352,6 +2353,7 @@ void mt7915_mac_add_twt_setup(struct ieee80211_hw *hw,
 	dev->twt.table_mask |= BIT(table_id);
 	msta->twt.flowid_mask |= BIT(flowid);
 	dev->twt.n_agrt++;
+	ret = 0;
 
 unlock:
 	mutex_unlock(&dev->mt76.mutex);
@@ -2361,29 +2363,31 @@ out:
 		le16_encode_bits(setup_cmd, IEEE80211_TWT_REQTYPE_SETUP_CMD);
 	twt->control = (twt->control & IEEE80211_TWT_CONTROL_WAKE_DUR_UNIT) |
 		       (twt->control & IEEE80211_TWT_CONTROL_RX_DISABLED);
+	return ret;
 }
 
-void mt7915_mac_twt_teardown_flow(struct mt7915_dev *dev,
-				  struct mt7915_sta *msta,
-				  u8 flowid)
+int mt7915_mac_twt_teardown_flow(struct mt7915_dev *dev,
+				 struct mt7915_sta *msta,
+				 struct ieee80211_twt_teardown *td)
 {
 	struct mt7915_twt_flow *flow;
 
 	lockdep_assert_held(&dev->mt76.mutex);
 
-	if (flowid >= ARRAY_SIZE(msta->twt.flow))
-		return;
+	if (td->id >= ARRAY_SIZE(msta->twt.flow))
+		return -EINVAL;
 
-	if (!(msta->twt.flowid_mask & BIT(flowid)))
-		return;
+	if (!(msta->twt.flowid_mask & BIT(td->id)))
+		return -EINVAL;
 
-	flow = &msta->twt.flow[flowid];
+	flow = &msta->twt.flow[td->id];
 	if (mt7915_mcu_twt_agrt_update(dev, msta->vif, flow,
 				       MCU_TWT_AGRT_DELETE))
-		return;
+		return -EINVAL;
 
 	list_del_init(&flow->list);
-	msta->twt.flowid_mask &= ~BIT(flowid);
+	msta->twt.flowid_mask &= ~BIT(td->id);
 	dev->twt.table_mask &= ~BIT(flow->table_id);
 	dev->twt.n_agrt--;
+	return 0;
 }

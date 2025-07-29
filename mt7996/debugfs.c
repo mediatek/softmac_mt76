@@ -982,21 +982,33 @@ mt7996_twt_stats(struct seq_file *s, void *data)
 {
 	struct mt7996_dev *dev = dev_get_drvdata(s->private);
 	struct mt7996_twt_flow *iter;
+	u8 i;
 
 	rcu_read_lock();
 
-	seq_puts(s, "     wcid |       id |    flags |      exp | mantissa");
-	seq_puts(s, " | duration |            tsf |\n");
-	list_for_each_entry_rcu(iter, &dev->twt_list, list)
+	seq_puts(s, " peer_id_grp_id |  id | flags | exp | mantissa");
+	seq_puts(s, " | duration |            tsf");
+	seq_puts(s, " | persist | member_cnt | sta_list \n");
+	list_for_each_entry_rcu(iter, &dev->twt_list, list) {
 		seq_printf(s,
-			   "%9d | %8d | %5c%c%c%c | %8d | %8d | %8d | %14lld |\n",
-			   iter->wcid, iter->id,
+			   "%15x | %3d | %2c%c%c%c | %3d | %8d | %8d | %14lld",
+			   iter->peer_id_grp_id, iter->id,
 			   iter->sched ? 's' : 'u',
 			   iter->protection ? 'p' : '-',
 			   iter->trigger ? 't' : '-',
 			   iter->flowtype ? '-' : 'a',
 			   iter->exp, iter->mantissa,
 			   iter->duration, iter->tsf);
+		if ((iter->peer_id_grp_id & MCU_TWT_BTWT_ID_BIT) == 0)
+			seq_printf(s, " |         |            |\n");
+		else {
+			seq_printf(s, " | %7d | %10d | ",
+				   iter->persist, iter->member_cnt);
+			for (i = 0; i < iter->member_cnt; i++)
+				seq_printf(s, "%3d ", iter->sta_list[i]);
+			seq_printf(s, "\n");
+		}
+	}
 
 	rcu_read_unlock();
 

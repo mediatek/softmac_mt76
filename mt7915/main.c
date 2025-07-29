@@ -861,7 +861,8 @@ int mt7915_mac_sta_event(struct mt76_dev *mdev, struct ieee80211_vif *vif,
 	case MT76_STA_EVENT_DISASSOC:
 		mutex_lock(&dev->mt76.mutex);
 		for (i = 0; i < ARRAY_SIZE(msta->twt.flow); i++)
-			mt7915_mac_twt_teardown_flow(dev, msta, i);
+			mt7915_mac_twt_teardown_flow(dev, msta,
+						     (struct ieee80211_twt_teardown *) &i);
 		mutex_unlock(&dev->mt76.mutex);
 
 		mt7915_mcu_add_sta(dev, vif, sta, CONN_STATE_DISCONNECT, false);
@@ -1691,17 +1692,23 @@ void mt7915_get_et_stats(struct ieee80211_hw *hw,
 		dev_err(dev->mt76.dev, "ei: %d size: %d", ei, stats_size);
 }
 
-static void
+static int
 mt7915_twt_teardown_request(struct ieee80211_hw *hw,
 			    struct ieee80211_sta *sta,
-			    u8 flowid)
+			    struct ieee80211_twt_teardown *td)
 {
 	struct mt7915_sta *msta = (struct mt7915_sta *)sta->drv_priv;
 	struct mt7915_dev *dev = mt7915_hw_dev(hw);
+	int ret;
 
 	mutex_lock(&dev->mt76.mutex);
-	mt7915_mac_twt_teardown_flow(dev, msta, flowid);
+	ret = mt7915_mac_twt_teardown_flow(dev, msta, td);
 	mutex_unlock(&dev->mt76.mutex);
+
+	if (ret)
+		dev_err(dev->mt76.dev, "TWT teardown request failed ret=%d\n", ret);
+
+	return ret;
 }
 
 static int

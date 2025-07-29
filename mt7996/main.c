@@ -1579,8 +1579,8 @@ mt7996_mac_sta_event(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 			}
 
 			for (i = 0; i < ARRAY_SIZE(msta_link->twt.flow); i++)
-				mt7996_mac_twt_teardown_flow(dev, link,
-							     msta_link, i);
+				mt7996_mac_twt_teardown_flow(dev, link, msta_link,
+					     (struct ieee80211_twt_teardown *) &i);
 
 			if (!sta->mlo)
 				mt7996_mcu_add_sta(dev, link_conf, link_sta,
@@ -2587,24 +2587,30 @@ void mt7996_get_et_stats(struct ieee80211_hw *hw,
 			ei, (int)MT7996_SSTATS_LEN);
 }
 
-static void
+static int
 mt7996_twt_teardown_request(struct ieee80211_hw *hw,
 			    struct ieee80211_sta *sta,
-			    u8 flowid)
+			    struct ieee80211_twt_teardown *td)
 {
 	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
 	struct mt7996_sta_link *msta_link;
 	struct mt7996_vif_link *link;
 	struct ieee80211_vif *vif;
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
+	int ret = -EINVAL;
 
 	vif = container_of((void *)msta->vif, struct ieee80211_vif, drv_priv);
 
 	mutex_lock(&dev->mt76.mutex);
 	msta_link = mt76_dereference(msta->link[0], &dev->mt76);
 	link = mt7996_vif_link(dev, vif, 0);
-	mt7996_mac_twt_teardown_flow(dev, link, msta_link, flowid);
+	ret = mt7996_mac_twt_teardown_flow(dev, link, msta_link, td);
 	mutex_unlock(&dev->mt76.mutex);
+
+	if (ret)
+		dev_err(dev->mt76.dev, "TWT teardown request failed ret=%d\n", ret);
+
+	return ret;
 }
 
 static void
@@ -3031,6 +3037,8 @@ const struct ieee80211_ops mt7996_ops = {
 	.sta_set_decap_offload = mt7996_sta_set_decap_offload,
 	.add_twt_setup = mt7996_mac_add_twt_setup,
 	.twt_teardown_request = mt7996_twt_teardown_request,
+	.add_btwt = mt7996_mac_add_btwt,
+	.del_btwt = mt7996_mac_del_btwt,
 #ifdef CONFIG_MAC80211_DEBUGFS
 	.sta_add_debugfs = mt7996_sta_add_debugfs,
 	.link_sta_add_debugfs = mt7996_link_sta_add_debugfs,

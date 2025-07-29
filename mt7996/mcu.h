@@ -441,7 +441,15 @@ enum {
 	MCU_TWT_AGRT_DELETE,
 	MCU_TWT_AGRT_TEARDOWN,
 	MCU_TWT_AGRT_GET_TSF,
+	MCU_TWT_AGRT_SUSPEND,
+	MCU_TWT_AGRT_SUSPEND_RESUME,
+	MCU_TWT_AGRT_ALLOC,
+	MCU_TWT_AGRT_FREE,
 };
+
+#define MCU_TWT_RTWT_ID_BIT			BIT(13)
+#define MCU_TWT_BTWT_ID_BIT			BIT(14)
+#define MCU_TWT_GROUP_ID_BIT			BIT(15)
 
 enum {
 	MCU_WA_PARAM_CMD_QUERY,
@@ -602,6 +610,13 @@ struct bss_bcn_sta_prof_cntdwn_tlv {
 	__le16 sta_prof_csa_offs[__MT_MAX_BAND];
 	u8 cs_bss_idx[__MT_MAX_BAND];
 	u8 pkt_content[3];
+} __packed;
+
+struct bss_bcn_btwt_tlv {
+	__le16 tag;
+	__le16 len;
+	__le16 btwt_ie_pos;
+	u8 rsv[2];
 } __packed;
 
 struct bss_txcmd_tlv {
@@ -1086,7 +1101,8 @@ enum {
 					 sizeof(struct bss_bcn_cntdwn_tlv) +	\
 					 sizeof(struct bss_bcn_mbss_tlv) +	\
 					 sizeof(struct bss_bcn_crit_update_tlv) +	\
-					 sizeof(struct bss_bcn_sta_prof_cntdwn_tlv))
+					 sizeof(struct bss_bcn_sta_prof_cntdwn_tlv) +	\
+					 sizeof(struct bss_bcn_btwt_tlv))
 #define MT7996_MAX_BSS_OFFLOAD_SIZE	2048
 #define MT7996_MAX_BEACON_SIZE		(MT7996_MAX_BSS_OFFLOAD_SIZE - \
 					 MT7996_BEACON_UPDATE_SIZE)

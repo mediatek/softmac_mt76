@@ -4044,6 +4044,33 @@ mt7996_mcu_beacon_cont(struct mt7996_dev *dev,
 	mt7996_packet_log_to_host(dev, skb->data, skb->len, PKT_BIN_DEBUG_TX, 0);
 }
 
+static void
+mt7996_mcu_beacon_btwt(struct mt7996_dev *dev,
+		       struct sk_buff *rskb, struct sk_buff *skb,
+		       struct ieee80211_mutable_offsets *offs)
+{
+	u16 offset = 0, tail_offset = offs->tim_offset + offs->tim_length;
+	u8 *beacon_tail = skb->data + tail_offset;
+	const struct element *elem;
+	struct bss_bcn_btwt_tlv *btwt;
+	struct tlv *tlv;
+
+	if (dev->twt.n_agrt_bc == 0)
+		return;
+
+	for_each_element_id(elem, WLAN_EID_S1G_TWT, beacon_tail, skb->len - tail_offset) {
+		offset = (u16)((u8 *)elem - skb->data);
+		break;
+	}
+
+	if (offset == 0)
+		return;
+
+	tlv = mt7996_mcu_add_uni_tlv(rskb, UNI_BSS_INFO_BCN_BTWT, sizeof(*btwt));
+	btwt = (struct bss_bcn_btwt_tlv *) tlv;
+	btwt->btwt_ie_pos = cpu_to_le16(offset);
+}
+
 int mt7996_mcu_add_beacon(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 			  struct ieee80211_bss_conf *link_conf, bool enabled)
 {
@@ -4101,6 +4128,7 @@ int mt7996_mcu_add_beacon(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	mt7996_mcu_beacon_cntdwn(rskb, skb, &offs, link_conf->csa_active);
 	mt7996_mcu_beacon_sta_prof_csa(rskb, link_conf, &offs);
 	mt7996_mcu_beacon_crit_update(rskb, skb, link_conf, link, &offs);
+	mt7996_mcu_beacon_btwt(dev, rskb, skb, &offs);
 out:
 	dev_kfree_skb(skb);
 	return mt76_mcu_skb_send_msg(&dev->mt76, rskb,
@@ -6358,9 +6386,10 @@ int mt7996_mcu_twt_agrt_update(struct mt7996_dev *dev,
 		u8 cmd;
 		u8 own_mac_idx;
 		u8 flowid; /* 0xff for group id */
-		__le16 peer_id; /* specify the peer_id (msb=0)
-				 * or group_id (msb=1)
-				 */
+		__le16 peer_id_grp_id; /* BIT15=0/1, this will be peer_id/grp_id
+					* BIT14=1, this will be btwt_id
+					* BIT13=1, this will be rtwt_id
+					*/
 		u8 duration; /* 256 us */
 		u8 bss_idx;
 		__le64 start_tsf;
@@ -6368,7 +6397,13 @@ int mt7996_mcu_twt_agrt_update(struct mt7996_dev *dev,
 		u8 exponent;
 		u8 is_ap;
 		u8 agrt_params;
-		u8 __rsv2[23];
+		u8 persist;
+		__le16 num_reject;
+		u8 member_cnt;
+		u8 tbl_idx_h;
+		u8 tid_dl_bmp;
+		u8 tid_ul_bmp;
+		__le16 sta_list[MT7996_MAX_BTWT_MEMBER_CNT];
 	} __packed req = {
 		.tag = cpu_to_le16(UNI_CMD_TWT_ARGT_UPDATE),
 		.len = cpu_to_le16(sizeof(req) - 4),
@@ -6376,7 +6411,7 @@ int mt7996_mcu_twt_agrt_update(struct mt7996_dev *dev,
 		.cmd = cmd,
 		.own_mac_idx = link->mt76.omac_idx,
 		.flowid = flow->id,
-		.peer_id = cpu_to_le16(flow->wcid),
+		.peer_id_grp_id= cpu_to_le16(flow->peer_id_grp_id),
 		.duration = flow->duration,
 		.bss = link->mt76.idx,
 		.bss_idx = link->mt76.idx,
@@ -6384,6 +6419,12 @@ int mt7996_mcu_twt_agrt_update(struct mt7996_dev *dev,
 		.mantissa = flow->mantissa,
 		.exponent = flow->exp,
 		.is_ap = true,
+		.persist = flow->persist,
+		.num_reject = cpu_to_le16(MT7996_NTBBT_BEFORE_REJECT),
+		.member_cnt = flow->member_cnt,
+		.tbl_idx_h = 0,
+		.tid_dl_bmp = flow->tid_dl_bmp,
+		.tid_ul_bmp = flow->tid_ul_bmp,
 	};
 
 	if (flow->protection)
@@ -6392,6 +6433,12 @@ int mt7996_mcu_twt_agrt_update(struct mt7996_dev *dev,
 		req.agrt_params |= TWT_AGRT_ANNOUNCE;
 	if (flow->trigger)
 		req.agrt_params |= TWT_AGRT_TRIGGER;
+
+	if (req.member_cnt) {
+		u8 i;
+		for (i = 0; i < MT7996_MAX_BTWT_MEMBER_CNT; i++)
+			req.sta_list[i] = cpu_to_le16(flow->sta_list[i]);
+	}
 
 	return mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(TWT),
 				 &req, sizeof(req), true);

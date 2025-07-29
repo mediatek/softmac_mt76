@@ -600,12 +600,12 @@ void mt7915_mac_reset_work(struct work_struct *work);
 void mt7915_mac_dump_work(struct work_struct *work);
 void mt7915_mac_sta_rc_work(struct work_struct *work);
 void mt7915_mac_update_stats(struct mt7915_phy *phy);
-void mt7915_mac_twt_teardown_flow(struct mt7915_dev *dev,
-				  struct mt7915_sta *msta,
-				  u8 flowid);
-void mt7915_mac_add_twt_setup(struct ieee80211_hw *hw,
-			      struct ieee80211_sta *sta,
-			      struct ieee80211_twt_setup *twt);
+int mt7915_mac_twt_teardown_flow(struct mt7915_dev *dev,
+				 struct mt7915_sta *msta,
+				 struct ieee80211_twt_teardown *td);
+int mt7915_mac_add_twt_setup(struct ieee80211_hw *hw,
+			     struct ieee80211_sta *sta,
+			     struct ieee80211_twt_setup *twt);
 int mt7915_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
 			  enum mt76_txq_id qid, struct mt76_wcid *wcid,
 			  struct ieee80211_sta *sta,

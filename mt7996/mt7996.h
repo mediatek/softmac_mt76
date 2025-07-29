@@ -121,9 +121,13 @@
 #define MT7996_SKU_PATH_NUM		494
 
 #define MT7996_MAX_TWT_AGRT		16
+#define MT7996_MAX_BTWT_AGRT		4
 #define MT7996_MAX_STA_TWT_AGRT		8
+#define MT7996_MAX_BTWT_MEMBER_CNT	8
+#define MT7996_BTWT_AGRT_OFFSET		(MT7996_MAX_TWT_AGRT - MT7996_MAX_BTWT_AGRT)
 #define MT7996_MIN_TWT_DUR		64
 #define MT7996_MAX_QUEUE		(__MT_RXQ_MAX +	__MT_MCUQ_MAX + 3)
+#define MT7996_NTBBT_BEFORE_REJECT	100
 
 /* NOTE: used to map mt76_rates. idx may change if firmware expands table */
 #define MT7996_BASIC_RATES_TBL		31
@@ -302,11 +306,16 @@ struct mt7996_twt_flow {
 	u64 start_tsf;
 	u64 tsf;
 	u32 duration;
-	u16 wcid;
+	u16 peer_id_grp_id;
 	__le16 mantissa;
 	u8 exp;
 	u8 table_id;
 	u8 id;
+	u8 persist;
+	u8 tid_dl_bmp;
+	u8 tid_ul_bmp;
+	u8 member_cnt;
+	u16 sta_list[MT7996_MAX_BTWT_MEMBER_CNT];
 	u8 protection:1;
 	u8 flowtype:1;
 	u8 trigger:1;
@@ -903,6 +912,8 @@ struct mt7996_dev {
 	struct {
 		u16 table_mask;
 		u8 n_agrt;
+		u8 n_agrt_bc;
+		struct mt7996_twt_flow btwt_flow[MT7996_MAX_BTWT_AGRT];
 	} twt;
 
 	spinlock_t reg_lock;
@@ -1390,15 +1401,21 @@ void mt7996_mac_reset_work(struct work_struct *work);
 void mt7996_mac_dump_work(struct work_struct *work);
 void mt7996_mac_sta_rc_work(struct work_struct *work);
 void mt7996_mac_update_stats(struct mt7996_phy *phy);
-void mt7996_mac_twt_teardown_flow(struct mt7996_dev *dev,
-				  struct mt7996_vif_link *link,
-				  struct mt7996_sta_link *msta_link,
-				  u8 flowid);
+int mt7996_mac_twt_teardown_flow(struct mt7996_dev *dev,
+				 struct mt7996_vif_link *link,
+				 struct mt7996_sta_link *msta_link,
+				 struct ieee80211_twt_teardown *td);
 void mt7996_mac_sta_deinit_link(struct mt7996_dev *dev,
 				struct mt7996_sta_link *msta_link);
-void mt7996_mac_add_twt_setup(struct ieee80211_hw *hw,
-			      struct ieee80211_sta *sta,
-			      struct ieee80211_twt_setup *twt);
+int mt7996_mac_add_twt_setup(struct ieee80211_hw *hw,
+			     struct ieee80211_sta *sta,
+			     struct ieee80211_twt_setup *twt);
+int mt7996_mac_add_btwt(struct ieee80211_hw *hw,
+			struct ieee80211_vif *vif,
+			struct cfg80211_broadcast_twt_settings *btwt);
+int mt7996_mac_del_btwt(struct ieee80211_hw *hw,
+			struct ieee80211_vif *vif,
+			u8 id);
 int mt7996_mac_sta_poll(struct mt76_dev *dev);
 int mt7996_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
 			  enum mt76_txq_id qid, struct mt76_wcid *wcid,
