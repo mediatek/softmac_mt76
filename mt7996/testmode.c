@@ -469,9 +469,6 @@ mt7996_tm_set_rx_frames(struct mt7996_phy *phy, bool en)
 		return;
 	}
 
-	if (!td->bf_en)
-		mt7996_tm_update_channel(phy);
-
 	if (td->tx_rate_mode >= MT76_TM_TX_MODE_HE_MU) {
 		if (td->aid)
 			mt7996_tm_set(dev, SET_ID(RX_MU_AID), td->aid);
@@ -501,7 +498,7 @@ mt7996_tm_set_tx_cont(struct mt7996_phy *phy, bool en)
 	struct mt7996_dev *dev = phy->dev;
 
 	if (!en) {
-		/* trigger firmware to stop CONT TX  */
+		/* trigger firmware to stop CONT TX */
 		mt7996_tm_set(dev, SET_ID(COMMAND), RF_CMD(STOP_TEST));
 		return;
 	}
