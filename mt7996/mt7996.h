@@ -459,6 +459,7 @@ struct mt7996_sta {
 	struct mt7996_vif *vif;
 	u8 sec_link;
 	u16 valid_links;
+	bool stop_rx_ba_in_progress;
 
 	unsigned long last_addba_req_time[IEEE80211_NUM_TIDS];
 };
@@ -578,6 +579,7 @@ struct mt7996_wed_rro_addr {
 struct mt7996_wed_rro_session_id {
 	struct list_head list;
 	u16 id;
+	u16 wcid;
 };
 
 struct mt7996_sta_rc_work_data {
