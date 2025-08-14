@@ -3775,7 +3775,8 @@ void mt7996_beacon_mon_work(struct work_struct *work)
 			loss_duration = msecs_to_jiffies(MT7996_MAX_PROBE_TIMEOUT);
 			timeout = mvif->probe_send_time[band_idx] + loss_duration;
 			if (time_after_eq(jiffies, timeout)) {
-				if (mvif->probe_send_count[band_idx] == MT7996_MAX_PROBE_TRIES)
+				if (mvif->probe_send_count[band_idx] == MT7996_MAX_PROBE_TRIES &&
+				    !dev->dbg.beacon_loss_keep_conn)
 					state = MON_STATE_LINK_LOST;
 				else
 					state = MON_STATE_SEND_PROBE;

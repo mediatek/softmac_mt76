@@ -982,6 +982,8 @@ struct mt7996_dev {
 			u8 min_tx_tpo;
 			u8 pst;
 		} lp;
+
+		bool beacon_loss_keep_conn;
 	} dbg;
 	const struct mt7996_dbg_reg_desc *dbg_reg;
 	bool sr_pp_enable:1;
