@@ -1419,16 +1419,13 @@ bool mt7996_debugfs_rx_log(struct mt7996_dev *dev, const void *data, int len)
 #ifdef CONFIG_MAC80211_DEBUGFS
 /** per-station debugfs **/
 
-static ssize_t mt7996_sta_fixed_rate_set(struct file *file,
-					 const char __user *user_buf,
-					 size_t count, loff_t *ppos)
+static ssize_t __mt7996_sta_fixed_rate_set(struct mt7996_dev *dev,
+					   struct mt7996_sta_link *msta_link,
+					   const char __user *user_buf,
+					   size_t count, loff_t *ppos)
 {
 #define SHORT_PREAMBLE 0
 #define LONG_PREAMBLE 1
-	struct ieee80211_sta *sta = file->private_data;
-	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
-	struct mt7996_dev *dev = msta->vif->deflink.phy->dev;
-	struct mt7996_sta_link *msta_link = &msta->deflink;
 	struct ra_rate phy = {};
 	char buf[100];
 	int ret;
@@ -1475,6 +1472,22 @@ static ssize_t mt7996_sta_fixed_rate_set(struct file *file,
 
 out:
 	return count;
+}
+
+static ssize_t mt7996_sta_fixed_rate_set(struct file *file,
+					 const char __user *user_buf,
+					 size_t count, loff_t *ppos)
+{
+	struct ieee80211_sta *sta = file->private_data;
+	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
+	struct mt7996_dev *dev = msta->vif->dev;
+
+	if (sta->mlo) {
+		dev_err(dev->mt76.dev, "Do not support for MLD station\n");
+		return -EFAULT;
+	}
+
+	return __mt7996_sta_fixed_rate_set(dev, &msta->deflink, user_buf, count, ppos);
 }
 
 static const struct file_operations fops_fixed_rate = {
@@ -1828,12 +1841,45 @@ mt7996_link_sta_info_show(struct seq_file *file, void *data)
 }
 DEFINE_SHOW_ATTRIBUTE(mt7996_link_sta_info);
 
+static ssize_t mt7996_link_sta_fixed_rate_set(struct file *file,
+					      const char __user *user_buf,
+					      size_t count, loff_t *ppos)
+{
+	struct ieee80211_link_sta *link_sta = file->private_data;
+	struct mt7996_sta *msta = (struct mt7996_sta *)link_sta->sta->drv_priv;
+	struct mt7996_dev *dev = msta->vif->dev;
+	struct mt7996_sta_link *msta_link;
+	ssize_t ret;
+
+	mutex_lock(&dev->mt76.mutex);
+	msta_link = mt76_dereference(msta->link[link_sta->link_id], &dev->mt76);
+	if (!msta_link) {
+		mutex_unlock(&dev->mt76.mutex);
+		return -EINVAL;
+	}
+
+	ret = __mt7996_sta_fixed_rate_set(dev, msta_link, user_buf, count, ppos);
+	mutex_unlock(&dev->mt76.mutex);
+
+	return ret;
+}
+
+static const struct file_operations fops_link_fixed_rate = {
+	.write = mt7996_link_sta_fixed_rate_set,
+	.open = simple_open,
+	.owner = THIS_MODULE,
+	.llseek = default_llseek,
+};
+
+
 void mt7996_link_sta_add_debugfs(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 				 struct ieee80211_link_sta *link_sta,
 				 struct dentry *dir)
 {
 	debugfs_create_file("link_sta_info", 0400, dir, link_sta,
 			    &mt7996_link_sta_info_fops);
+	debugfs_create_file("link_fixed_rate", 0600, dir, link_sta,
+			    &fops_link_fixed_rate);
 }
 
 static int
