@@ -2223,6 +2223,8 @@ mt7996_net_fill_forward_path(struct ieee80211_hw *hw,
 			     struct net_device_path_ctx *ctx,
 			     struct net_device_path *path)
 {
+#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
 	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
 	struct mtk_wed_device *wed = &dev->mt76.mmio.wed;
@@ -2247,10 +2249,8 @@ mt7996_net_fill_forward_path(struct ieee80211_hw *hw,
 
 	if (!mtk_wed_device_active(wed) &&
 	    !mt76_npu_device_active(&dev->mt76))
-		return -ENODEV;
+		goto out;
 
-	path->type = DEV_PATH_MTK_WDMA;
-	path->dev = ctx->dev;
 #ifdef CONFIG_NET_MEDIATEK_SOC_WED
 	if (mtk_wed_device_active(wed))
 		path->mtk_wdma.wdma_idx = wed->wdma_idx;
@@ -2270,6 +2270,11 @@ mt7996_net_fill_forward_path(struct ieee80211_hw *hw,
 		path->mtk_wdma.amsdu = msta_link->wcid.amsdu;
 	else
 		path->mtk_wdma.amsdu = 0;
+
+out:
+#endif
+	path->type = DEV_PATH_MTK_WDMA;
+	path->dev = ctx->dev;
 	ctx->dev = NULL;
 
 	return 0;
