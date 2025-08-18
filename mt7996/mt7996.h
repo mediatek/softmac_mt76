@@ -986,6 +986,7 @@ struct mt7996_dev {
 		} lp;
 
 		bool beacon_loss_keep_conn;
+		bool ignore_radar_event;
 	} dbg;
 	const struct mt7996_dbg_reg_desc *dbg_reg;
 	bool sr_pp_enable:1;

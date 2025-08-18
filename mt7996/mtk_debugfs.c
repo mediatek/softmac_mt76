@@ -4763,6 +4763,8 @@ void mt7996_mtk_init_dev_debugfs(struct mt7996_dev *dev, struct dentry *dir)
 	debugfs_create_u8("sku_disable", 0600, dir, &dev->dbg.sku_disable);
 	debugfs_create_bool("beacon_loss_keep_conn", 0600, dir,
 			    &dev->dbg.beacon_loss_keep_conn);
+	debugfs_create_bool("ignore_radar_event", 0600, dir,
+			    &dev->dbg.ignore_radar_event);
 #endif
 
 	debugfs_create_file("muru_prot_thr", 0200, dir, dev, &fops_muru_prot_thr);

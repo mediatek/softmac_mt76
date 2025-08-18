@@ -1648,6 +1648,8 @@ mt7996_mcu_uni_rx_unsolicited_event(struct mt7996_dev *dev, struct sk_buff *skb)
 		mt7996_mcu_ie_countdown(dev, skb);
 		break;
 	case MCU_UNI_EVENT_RDD_REPORT:
+		if (dev->dbg.ignore_radar_event)
+			break;
 		mt7996_mcu_rx_radar_detected(dev, skb);
 		break;
 	case MCU_UNI_EVENT_ALL_STA_INFO:
