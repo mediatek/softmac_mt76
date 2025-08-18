@@ -1137,6 +1137,7 @@ struct mt76_phy {
 	int tokens;
 
 	bool rdd_txq_paused;
+	bool radar_bypass_cal;
 };
 
 struct mt76_dev {

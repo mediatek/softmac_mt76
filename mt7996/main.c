@@ -1169,14 +1169,13 @@ mt7996_post_channel_switch(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	struct cfg80211_chan_def *chandef = &link_conf->chanreq.oper;
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
 	struct mt7996_phy *phy = mt7996_band_phy(dev, chandef->chan->band);
-	int ret;
 
 	mt7996_mcu_rdd_resume_tx(phy);
 
-	ret = cfg80211_chandef_dfs_required(hw->wiphy, chandef, NL80211_IFTYPE_AP);
-	if (ret <= 0)
-		return ret;
+	if (!phy->mt76->radar_bypass_cal)
+		return 0;
 
+	phy->mt76->radar_bypass_cal = false;
 	return mt76_set_channel(phy->mt76, chandef, false);
 }
 

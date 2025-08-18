@@ -5737,6 +5737,8 @@ int mt7996_mcu_set_chan_info(struct mt7996_phy *phy, u16 tag, bool sta)
 		req.center_ch2 = ieee80211_frequency_to_channel(freq2);
 	}
 
+	phy->mt76->radar_bypass_cal = req.switch_reason == CH_SWITCH_DFS;
+
 	return mt76_mcu_send_msg(&dev->mt76, MCU_WMWA_UNI_CMD(CHANNEL_SWITCH),
 				 &req, sizeof(req), true);
 }
