@@ -576,6 +576,7 @@ static int mt7996_eeprom_load_precal(struct mt7996_dev *dev)
 		ret = mt7996_eeprom_load_precal_binfile(dev, offs, size);
 		if (ret)
 			goto fail;
+		return 0;
 	}
 
 	ret = mt76_get_of_data_from_mtd(mdev, dev->cal, offs, size);
