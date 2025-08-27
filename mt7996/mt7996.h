@@ -950,6 +950,7 @@ struct mt7996_dev {
 
 	bool wmm_pbc_enable;
 	struct work_struct wmm_pbc_work;
+	u16 pbc_bound[5];
 #ifdef CONFIG_MTK_DEBUG
 	u16 wlan_idx;
 	struct {

@@ -1361,9 +1361,6 @@ int mt7996_mcu_set_vow_drr_dbg(struct mt7996_dev *dev, u32 val)
 		.val = cpu_to_le32(val),
 	};
 
-	if (val & ~VOW_DRR_DBG_FLAGS)
-		return -EINVAL;
-
 	return mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(VOW), &req,
 				 sizeof(req), true);
 }

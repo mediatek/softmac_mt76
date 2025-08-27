@@ -1214,11 +1214,6 @@ void mt7996_mcu_wmm_pbc_work(struct work_struct *work)
 #define WMM_PBC_BSS_ALL		0xff
 #define WMM_PBC_WLAN_IDX_ALL	0xffff
 #define WMM_PBC_BOUND_DEFAULT	0xffff
-#define WMM_PBC_LOW_BOUND_VO	1900
-#define WMM_PBC_LOW_BOUND_VI	1900
-#define WMM_PBC_LOW_BOUND_BE	1500
-#define WMM_PBC_LOW_BOUND_BK	900
-#define WMM_PBC_LOW_BOUND_MGMT	32
 	struct mt7996_dev *dev = container_of(work, struct mt7996_dev, wmm_pbc_work);
 
 	struct {
@@ -1248,18 +1243,11 @@ void mt7996_mcu_wmm_pbc_work(struct work_struct *work)
 	};
 	int i, ret;
 
-#define pbc_acq_low_bound_config(_ac, _bound)						\
-	req.data.bound[mt76_connac_lmac_mapping(_ac)].low = dev->wmm_pbc_enable ?	\
-							    cpu_to_le16(_bound) : 0
-	pbc_acq_low_bound_config(IEEE80211_AC_VO, WMM_PBC_LOW_BOUND_VO);
-	pbc_acq_low_bound_config(IEEE80211_AC_VI, WMM_PBC_LOW_BOUND_VI);
-	pbc_acq_low_bound_config(IEEE80211_AC_BE, WMM_PBC_LOW_BOUND_BE);
-	pbc_acq_low_bound_config(IEEE80211_AC_BK, WMM_PBC_LOW_BOUND_BK);
-	req.data.bound[4].low = dev->wmm_pbc_enable ?
-				cpu_to_le16(WMM_PBC_LOW_BOUND_MGMT) : 0;
-
-	for (i = 0; i < WMM_PBC_QUEUE_NUM; ++i)
+	for (i = 0; i < WMM_PBC_QUEUE_NUM; ++i) {
+		req.data.bound[i].low = dev->wmm_pbc_enable ?
+					cpu_to_le16(dev->pbc_bound[i]) : 0;
 		req.data.bound[i].up = cpu_to_le16(WMM_PBC_BOUND_DEFAULT);
+	}
 
 	if (is_mt7990(&dev->mt76))
 		ret = mt76_mcu_send_msg(&dev->mt76, MCU_WA_UNI_CMD(SDO),
