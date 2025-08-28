@@ -3211,7 +3211,7 @@ void mt7996_mac_work(struct work_struct *work)
 	mutex_lock(&mdev->mutex);
 
 	mt76_update_survey(mphy);
-	if (++mphy->mac_work_count % 5 == 0) {
+	if (++mphy->mac_work_count % 5 == 0 && !phy->dev->testmode_enable) {
 		int i;
 
 		mt7996_mac_update_stats(phy);
