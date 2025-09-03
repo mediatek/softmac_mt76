@@ -1348,6 +1348,19 @@ out:
 	mt76_put_txwi(mdev, t);
 }
 
+static void mt7996_refresh_tx_agg_session_timer(struct ieee80211_sta *sta)
+{
+	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
+	u8 tid;
+
+	rcu_read_lock();
+	for (tid = 0; tid < IEEE80211_NUM_TIDS; tid++) {
+		if (test_bit(tid, &msta->deflink.wcid.ampdu_state))
+			ieee80211_refresh_tx_agg_session_timer(sta, tid);
+	}
+	rcu_read_unlock();
+}
+
 static void
 mt7996_mac_tx_free(struct mt7996_dev *dev, void *data, int len)
 {
@@ -3168,6 +3181,7 @@ static int mt7996_mac_sta_poll(struct mt76_dev *dev)
 {
 	u16 sta_list[PER_STA_INFO_MAX_NUM];
 	struct mt7996_sta_link *msta_link;
+	struct ieee80211_sta *sta;
 	int i, ret;
 
 	spin_lock_bh(&dev->sta_poll_lock);
@@ -3180,6 +3194,9 @@ static int mt7996_mac_sta_poll(struct mt76_dev *dev)
 					 wcid.poll_list);
 		list_del_init(&msta_link->wcid.poll_list);
 		sta_list[i] = msta_link->wcid.idx;
+		sta = container_of((void *)msta_link->sta,
+				   struct ieee80211_sta, drv_priv);
+		mt7996_refresh_tx_agg_session_timer(sta);
 	}
 	spin_unlock_bh(&dev->sta_poll_lock);
 
