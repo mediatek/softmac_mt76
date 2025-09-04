@@ -1668,6 +1668,73 @@ out:
 	rcu_read_unlock();
 }
 
+void mt7996_mac_ba_trigger(struct mt7996_dev *dev, u16 wlan_idx, u8 tid)
+{
+	struct ieee80211_link_sta *link_sta;
+	struct ieee80211_sta *sta;
+	struct mt7996_sta *msta;
+	struct mt76_wcid *wcid;
+
+	if (wlan_idx >= mt7996_wtbl_size(dev) || tid >= IEEE80211_NUM_TIDS) {
+		dev_err(dev->mt76.dev,
+			"Invalid ba parameters wlan_idx = %d, tid = %d\n",
+			wlan_idx, tid);
+		return;
+	}
+
+	rcu_read_lock();
+	wcid = rcu_dereference(dev->mt76.wcid[wlan_idx]);
+	sta = wcid_to_sta(wcid);
+	if (!sta)
+		goto out;
+
+	msta = (struct mt7996_sta *)sta->drv_priv;
+	link_sta = rcu_dereference(sta->link[wcid->link_id]);
+	if (!link_sta)
+		goto out;
+
+	mt7996_check_tx_ba_status(link_sta, &msta->deflink.wcid, tid);
+out:
+	rcu_read_unlock();
+}
+
+static void
+mt7996_mac_rx_sdo_event(struct mt7996_dev *dev, void *data, int len)
+{
+	void *end = data + len;
+	__le32 *event = (__le32 *)data, *cur_info;
+	u16 total, count = 0;
+
+	total = le32_get_bits(event[0], MT7996_SDO_EVENT_COUNT);
+	for (cur_info = &event[2]; count < total;) {
+		u32 info;
+		u16 wlan_idx;
+		u8 tid;
+
+		if ((void *)cur_info >= end) {
+		        dev_info(dev->mt76.dev,
+				 "sdo event: count=%u total=%u\n", count, total);
+			return;
+		}
+		info = le32_to_cpu(*cur_info);
+
+		switch(u32_get_bits(info, MT7996_SDO_EVENT_ID)) {
+		case MT7996_SDO_EVENT_BA_TRIGGER:
+			tid = u32_get_bits(info, MT7996_SDO_EVENT_BA_TRIG_TID);
+			wlan_idx = u32_get_bits(info,
+					MT7996_SDO_EVENT_BA_TRIG_WLAN_IDX);
+
+			mt7996_mac_ba_trigger(dev, wlan_idx, tid);
+			break;
+		default:
+			break;
+		}
+		/* Each event length is 1 plus MT_SDO_EVENT_DW_LEN */
+		cur_info += 1 + u32_get_bits(info, MT7996_SDO_EVENT_DW_LEN);
+		count++;
+	}
+}
+
 bool mt7996_rx_check(struct mt76_dev *mdev, void *data, int len)
 {
 	struct mt7996_dev *dev = container_of(mdev, struct mt7996_dev, mt76);
@@ -1687,6 +1754,9 @@ bool mt7996_rx_check(struct mt76_dev *mdev, void *data, int len)
 	switch (type) {
 	case PKT_TYPE_TXRX_NOTIFY:
 		mt7996_mac_tx_free(dev, data, len);
+		return false;
+	case PKT_TYPE_SDO_EVENT:
+		mt7996_mac_rx_sdo_event(dev, data, len);
 		return false;
 	case PKT_TYPE_TXS:
 		for (rxd += MT_TXS_HDR_SIZE; rxd + MT_TXS_SIZE <= end; rxd += MT_TXS_SIZE)
@@ -1738,6 +1808,9 @@ void mt7996_queue_rx_skb(struct mt76_dev *mdev, enum mt76_rxq_id q,
 		break;
 	case PKT_TYPE_RX_EVENT:
 		mt7996_mcu_rx_event(dev, skb);
+		break;
+	case PKT_TYPE_SDO_EVENT:
+		mt7996_mac_rx_sdo_event(dev, skb->data, skb->len);
 		break;
 	case PKT_TYPE_TXS:
 		for (rxd += MT_TXS_HDR_SIZE; rxd + MT_TXS_SIZE <= end; rxd += MT_TXS_SIZE)

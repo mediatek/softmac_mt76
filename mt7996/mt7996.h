@@ -1342,6 +1342,7 @@ int mt7996_mcu_set_vow_drr_ctrl(struct mt7996_phy *phy,
 				enum vow_drr_ctrl_id id);
 int mt7996_mcu_set_vow_feature_ctrl(struct mt7996_phy *phy);
 void mt7996_mcu_wmm_pbc_work(struct work_struct *work);
+int mt7996_mcu_ba_trigger_enable(struct mt7996_dev *dev, u8 enable);
 int mt7996_mcu_mld_reconf_stop_link(struct mt7996_dev *dev,
 				    struct ieee80211_vif *vif, u16 removed_links);
 int mt7996_mcu_mld_link_oper(struct mt7996_phy *phy,
@@ -1507,6 +1508,7 @@ void mt7996_link_add_debugfs(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 int mt7996_mmio_wed_init(struct mt7996_dev *dev, void *pdev_ptr,
 			 bool hif2, int *irq);
 u32 mt7996_wed_init_buf(void *ptr, dma_addr_t phys, int token_id);
+void mt7996_mac_ba_trigger(struct mt7996_dev *dev, u16 wlan_idx, u8 tid);
 
 #ifdef CONFIG_MTK_VENDOR
 void mt7996_set_wireless_vif(void *data, u8 *mac, struct ieee80211_vif *vif);

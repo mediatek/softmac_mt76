@@ -1287,6 +1287,48 @@ mt7996_mcu_rx_bss_acq_pkt_cnt(struct mt7996_dev *dev, struct sk_buff *skb)
 	}
 }
 
+int mt7996_mcu_ba_trigger_enable(struct mt7996_dev *dev, u8 enable)
+{
+#define MT7996_BA_TIMEOUT 1000
+	struct {
+		u8 rsv[4];
+		__le16 tag;
+		__le16 len;
+		struct {
+			u8 enable;
+			u8 target;
+			u8 rsv[2];
+			__le32 timeout;
+		} __packed data;
+	} __packed req = {
+		.tag = cpu_to_le16(UNI_CMD_SDO_AUTO_BA),
+		.len = cpu_to_le16(sizeof(req) - 4),
+		.data.enable = enable,
+		.data.target = 0,
+		.data.timeout = cpu_to_le32(MT7996_BA_TIMEOUT),
+	};
+	int ret;
+
+	if (is_mt7990(&dev->mt76))
+		ret = mt76_mcu_send_msg(&dev->mt76, MCU_WA_UNI_CMD(SDO),
+					&req, sizeof(req), false);
+	else
+		ret = mt76_mcu_send_msg(&dev->mt76, MCU_WA_EXT_CMD(AUTO_BA),
+					&req.data, sizeof(req.data), true);
+
+	return ret;
+}
+
+static void mt7996_mcu_rx_ba_trigger(struct mt7996_dev *dev, struct sk_buff *skb)
+{
+	struct mt7996_mcu_ba_trigger *event = (struct mt7996_mcu_ba_trigger *)skb->data;
+	u16 wlan_idx = u16_encode_bits(event->wlan_idx_hi, GENMASK(15, 8)) |
+		       u16_encode_bits(event->wlan_idx_lo, GENMASK(7, 0));
+	u8 tid = event->tid;
+
+	mt7996_mac_ba_trigger(dev, wlan_idx, tid);
+}
+
 static void
 mt7996_mcu_rx_ext_event(struct mt7996_dev *dev, struct sk_buff *skb)
 {
@@ -1298,6 +1340,10 @@ mt7996_mcu_rx_ext_event(struct mt7996_dev *dev, struct sk_buff *skb)
 		break;
 	case MCU_EXT_EVENT_BSS_ACQ_PKT_CNT:
 		mt7996_mcu_rx_bss_acq_pkt_cnt(dev, skb);
+		break;
+	case MCU_EXT_EVENT_BA_TRIGGER:
+		mt7996_mcu_rx_ba_trigger(dev, skb);
+		break;
 	default:
 		break;
 	}
