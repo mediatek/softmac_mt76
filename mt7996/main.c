@@ -1816,7 +1816,8 @@ static void mt7996_sta_rate_ctrl_update(void *data, struct ieee80211_sta *sta)
 
 static int
 mt7996_set_bitrate_mask(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
-			const struct cfg80211_bitrate_mask *mask)
+			const struct cfg80211_bitrate_mask *mask,
+			unsigned int link_id)
 {
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
 	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
@@ -2355,6 +2356,13 @@ mt7996_set_eml_op_mode(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	return ret;
 }
 
+static int
+mt7996_set_qos_map(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+		   struct cfg80211_qos_map *qos_map)
+{
+	return 0;
+}
+
 const struct ieee80211_ops mt7996_ops = {
 	.add_chanctx = mt76_add_chanctx,
 	.remove_chanctx = mt76_remove_chanctx,
@@ -2419,4 +2427,5 @@ const struct ieee80211_ops mt7996_ops = {
 	.change_sta_links = mt7996_mac_sta_change_links,
 	.reconfig_complete = mt7996_reconfig_complete,
 	.set_eml_op_mode = mt7996_set_eml_op_mode,
+	.set_qos_map = mt7996_set_qos_map,
 };

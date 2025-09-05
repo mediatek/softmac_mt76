@@ -738,25 +738,19 @@ struct mt76_mmio {
 	int npu_type;
 };
 
+/* at most 48 bytes to fit in skb->cb */
 struct mt76_rx_status {
 	union {
 		struct mt76_wcid *wcid;
 		u16 wcid_idx;
 	};
-
 	u32 reorder_time;
-
 	u32 ampdu_ref;
 	u32 timestamp;
-
 	u8 iv[6];
-
-	u8 phy_idx:2;
-	u8 aggr:1;
+	u16 freq:13, phy_idx:2, aggr:1;
 	u8 qos_ctl;
 	u16 seqno;
-
-	u16 freq;
 	u32 flag;
 	u8 enc_flags;
 	u8 encoding:3, bw:4;
@@ -771,14 +765,13 @@ struct mt76_rx_status {
 			u8 gi:2;
 		} eht;
 	};
-
-	u8 amsdu:1, first_amsdu:1, last_amsdu:1;
-	u8 rate_idx;
-	u8 nss:5, band:3;
+	u16 amsdu:1, first_amsdu:1, last_amsdu:1;
+	u16 nss:3, band:3;
+	u16 rate_idx:7;
 	s8 signal;
 	u8 chains;
 	s8 chain_signal[IEEE80211_MAX_CHAINS];
-};
+} __packed;
 
 struct mt76_freq_range_power {
 	const struct cfg80211_sar_freq_ranges *range;

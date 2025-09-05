@@ -490,7 +490,7 @@ int mt7996_mmio_wed_init(struct mt7996_dev *dev, void *pdev_ptr,
 				      MT_INT_PCIE1_SOURCE_CSR_EXT;
 		wed->wlan.wpdma_mask = wed->wlan.phy_base +
 				       MT_INT_PCIE1_MASK_CSR;
-		wed->wlan.wpdma_tx = wed->wlan.phy_base + hif1_ofs +
+		wed->wlan.wpdma_tx[0] = wed->wlan.phy_base + hif1_ofs +
 					     MT_TXQ_RING_BASE(0) +
 					     MT7996_TXQ_BAND2 * MT_RING_SIZE;
 		if (mt7996_has_hwrro(dev)) {
@@ -523,7 +523,7 @@ int mt7996_mmio_wed_init(struct mt7996_dev *dev, void *pdev_ptr,
 		wed->wlan.hw_rro = mt7996_has_hwrro(dev);
 		wed->wlan.wpdma_int = wed->wlan.phy_base + MT_INT_SOURCE_CSR;
 		wed->wlan.wpdma_mask = wed->wlan.phy_base + MT_INT_MASK_CSR;
-		wed->wlan.wpdma_tx = wed->wlan.phy_base + MT_TXQ_RING_BASE(0) +
+		wed->wlan.wpdma_tx[0] = wed->wlan.phy_base + MT_TXQ_RING_BASE(0) +
 				     MT7996_TXQ_BAND0 * MT_RING_SIZE;
 
 		wed->wlan.wpdma_rx_glo = wed->wlan.phy_base + MT_WFDMA0_GLO_CFG;
