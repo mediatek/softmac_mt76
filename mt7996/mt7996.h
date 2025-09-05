@@ -330,6 +330,11 @@ struct mt7996_twt_flow {
 	u8 trigger:1;
 	u8 sched:1;
 };
+struct mt7996_twt_event {
+	struct list_head list;
+	u8 btwt_id;
+	u16 wcid_idx;
+};
 
 DECLARE_EWMA(avg_signal, 10, 8)
 
@@ -938,6 +943,9 @@ struct mt7996_dev {
 		u8 n_agrt;
 		u8 n_agrt_bc;
 		struct mt7996_twt_flow btwt_flow[MT7996_MAX_BTWT_AGRT];
+		struct work_struct event_work;
+		struct list_head event_list;
+		spinlock_t event_lock;
 	} twt;
 
 	spinlock_t reg_lock;
@@ -1470,11 +1478,10 @@ int mt7996_mac_add_twt_setup(struct ieee80211_hw *hw,
 			     struct ieee80211_sta *sta,
 			     struct ieee80211_twt_setup *twt);
 int mt7996_mac_add_btwt(struct ieee80211_hw *hw,
-			struct ieee80211_vif *vif,
+			struct ieee80211_vif *vif, u8 link_id,
 			struct cfg80211_broadcast_twt_settings *btwt);
 int mt7996_mac_del_btwt(struct ieee80211_hw *hw,
-			struct ieee80211_vif *vif,
-			u8 id);
+			struct ieee80211_vif *vif, u8 link_id, u8 id);
 int mt7996_mac_sta_poll(struct mt76_dev *dev);
 void mt7996_sta_chsw_state_reset(struct mt7996_vif_link *mconf);
 int mt7996_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
@@ -1492,6 +1499,8 @@ bool mt7996_rx_check(struct mt76_dev *mdev, void *data, int len);
 void mt7996_stats_work(struct work_struct *work);
 void mt7996_beacon_mon_work(struct work_struct *work);
 void mt7996_sta_chsw_work(struct work_struct *work);
+void mt7996_twt_event_work(struct work_struct *work);
+void mt7996_twt_event_list_free(struct mt7996_dev *dev);
 int mt76_dfs_start_rdd(struct mt7996_dev *dev, bool force);
 int mt7996_dfs_init_radar_detector(struct mt7996_phy *phy);
 void mt7996_set_stream_he_eht_caps(struct mt7996_phy *phy);

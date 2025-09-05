@@ -1864,7 +1864,8 @@ mt7996_init_eht_caps(struct mt7996_phy *phy, enum nl80211_band band,
 	if (iftype == NL80211_IFTYPE_AP)
 		eht_cap_elem->mac_cap_info[0] |=
 			IEEE80211_EHT_MAC_CAP0_SCS_TRAFFIC_DESC |
-			IEEE80211_EHT_MAC_CAP0_EPCS_PRIO_ACCESS;
+			IEEE80211_EHT_MAC_CAP0_EPCS_PRIO_ACCESS |
+			IEEE80211_EHT_MAC_CAP0_RESTRICTED_TWT;
 
 	eht_cap_elem->mac_cap_info[1] |=
 		IEEE80211_EHT_MAC_CAP1_MAX_AMPDU_LEN_MASK;
@@ -2041,6 +2042,10 @@ int mt7996_register_device(struct mt7996_dev *dev)
 	INIT_LIST_HEAD(&dev->sta_rc_list);
 	INIT_LIST_HEAD(&dev->twt_list);
 
+	INIT_WORK(&dev->twt.event_work, mt7996_twt_event_work);
+	INIT_LIST_HEAD(&dev->twt.event_list);
+	spin_lock_init(&dev->twt.event_lock);
+
 	init_waitqueue_head(&dev->reset_wait);
 	INIT_WORK(&dev->reset_work, mt7996_mac_reset_work);
 	INIT_WORK(&dev->dump_work, mt7996_mac_dump_work);
@@ -2129,6 +2134,8 @@ void mt7996_unregister_device(struct mt7996_dev *dev)
 {
 	cancel_work_sync(&dev->dump_work);
 	cancel_work_sync(&dev->wed_rro.work);
+	cancel_work_sync(&dev->twt.event_work);
+	mt7996_twt_event_list_free(dev);
 	mt7996_unregister_phy(mt7996_phy3(dev));
 	mt7996_unregister_phy(mt7996_phy2(dev));
 	mt7996_unregister_thermal(&dev->phy);

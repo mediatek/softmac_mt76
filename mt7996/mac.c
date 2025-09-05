@@ -15,6 +15,8 @@
 #include "mt7996_trace.h"
 
 static void mt7996_rx_beacon_hint(struct mt7996_phy *phy, struct mt7996_vif *mvif);
+static int mt7996_mac_btwt_add_member(struct mt7996_twt_flow *flow, u16 idx);
+static int mt7996_mac_btwt_del_member(struct mt7996_twt_flow *flow, u16 idx);
 
 static struct mt76_wcid *mt7996_rx_get_wcid(struct mt7996_dev *dev,
 					    u16 idx, u8 band_idx)
@@ -1494,6 +1496,145 @@ next:
 	}
 }
 
+static void
+mt7996_twt_event_enqueue(struct mt7996_dev *dev, struct sk_buff *skb, u16 wcid_idx)
+{
+	struct ieee80211_mgmt *mgmt = (struct ieee80211_mgmt *)skb->data;
+	struct ieee80211_twt_setup *twt =
+		(struct ieee80211_twt_setup *)mgmt->u.action.u.s1g.variable;
+	struct ieee80211_twt_params *twt_agrt =
+		(struct ieee80211_twt_params *)twt->params;
+	struct mt7996_twt_event *ev;
+	u8 id;
+
+	if (!(twt->control & IEEE80211_TWT_CONTROL_NEG_TYPE_BROADCAST))
+		return;
+
+	id = le16_get_bits(twt_agrt->bcast.btwt_info, IEEE80211_BTWT_INFO_ID);
+
+	ev = kzalloc(sizeof(*ev), GFP_ATOMIC);
+	if (!ev)
+		return;
+
+	INIT_LIST_HEAD(&ev->list);
+	ev->btwt_id = id;
+	ev->wcid_idx = wcid_idx;
+
+	spin_lock_bh(&dev->twt.event_lock);
+	list_add_tail(&ev->list, &dev->twt.event_list);
+	spin_unlock_bh(&dev->twt.event_lock);
+
+	queue_work(dev->mt76.wq, &dev->twt.event_work);
+}
+
+static void
+mt7996_mac_txs_action_frame(struct mt7996_dev *dev, struct sk_buff *skb, u16 wcid_idx)
+{
+	struct ieee80211_mgmt *mgmt = (struct ieee80211_mgmt *)skb->data;
+
+	switch (mgmt->u.action.category) {
+	case WLAN_CATEGORY_S1G:
+		if (mgmt->u.action.u.s1g.action_code == WLAN_S1G_TWT_SETUP)
+			mt7996_twt_event_enqueue(dev, skb, wcid_idx);
+		break;
+	default:
+		break;
+	}
+}
+
+static struct mt7996_vif_link *
+mt7996_twt_wcid_link(struct mt7996_dev *dev, u16 wcid_idx)
+{
+	struct mt7996_sta_link *msta_link;
+	struct mt76_wcid *wcid;
+	struct mt7996_sta *msta;
+	struct ieee80211_vif *vif;
+	u8 link_id;
+
+	lockdep_assert_held(&dev->mt76.mutex);
+
+	rcu_read_lock();
+	wcid = mt76_wcid_ptr(dev, wcid_idx);
+	if (!wcid || !wcid->sta) {
+		rcu_read_unlock();
+		return NULL;
+	}
+	link_id = wcid->link_id;
+
+	msta_link = container_of(wcid, struct mt7996_sta_link, wcid);
+	msta = msta_link->sta;
+	if (!msta || !msta->vif) {
+		rcu_read_unlock();
+		return NULL;
+	}
+	vif = container_of((void *)msta->vif, struct ieee80211_vif, drv_priv);
+	rcu_read_unlock();
+
+	return mt7996_vif_link(dev, vif, link_id);
+}
+
+void mt7996_twt_event_work(struct work_struct *work)
+{
+	struct mt7996_dev *dev =
+		container_of(work, struct mt7996_dev, twt.event_work);
+
+	for (;;) {
+		struct mt7996_twt_flow *flow = NULL;
+		struct mt7996_twt_event *ev;
+		struct mt7996_vif_link *link;
+		u8 i;
+
+		spin_lock_bh(&dev->twt.event_lock);
+		if (list_empty(&dev->twt.event_list)) {
+			spin_unlock_bh(&dev->twt.event_lock);
+			break;
+		}
+		ev = list_first_entry(&dev->twt.event_list, struct mt7996_twt_event, list);
+		list_del(&ev->list);
+		spin_unlock_bh(&dev->twt.event_lock);
+
+		mutex_lock(&dev->mt76.mutex);
+
+		for (i = 0; i < MT7996_MAX_BTWT_AGRT; i++) {
+			if ((dev->twt.table_mask & BIT(i + MT7996_BTWT_AGRT_OFFSET)) &&
+			    (dev->twt.btwt_flow[i].peer_id_grp_id & 0xff) == ev->btwt_id) {
+				flow = &dev->twt.btwt_flow[i];
+				break;
+			}
+		}
+		if (!flow)
+			goto out_unlock;
+
+		link = mt7996_twt_wcid_link(dev, ev->wcid_idx);
+		if (!link)
+			goto out_unlock;
+
+		if (mt7996_mac_btwt_add_member(flow, ev->wcid_idx))
+			goto out_unlock;
+
+		if (mt7996_mcu_twt_agrt_update(dev, link, flow, MCU_TWT_AGRT_MODIFY))
+			mt7996_mac_btwt_del_member(flow, ev->wcid_idx);
+
+out_unlock:
+		mutex_unlock(&dev->mt76.mutex);
+		kfree(ev);
+	}
+}
+
+void mt7996_twt_event_list_free(struct mt7996_dev *dev)
+{
+	struct mt7996_twt_event *ev;
+
+	spin_lock_bh(&dev->twt.event_lock);
+	while (!list_empty(&dev->twt.event_list)) {
+		ev = list_first_entry(&dev->twt.event_list,
+				      struct mt7996_twt_event, list);
+		list_del(&ev->list);
+		kfree(ev);
+	}
+	spin_unlock_bh(&dev->twt.event_lock);
+}
+
 static bool
 mt7996_mac_add_txs_skb(struct mt7996_dev *dev, struct mt76_wcid *wcid,
 		       struct mt76_wcid *link_wcid, int pid, __le32 *txs_data)
@@ -1543,6 +1684,10 @@ mt7996_mac_add_txs_skb(struct mt7996_dev *dev, struct mt76_wcid *wcid,
 				mvif->beacon_received_time[wcid->phy_idx] = jiffies;
 				mvif->probe_send_count[wcid->phy_idx] = 0;
 			}
+
+			if (ieee80211_is_action(hdr->frame_control) &&
+			    info->flags & IEEE80211_TX_STAT_ACK)
+				mt7996_mac_txs_action_frame(dev, skb, wcid->idx);
 		}
 		break;
 	default:
@@ -2537,6 +2682,9 @@ mt7996_mac_full_reset(struct mt7996_dev *dev)
 
 	mt76_abort_scan(&dev->mt76);
 
+	cancel_work_sync(&dev->twt.event_work);
+	mt7996_twt_event_list_free(dev);
+
 	mutex_lock(&dev->mt76.mutex);
 	for (i = 0; i < 10; i++) {
 		if (!mt7996_mac_restart(dev))
@@ -3520,18 +3668,16 @@ static int mt7996_mac_btwt_setup(struct ieee80211_hw *hw,
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
 	struct mt7996_twt_flow *flow = NULL;
 	u8 i, id;
-	u64 curr_tsf, interval, future_twt;
-	u32 rem;
 	int ret = -EINVAL;
 
 	if (mt7996_mac_check_twt_req(twt))
 		goto out;
 
-	mutex_lock(&dev->mt76.mutex);
+	id = le16_get_bits(twt_agrt->bcast.btwt_info, IEEE80211_BTWT_INFO_ID);
 
+	mutex_lock(&dev->mt76.mutex);
 	msta_link = mt76_dereference(msta->link[0], &dev->mt76);
 	link = mt7996_vif_link(dev, vif, 0);
-	id = le16_get_bits(twt_agrt->bcast.btwt_info, IEEE80211_BTWT_INFO_ID);
 
 	if (id == 0) {
 		if (mt7996_mac_btwt_setup_id_0(dev, link, msta_link))
@@ -3550,23 +3696,21 @@ static int mt7996_mac_btwt_setup(struct ieee80211_hw *hw,
 	if (!flow)
 		goto unlock;
 
-	if (mt7996_mac_btwt_add_member(flow, msta_link->wcid.idx))
-		goto unlock;
+	if (le16_get_bits(twt_agrt->req_type, IEEE80211_TWT_REQTYPE_SETUP_CMD) ==
+			  TWT_SETUP_CMD_REQUEST) {
+		u64 curr_tsf, interval, future_twt;
+		u32 rem;
 
-	if (mt7996_mcu_twt_agrt_update(dev, link, flow, MCU_TWT_AGRT_MODIFY)) {
-		mt7996_mac_btwt_del_member(flow, msta_link->wcid.idx);
-		goto unlock;
+		/* Calculate the future TSF and fill in the outgoing TWT action frame.
+		 * Since the TWT field in the frame has only 16bits, we need to
+		 * extract TSF[10:25] according to spec
+		 */
+		interval = (u64)le16_to_cpu(flow->mantissa) << flow->exp;
+		curr_tsf = __mt7996_get_tsf(hw, link);
+		div_u64_rem(curr_tsf - flow->start_tsf, interval, &rem);
+		future_twt = curr_tsf + (interval - rem);
+		twt_agrt->bcast.twt = cpu_to_le16((u16)((future_twt >> 10) & 0xffff));
 	}
-
-	/* Calculate the future TSF and fill in the outgoing TWT action frame.
-	 * Since the TWT field in the frame has only 16bits, we need to
-	 * extract TSF[10:25] according to spec
-	 */
-	interval = (u64)le16_to_cpu(flow->mantissa) << flow->exp;
-	curr_tsf = __mt7996_get_tsf(hw, link);
-	div_u64_rem(curr_tsf - flow->start_tsf, interval, &rem);
-	future_twt = curr_tsf + (interval - rem);
-	twt_agrt->bcast.twt = cpu_to_le16((u16)((future_twt >> 10) & 0xffff));
 
 	le16p_replace_bits(&twt_agrt->bcast.btwt_info, flow->persist,
 			   IEEE80211_BTWT_INFO_PERSISTENCE);
@@ -3763,50 +3907,70 @@ int mt7996_mac_twt_teardown_flow(struct mt7996_dev *dev,
 }
 
 int mt7996_mac_add_btwt(struct ieee80211_hw *hw,
-			struct ieee80211_vif *vif,
+			struct ieee80211_vif *vif, u8 link_id,
 			struct cfg80211_broadcast_twt_settings *btwt)
 {
+#define BTWT_RECOMM_RTWT 4
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
 	struct mt7996_vif_link *link;
 	struct mt7996_twt_flow *flow;
 	int ret = -EINVAL;
-	u8 i, table_id;
+	u8 i, table_id = MT7996_MAX_TWT_AGRT;
 	u64 interval, curr_tsf;
 	u32 rem;
 
 	mutex_lock(&dev->mt76.mutex);
 
-	link = mt7996_vif_link(dev, vif, 0);
+	link = mt7996_vif_link(dev, vif, link_id);
+	if (!link)
+		goto unlock;
 
 	if (dev->twt.n_agrt_bc == MT7996_MAX_BTWT_AGRT)
 		goto unlock;
 
+	switch (btwt->setup_cmd) {
+	case TWT_SETUP_CMD_REQUEST:
+		break;
+	case TWT_SETUP_CMD_DEMAND:
+		/* TWT responding STA decides persistence for DEMAND setup */
+		btwt->persist = 255;
+		break;
+	default:
+		ret = -EOPNOTSUPP;
+		goto unlock;
+	}
+
 	for (i = 0; i < MT7996_MAX_BTWT_AGRT; i++) {
+		u8 tmp_table_id = i + MT7996_BTWT_AGRT_OFFSET;
+
 		/* Per IEEE802.11ax clause 26.8.3.2, btwt_id must be unique to
 		 * identify each BTWT service period. An exceptions to the rule
 		 * is when btwt_id=0, in this case multiple BTWT service periods
 		 * with btwt_id=0 are permitted.
 		 */
 		if (btwt->id != 0 &&
-		    (dev->twt.table_mask & BIT(i + MT7996_BTWT_AGRT_OFFSET)) &&
-		    btwt->id == (dev->twt.btwt_flow[i].peer_id_grp_id & 0xff))
+		    (dev->twt.table_mask & BIT(tmp_table_id)) &&
+		    btwt->id == (dev->twt.btwt_flow[i].peer_id_grp_id & 0xff)) {
+			ret = -EEXIST;
 			goto unlock;
-	}
-
-	for (i = MT7996_BTWT_AGRT_OFFSET; i < MT7996_MAX_TWT_AGRT; i++) {
-		if ((dev->twt.table_mask & BIT(i)) == 0) {
-			table_id = i;
-			break;
 		}
+
+		if (table_id == MT7996_MAX_TWT_AGRT &&
+		    !(dev->twt.table_mask & BIT(tmp_table_id)))
+			table_id = tmp_table_id;
 	}
 
-	if (table_id >= MT7996_MAX_TWT_AGRT)
+	if (table_id >= MT7996_MAX_TWT_AGRT) {
+		ret = -ENOSPC;
 		goto unlock;
+	}
 
 	flow = &dev->twt.btwt_flow[table_id - MT7996_BTWT_AGRT_OFFSET];
 	memset(flow, 0, sizeof(*flow));
 	INIT_LIST_HEAD(&flow->list);
 	flow->peer_id_grp_id = btwt->id | MCU_TWT_BTWT_ID_BIT;
+	if (btwt->recommendation == BTWT_RECOMM_RTWT)
+		flow->peer_id_grp_id |= MCU_TWT_RTWT_ID_BIT;
 
 	flow->table_id = table_id;
 	flow->duration = btwt->min_wake_dur;
@@ -3821,6 +3985,8 @@ int mt7996_mac_add_btwt(struct ieee80211_hw *hw,
 	flow->tsf = curr_tsf + interval - rem;
 	flow->flowtype = btwt->flow_type;
 	flow->trigger = btwt->trigger;
+	flow->tid_dl_bmp = btwt->dl_tid_bmp;
+	flow->tid_ul_bmp = btwt->ul_tid_bmp;
 
 	/* Here, we maintain the table_id by ourselves and directly add BTWT SP
 	 * by MCU_TWT_AGRT_ADD. MTK proprietary driver handles it differently.
@@ -3845,7 +4011,7 @@ unlock:
 
 int mt7996_mac_del_btwt(struct ieee80211_hw *hw,
 			struct ieee80211_vif *vif,
-			u8 id)
+			u8 link_id, u8 id)
 {
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
 	struct mt7996_vif_link *link;
@@ -3855,7 +4021,9 @@ int mt7996_mac_del_btwt(struct ieee80211_hw *hw,
 
 	mutex_lock(&dev->mt76.mutex);
 
-	link = mt7996_vif_link(dev, vif, 0);
+	link = mt7996_vif_link(dev, vif, link_id);
+	if (!link)
+		goto unlock;
 
 	for (i = 0; i < MT7996_MAX_BTWT_AGRT; i++) {
 		if ((dev->twt.table_mask & BIT(i + MT7996_BTWT_AGRT_OFFSET)) &&

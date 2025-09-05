@@ -137,6 +137,8 @@ static void mt7996_stop(struct ieee80211_hw *hw, bool suspend)
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
 
 	cancel_delayed_work_sync(&dev->scs_work);
+	cancel_work_sync(&dev->twt.event_work);
+	mt7996_twt_event_list_free(dev);
 }
 
 static inline int get_free_idx(u64 mask, u8 start, u8 end)
