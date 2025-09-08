@@ -2685,13 +2685,14 @@ mt7996_net_fill_forward_path(struct ieee80211_hw *hw,
 	struct mtk_wed_device *wed = &dev->mt76.mmio.wed;
 	struct mt7996_sta_link *msta_link;
 	struct mt76_vif_link *mlink;
-	u8 dscp = path->mtk_wdma.tid >> 2;
+	u8 tid = mvif->qos_map[path->mtk_wdma.tid >> 2];
+	u8 link_id = (sta->mlo && tid % 2) ? msta->sec_link : msta->deflink_id;
 
-	mlink = rcu_dereference(mvif->mt76.link[msta->deflink_id]);
+	mlink = rcu_dereference(mvif->mt76.link[link_id]);
 	if (!mlink)
 		return -EIO;
 
-	msta_link = rcu_dereference(msta->link[msta->deflink_id]);
+	msta_link = rcu_dereference(msta->link[link_id]);
 	if (!msta_link)
 		return -EIO;
 
@@ -2720,7 +2721,7 @@ mt7996_net_fill_forward_path(struct ieee80211_hw *hw,
 	path->mtk_wdma.bss = mlink->idx;
 	path->mtk_wdma.queue = 0;
 	path->mtk_wdma.wcid = msta_link->wcid.idx;
-	path->mtk_wdma.tid = mvif->qos_map[dscp];
+	path->mtk_wdma.tid = tid;
 
 	if (ieee80211_hw_check(hw, SUPPORTS_AMSDU_IN_AMPDU) &&
 	    mtk_wed_is_amsdu_supported(wed))
