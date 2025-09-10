@@ -318,6 +318,11 @@ mt76_init_sband(struct mt76_phy *phy, struct mt76_sband *msband,
 	sband->bitrates = rates;
 	sband->n_bitrates = n_rates;
 
+	/* init parking channel */
+	cfg80211_chandef_create(&phy->chandef, &sband->channels[0],
+				NL80211_CHAN_HT20);
+	phy->main_chandef = phy->chandef;
+
 	if (!ht)
 		return 0;
 
@@ -1064,6 +1069,7 @@ int mt76_set_channel(struct mt76_phy *phy, struct cfg80211_chan_def *chandef,
 
 	return ret;
 }
+EXPORT_SYMBOL_GPL(mt76_set_channel);
 
 int mt76_update_channel(struct mt76_phy *phy)
 {

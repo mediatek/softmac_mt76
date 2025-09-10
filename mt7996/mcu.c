@@ -5630,8 +5630,7 @@ int mt7996_mcu_set_chan_info(struct mt7996_phy *phy, u16 tag, bool sta)
 	if (phy->mt76->hw->conf.flags & IEEE80211_CONF_MONITOR)
 		req.switch_reason = CH_SWITCH_NORMAL;
 	else if (phy->mt76->offchannel ||
-		 phy->mt76->hw->conf.flags & IEEE80211_CONF_IDLE ||
-		 phy->scan_chan)
+		 phy->mt76->hw->conf.flags & IEEE80211_CONF_IDLE)
 		req.switch_reason = CH_SWITCH_SCAN_BYPASS_DPD;
 	else if (!cfg80211_reg_can_beacon(phy->mt76->hw->wiphy, chandef, iftype))
 		req.switch_reason = CH_SWITCH_DFS;
@@ -8687,7 +8686,7 @@ int mt7996_mcu_set_qos_map(struct mt7996_dev *dev, struct mt7996_vif_link *mconf
 		}
 	}
 
-	memcpy(mconf->vif->qos_map, req.data.qos_map, IP_DSCP_NUM);
+	memcpy(mconf->msta_link.sta->vif->qos_map, req.data.qos_map, IP_DSCP_NUM);
 
 	if (!mt7996_has_wa(dev))
 		return mt76_mcu_send_msg(&dev->mt76, MCU_WA_UNI_CMD(SDO),
