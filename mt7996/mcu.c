@@ -5250,8 +5250,7 @@ int mt7996_mcu_init_firmware(struct mt7996_dev *dev)
 	if (ret)
 		return ret;
 
-	return mt7996_mcu_red_config(dev,
-			mtk_wed_device_active(&dev->mt76.mmio.wed));
+	return mt7996_mcu_red_config(dev, true);
 }
 
 int mt7996_mcu_init(struct mt7996_dev *dev)

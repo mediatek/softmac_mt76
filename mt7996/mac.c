@@ -1589,8 +1589,7 @@ mt7996_mac_add_txs_skb(struct mt7996_dev *dev, struct mt76_wcid *wcid,
 		goto unlock;
 	}
 
-	if (mtk_wed_device_active(&dev->mt76.mmio.wed) && wcid->sta &&
-	    (wcid->tx_info & MT_WCID_TX_INFO_SET)) {
+	if (wcid->sta && (wcid->tx_info & MT_WCID_TX_INFO_SET)) {
 		/* Do not check TX BA status for mgmt frames which are sent at a
 		 * fixed rate
 		 */
