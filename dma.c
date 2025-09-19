@@ -9,7 +9,7 @@
 
 #if IS_ENABLED(CONFIG_NET_MEDIATEK_SOC_WED)
 
-#define Q_READ(_q, _field) ({						\
+#define Q_READ(_q, _field, _mask) ({					\
 	u32 _offset = offsetof(struct mt76_queue_regs, _field);		\
 	u32 _val;							\
 	if ((_q)->flags & MT_QFLAG_WED)					\
@@ -18,11 +18,13 @@
 					        _offset));		\
 	else								\
 		_val = readl(&(_q)->regs->_field);			\
-	_val;								\
+	_mask ? FIELD_GET(_mask, _val) : _val;				\
 })
 
-#define Q_WRITE(_q, _field, _val)	do {				\
+#define Q_WRITE(_q, _field, _v, _mask)	do {				\
 	u32 _offset = offsetof(struct mt76_queue_regs, _field);		\
+	u32 _val = (Q_READ(_q, _field, 0) & ~_mask) |			\
+		   FIELD_PREP(_mask, _v);				\
 	if ((_q)->flags & MT_QFLAG_WED)					\
 		mtk_wed_device_reg_write((_q)->wed,			\
 					 ((_q)->wed_regs + _offset),	\
@@ -33,8 +35,12 @@
 
 #else
 
-#define Q_READ(_q, _field)		readl(&(_q)->regs->_field)
-#define Q_WRITE(_q, _field, _val)	writel(_val, &(_q)->regs->_field)
+#define Q_READ(_q, _field, _mask)					\
+	_mask ? FIELD_GET(_mask, readl(&(_q)->regs->_field)) :		\
+		readl(&(_q)->regs->_field)
+#define Q_WRITE(_q, _field, _v, _mask)					\
+	writel(((Q_READ(_q, _field, 0) & ~_mask) |			\
+	       FIELD_PREP(_mask, _v)), &(_q)->regs->_field)
 
 #endif
 
@@ -214,12 +220,12 @@ mt76_dma_queue_init_magic_cnt(struct mt76_dev *dev, struct mt76_queue *q)
 static void
 mt76_dma_sync_idx(struct mt76_dev *dev, struct mt76_queue *q)
 {
-	Q_WRITE(q, desc_base, q->desc_dma);
+	Q_WRITE(q, desc_base, q->desc_dma, MT_QUEUE_DESC_BASE);
 	if (q->flags & MT_QFLAG_WED_RRO_EN)
-		Q_WRITE(q, ring_size, MT_DMA_RRO_EN | q->ndesc);
+		Q_WRITE(q, ring_size, MT_DMA_RRO_EN | q->ndesc, MT_QUEUE_RING_SIZE);
 	else
-		Q_WRITE(q, ring_size, q->ndesc);
-	q->head = Q_READ(q, dma_idx);
+		Q_WRITE(q, ring_size, q->ndesc, MT_QUEUE_RING_SIZE);
+	q->head = Q_READ(q, dma_idx, MT_QUEUE_DMA_IDX);
 	q->tail = q->head;
 }
 
@@ -244,8 +250,8 @@ void __mt76_dma_queue_reset(struct mt76_dev *dev, struct mt76_queue *q,
 		if (q->flags & MT_QFLAG_EMI_EN)
 			*q->emi_cidx_addr = 0;
 		else
-			Q_WRITE(q, cpu_idx, 0);
-		Q_WRITE(q, dma_idx, 0);
+			Q_WRITE(q, cpu_idx, 0, MT_QUEUE_CPU_IDX);
+		Q_WRITE(q, dma_idx, 0, GENMASK(31, 0));
 	}
 	mt76_dma_sync_idx(dev, q);
 }
@@ -428,7 +434,7 @@ mt76_dma_kick_queue(struct mt76_dev *dev, struct mt76_queue *q)
 	if (q->flags & MT_QFLAG_EMI_EN)
 		*q->emi_cidx_addr = cpu_to_le16(q->head);
 	else
-		Q_WRITE(q, cpu_idx, q->head);
+		Q_WRITE(q, cpu_idx, q->head, MT_QUEUE_CPU_IDX);
 }
 
 static void
@@ -444,7 +450,7 @@ mt76_dma_tx_cleanup(struct mt76_dev *dev, struct mt76_queue *q, bool flush)
 	if (flush)
 		last = -1;
 	else
-		last = Q_READ(q, dma_idx);
+		last = Q_READ(q, dma_idx, MT_QUEUE_DMA_IDX);
 
 	while (q->queued > 0 && q->tail != last) {
 		mt76_dma_tx_cleanup_idx(dev, q, q->tail, &entry);
@@ -456,7 +462,7 @@ mt76_dma_tx_cleanup(struct mt76_dev *dev, struct mt76_queue *q, bool flush)
 		}
 
 		if (!flush && q->tail == last)
-			last = Q_READ(q, dma_idx);
+			last = Q_READ(q, dma_idx, MT_QUEUE_DMA_IDX);
 	}
 	spin_unlock_bh(&q->cleanup_lock);
 
@@ -968,7 +974,7 @@ mt76_dma_rx_process(struct mt76_dev *dev, struct mt76_queue *q, int budget)
 	if ((q->flags & MT_QFLAG_WED_RRO_EN) ||
 	    (IS_ENABLED(CONFIG_NET_MEDIATEK_SOC_WED) &&
 	    mt76_queue_is_wed_tx_free(q))) {
-		dma_idx = Q_READ(q, dma_idx);
+		dma_idx = Q_READ(q, dma_idx, MT_QUEUE_DMA_IDX);
 		check_ddone = true;
 	}
 
@@ -978,7 +984,7 @@ mt76_dma_rx_process(struct mt76_dev *dev, struct mt76_queue *q, int budget)
 
 		if (check_ddone) {
 			if (q->tail == dma_idx)
-				dma_idx = Q_READ(q, dma_idx);
+				dma_idx = Q_READ(q, dma_idx, MT_QUEUE_DMA_IDX);
 
 			if (q->tail == dma_idx)
 				break;

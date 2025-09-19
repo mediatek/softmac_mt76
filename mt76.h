@@ -272,6 +272,11 @@ struct mt76_queue_entry {
 	bool done:1;
 };
 
+#define MT_QUEUE_DESC_BASE	GENMASK(31, 0)
+#define MT_QUEUE_RING_SIZE	GENMASK(15, 0)
+#define MT_QUEUE_CPU_IDX	GENMASK(11, 0)
+#define MT_QUEUE_DMA_IDX	GENMASK(11, 0)
+
 struct mt76_queue_regs {
 	u32 desc_base;
 	u32 ring_size;
