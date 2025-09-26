@@ -6,9 +6,18 @@
 #include "mt76.h"
 #include "dma.h"
 
+static struct mt76_dev *
+mt76_wed_get_mt76_dev(struct mtk_wed_device *wed)
+{
+	if (wed->version == MTK_WED_HW_V3 && wed->wdma_idx == 1)
+		return container_of(wed, struct mt76_dev, mmio.wed_hif2);
+	else
+		return container_of(wed, struct mt76_dev, mmio.wed);
+};
+
 void mt76_wed_release_rx_buf(struct mtk_wed_device *wed)
 {
-	struct mt76_dev *dev = container_of(wed, struct mt76_dev, mmio.wed);
+	struct mt76_dev *dev = mt76_wed_get_mt76_dev(wed);
 #if LINUX_VERSION_IS_LESS(6,6,0)
 	/* Todo: Check wether it is necessary in kernel 6.6 */
 	struct page *page;
@@ -58,7 +67,7 @@ EXPORT_SYMBOL_GPL(mt76_wed_release_rx_buf);
 #ifdef CONFIG_NET_MEDIATEK_SOC_WED
 u32 mt76_wed_init_rx_buf(struct mtk_wed_device *wed, int size)
 {
-	struct mt76_dev *dev = container_of(wed, struct mt76_dev, mmio.wed);
+	struct mt76_dev *dev = mt76_wed_get_mt76_dev(wed);
 	struct mtk_wed_bm_desc *desc = wed->rx_buf_ring.desc;
 	struct mt76_queue *q = &dev->q_rx[MT_RXQ_MAIN];
 	struct mt76_txwi_cache *t = NULL;
@@ -107,7 +116,7 @@ EXPORT_SYMBOL_GPL(mt76_wed_init_rx_buf);
 
 int mt76_wed_offload_enable(struct mtk_wed_device *wed)
 {
-	struct mt76_dev *dev = container_of(wed, struct mt76_dev, mmio.wed);
+	struct mt76_dev *dev = mt76_wed_get_mt76_dev(wed);
 
 	spin_lock_bh(&dev->token_lock);
 	dev->token_size = MT76_WED_SW_TOKEN_SIZE;
@@ -196,7 +205,7 @@ EXPORT_SYMBOL_GPL(mt76_wed_dma_setup);
 
 void mt76_wed_offload_disable(struct mtk_wed_device *wed)
 {
-	struct mt76_dev *dev = container_of(wed, struct mt76_dev, mmio.wed);
+	struct mt76_dev *dev = mt76_wed_get_mt76_dev(wed);
 
 	spin_lock_bh(&dev->token_lock);
 	dev->token_size = MT76_WED_SW_TOKEN_SIZE;
@@ -206,7 +215,7 @@ EXPORT_SYMBOL_GPL(mt76_wed_offload_disable);
 
 void mt76_wed_reset_complete(struct mtk_wed_device *wed)
 {
-	struct mt76_dev *dev = container_of(wed, struct mt76_dev, mmio.wed);
+	struct mt76_dev *dev = mt76_wed_get_mt76_dev(wed);
 
 	complete(&dev->mmio.wed_reset_complete);
 }
