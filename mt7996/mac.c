@@ -2570,12 +2570,8 @@ void mt7996_mac_reset_work(struct work_struct *work)
 	wake_up(&dev->mt76.mcu.wait);
 	mt76_abort_scan(&dev->mt76);
 
-	cancel_work_sync(&dev->wed_rro.work);
-	mt7996_for_each_phy(dev, phy) {
-		mt76_abort_roc(phy->mt76);
+	mt7996_for_each_phy(dev, phy)
 		set_bit(MT76_RESET, &phy->mt76->state);
-		cancel_delayed_work_sync(&phy->mt76->mac_work);
-	}
 
 	mutex_lock(&dev->mt76.mutex);
 
@@ -2695,11 +2691,8 @@ void mt7996_mac_reset_work(struct work_struct *work)
 
 	mutex_unlock(&dev->mt76.mutex);
 
-	mt7996_for_each_phy(dev, phy)
-		ieee80211_queue_delayed_work(hw, &phy->mt76->mac_work,
-					     MT7996_WATCHDOG_TIME);
-
-	ieee80211_queue_delayed_work(mt76_hw(dev), &dev->scs_work, HZ);
+	dev_info(dev->mt76.dev,"\n%s L1 SER recovery completed.",
+		 wiphy_name(dev->mt76.hw->wiphy));
 }
 
 /* firmware coredump */
