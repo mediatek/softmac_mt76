@@ -1687,6 +1687,42 @@ mt7996_mcu_bss_event(struct mt7996_dev *dev, struct sk_buff *skb)
 }
 
 static void
+mt7996_mcu_twt_sync_event(struct mt7996_dev *dev, struct sk_buff *skb)
+{
+	struct mt7996_mcu_twt_sync_event *event;
+	struct mt7996_sta_link *msta_link;
+	struct mt76_wcid *wcid_entry;
+	struct mt7996_twt_flow *flow;
+	u16 wcid_idx;
+	u8 flow_id;
+
+	event = (struct mt7996_mcu_twt_sync_event *)skb->data;
+
+	if (le16_to_cpu(event->tag) != UNI_EVENT_TWT_INFO)
+		return;
+
+	wcid_idx = le16_to_cpu(event->wcid);
+	flow_id = event->flow_id;
+
+	rcu_read_lock();
+	wcid_entry = mt76_wcid_ptr(dev, wcid_idx);
+	if (!wcid_entry || !wcid_entry->sta)
+		goto unlock;
+
+	msta_link = container_of(wcid_entry, struct mt7996_sta_link, wcid);
+
+	if (flow_id >= MT7996_MAX_STA_TWT_AGRT ||
+	    !(msta_link->twt.flowid_mask & BIT(flow_id)))
+		goto unlock;
+
+	flow = &msta_link->twt.flow[flow_id];
+	flow->suspended = event->idle != 0;
+
+unlock:
+	rcu_read_unlock();
+}
+
+static void
 mt7996_mcu_uni_rx_unsolicited_event(struct mt7996_dev *dev, struct sk_buff *skb)
 {
 	struct mt7996_mcu_rxd *rxd = (struct mt7996_mcu_rxd *)skb->data;
@@ -1737,6 +1773,9 @@ mt7996_mcu_uni_rx_unsolicited_event(struct mt7996_dev *dev, struct sk_buff *skb)
 		mt7996_tm_rf_test_event(dev, skb);
 		break;
 #endif
+	case MCU_UNI_EVENT_TWT_SYNC:
+		mt7996_mcu_twt_sync_event(dev, skb);
+		break;
 #if defined CONFIG_NL80211_TESTMODE && defined CONFIG_MTK_DEBUG
 	case MCU_UNI_EVENT_BF:
 		mt7996_mcu_rx_bf_event(dev, skb);
@@ -7136,6 +7175,9 @@ int mt7996_mcu_update_bss_color(struct mt7996_dev *dev,
 #define TWT_AGRT_TRIGGER	BIT(0)
 #define TWT_AGRT_ANNOUNCE	BIT(1)
 #define TWT_AGRT_PROTECT	BIT(2)
+#define TWT_AGRT_NEXT_TWT_32	BIT(4)
+#define TWT_AGRT_NEXT_TWT_48	BIT(5)
+#define TWT_AGRT_NEXT_TWT_64	BIT(6)
 
 int mt7996_mcu_twt_agrt_update(struct mt7996_dev *dev,
 			       struct mt7996_vif_link *link,
@@ -7200,6 +7242,20 @@ int mt7996_mcu_twt_agrt_update(struct mt7996_dev *dev,
 		req.agrt_params |= TWT_AGRT_ANNOUNCE;
 	if (flow->trigger)
 		req.agrt_params |= TWT_AGRT_TRIGGER;
+
+	if (cmd == MCU_TWT_AGRT_SUSPEND_RESUME) {
+		switch (flow->next_twt_size) {
+		case IEEE80211_TWT_INFO_NEXT_TWT_SIZE_32:
+			req.agrt_params |= TWT_AGRT_NEXT_TWT_32;
+			break;
+		case IEEE80211_TWT_INFO_NEXT_TWT_SIZE_48:
+			req.agrt_params |= TWT_AGRT_NEXT_TWT_48;
+			break;
+		case IEEE80211_TWT_INFO_NEXT_TWT_SIZE_64:
+			req.agrt_params |= TWT_AGRT_NEXT_TWT_64;
+			break;
+		}
+	}
 
 	if (req.member_cnt) {
 		u8 i;

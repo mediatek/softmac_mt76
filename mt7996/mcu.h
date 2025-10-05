@@ -1825,6 +1825,24 @@ enum {
 	UNI_EPCS_CTRL_RESET_STA
 };
 
+enum {
+	UNI_EVENT_TWT_INFO,
+};
+
+struct mt7996_mcu_twt_sync_event {
+	struct mt7996_mcu_rxd rxd;
+
+	u8 __rsv1[4];
+
+	__le16 tag;
+	__le16 len;
+	__le16 wcid;
+	u8 bss_idx;
+	u8 flow_id;
+	u8 idle;
+	u8 __rsv2[3];
+} __packed;
+
 #ifdef CONFIG_MTK_VENDOR
 struct mt7996_mcu_csi_event {
 	struct mt7996_mcu_rxd rxd;

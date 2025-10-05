@@ -324,11 +324,14 @@ struct mt7996_twt_flow {
 	u8 tid_dl_bmp;
 	u8 tid_ul_bmp;
 	u8 member_cnt;
+	u8 bss_idx;
+	u8 next_twt_size;
 	u16 sta_list[MT7996_MAX_BTWT_MEMBER_CNT];
 	u8 protection:1;
 	u8 flowtype:1;
 	u8 trigger:1;
 	u8 sched:1;
+	u8 suspended:1;
 };
 struct mt7996_twt_event {
 	struct list_head list;
@@ -1051,6 +1054,12 @@ enum mt7996_wtbl_type {
 	MAX_NUM_WTBL_TYPE
 };
 
+enum mt7996_twt_check_result {
+	TWT_CHECK_NOT_EXIST,
+	TWT_CHECK_SAME,
+	TWT_CHECK_NEED_MODIFY,
+};
+
 static inline int
 mt7996_get_rdd_idx(struct mt7996_phy *phy, bool is_background)
 {
@@ -1178,6 +1187,18 @@ mt7996_sta_link_protected(struct mt7996_dev *dev, struct mt7996_sta *msta,
 	for (int __i = 0; __i < ARRAY_SIZE((dev)->radio_phy); __i++)	\
 		if (((phy) = (dev)->radio_phy[__i]) != NULL)
 
+#define mt7996_for_each_btwt_flow(dev, flow)				\
+	for (int __i = 0; __i < MT7996_MAX_BTWT_AGRT; __i++)		\
+		if (((dev)->twt.table_mask &				\
+		     BIT(__i + MT7996_BTWT_AGRT_OFFSET)) &&		\
+		    ((flow) = &(dev)->twt.btwt_flow[__i]))
+
+static inline u8
+mt7996_btwt_has_id(struct mt7996_twt_flow *flow, u8 id)
+{
+	return (flow->peer_id_grp_id & 0xff) == id;
+}
+
 static inline void
 mt7996_get_merged_ttlm(struct ieee80211_vif *vif,
 		       struct ieee80211_neg_ttlm *merged_ttlm)
@@ -1248,6 +1269,10 @@ int mt7996_mcu_twt_agrt_update(struct mt7996_dev *dev,
 			       struct mt7996_vif_link *link,
 			       struct mt7996_twt_flow *flow,
 			       int cmd);
+void mt7996_mac_btwt_cleanup(struct mt7996_dev *dev,
+			     struct mt7996_vif_link *link);
+void mt7996_btwt_table_cleanup(struct mt7996_dev *dev,
+			       struct mt7996_vif_link *link);
 int mt7996_mcu_add_dev_info(struct mt7996_phy *phy, struct ieee80211_vif *vif,
 			    struct ieee80211_bss_conf *link_conf,
 			    struct mt76_vif_link *mlink, bool enable);
@@ -1475,7 +1500,7 @@ int mt7996_mac_twt_teardown_flow(struct mt7996_dev *dev,
 void mt7996_mac_sta_deinit_link(struct mt7996_dev *dev,
 				struct mt7996_sta_link *msta_link);
 int mt7996_mac_add_twt_setup(struct ieee80211_hw *hw,
-			     struct ieee80211_sta *sta,
+			     struct ieee80211_sta *sta, u8 link_id,
 			     struct ieee80211_twt_setup *twt);
 int mt7996_mac_add_btwt(struct ieee80211_hw *hw,
 			struct ieee80211_vif *vif, u8 link_id,

@@ -483,6 +483,8 @@ void mt7996_vif_link_remove(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 	if (ieee80211_vif_is_mld(vif) && mlink->ctx)
 		return;
 
+	mt7996_mac_btwt_cleanup(dev, link);
+
 	if (!mlink->wcid->offchannel)
 		ieee80211_iter_keys(mphy->hw, vif, mt7996_key_iter, &it);
 
@@ -532,6 +534,8 @@ void mt7996_vif_link_remove(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 	phy->omac_mask &= ~BIT_ULL(mlink->omac_idx);
 
 	mvif->mt76.valid_links &= ~BIT(link_id);
+
+	mt7996_btwt_table_cleanup(dev, link);
 
 	spin_lock_bh(&dev->mt76.sta_poll_lock);
 	if (!list_empty(&msta_link->wcid.poll_list))
@@ -2731,7 +2735,7 @@ void mt7996_get_et_stats(struct ieee80211_hw *hw,
 
 static int
 mt7996_twt_teardown_request(struct ieee80211_hw *hw,
-			    struct ieee80211_sta *sta,
+			    struct ieee80211_sta *sta, u8 link_id,
 			    struct ieee80211_twt_teardown *td)
 {
 	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
@@ -2743,16 +2747,95 @@ mt7996_twt_teardown_request(struct ieee80211_hw *hw,
 
 	vif = container_of((void *)msta->vif, struct ieee80211_vif, drv_priv);
 
+	if (link_id >= IEEE80211_LINK_UNSPECIFIED)
+		return ret;
+
 	mutex_lock(&dev->mt76.mutex);
-	msta_link = mt76_dereference(msta->link[0], &dev->mt76);
-	link = mt7996_vif_link(dev, vif, 0);
+	msta_link = mt76_dereference(msta->link[link_id], &dev->mt76);
+	link = mt7996_vif_link(dev, vif, link_id);
+	if (!msta_link || !link)
+		goto unlock;
+
 	ret = mt7996_mac_twt_teardown_flow(dev, link, msta_link, td);
+	if (ret)
+		dev_err(dev->mt76.dev, "TWT id %d teardown request failed ret=%d\n",
+			td->id, ret);
+
+unlock:
 	mutex_unlock(&dev->mt76.mutex);
 
-	if (ret)
-		dev_err(dev->mt76.dev, "TWT teardown request failed ret=%d\n", ret);
-
 	return ret;
+}
+
+static void
+mt7996_twt_information(struct ieee80211_hw *hw, struct ieee80211_sta *sta,
+		       u8 link_id, struct ieee80211_twt_info *twt_info)
+{
+	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
+	struct mt7996_dev *dev = mt7996_hw_dev(hw);
+	struct mt7996_sta_link *msta_link;
+	struct mt7996_vif_link *link;
+	struct mt7996_twt_flow *flow;
+	struct ieee80211_vif *vif;
+	u8 flow_id, next_twt_size;
+	bool suspend;
+
+	if (link_id >= IEEE80211_LINK_UNSPECIFIED)
+		return;
+
+	flow_id = FIELD_GET(IEEE80211_TWT_INFO_FLOW_ID, twt_info->control);
+	next_twt_size = FIELD_GET(IEEE80211_TWT_INFO_NEXT_TWT_SIZE,
+				  twt_info->control);
+
+	vif = container_of((void *)msta->vif, struct ieee80211_vif, drv_priv);
+
+	mutex_lock(&dev->mt76.mutex);
+
+	msta_link = mt76_dereference(msta->link[link_id], &dev->mt76);
+	link = mt7996_vif_link(dev, vif, link_id);
+	if (!msta_link || !link)
+		goto unlock;
+
+	if (flow_id >= MT7996_MAX_STA_TWT_AGRT ||
+	    !(msta_link->twt.flowid_mask & BIT(flow_id)))
+		goto unlock;
+
+	flow = &msta_link->twt.flow[flow_id];
+	suspend = next_twt_size == IEEE80211_TWT_INFO_NEXT_TWT_SIZE_0;
+
+	if (!suspend) {
+		switch (next_twt_size) {
+		case IEEE80211_TWT_INFO_NEXT_TWT_SIZE_32:
+			flow->tsf = get_unaligned_le32(twt_info->next_twt);
+			break;
+		case IEEE80211_TWT_INFO_NEXT_TWT_SIZE_48:
+			flow->tsf = get_unaligned_le32(twt_info->next_twt) |
+				    ((u64)get_unaligned_le16(twt_info->next_twt + 4) << 32);
+			break;
+		case IEEE80211_TWT_INFO_NEXT_TWT_SIZE_64:
+			flow->tsf = get_unaligned_le64(twt_info->next_twt);
+			break;
+		default:
+			dev_warn(dev->mt76.dev,
+				 "TWT unexpected next_twt_size %d\n",
+				 next_twt_size);
+			goto unlock;
+		}
+		flow->next_twt_size = next_twt_size;
+	} else {
+		flow->tsf = 0;
+	}
+
+	if (mt7996_mcu_twt_agrt_update(dev, link, flow,
+				       suspend ? MCU_TWT_AGRT_SUSPEND
+					       : MCU_TWT_AGRT_SUSPEND_RESUME))
+		dev_err(dev->mt76.dev, "TWT flow_id %d %s failed\n",
+			flow_id, suspend ? "suspend" : "resume");
+	else
+		flow->suspended = true;
+
+unlock:
+	mutex_unlock(&dev->mt76.mutex);
 }
 
 static void
@@ -3343,6 +3426,7 @@ const struct ieee80211_ops mt7996_ops = {
 	.sta_set_decap_offload = mt7996_sta_set_decap_offload,
 	.add_twt_setup = mt7996_mac_add_twt_setup,
 	.twt_teardown_request = mt7996_twt_teardown_request,
+	.twt_information = mt7996_twt_information,
 	.add_btwt = mt7996_mac_add_btwt,
 	.del_btwt = mt7996_mac_del_btwt,
 #ifdef CONFIG_MAC80211_DEBUGFS

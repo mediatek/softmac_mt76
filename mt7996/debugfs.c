@@ -988,21 +988,24 @@ mt7996_twt_stats(struct seq_file *s, void *data)
 
 	seq_puts(s, " peer_id_grp_id |  id | flags | exp | mantissa");
 	seq_puts(s, " | duration |            tsf");
-	seq_puts(s, " | persist | member_cnt | sta_list \n");
+	seq_puts(s, " | bss_idx | status  | persist | member_cnt | sta_list \n");
 	list_for_each_entry_rcu(iter, &dev->twt_list, list) {
 		seq_printf(s,
-			   "%15x | %3d | %2c%c%c%c | %3d | %8d | %8d | %14lld",
+			   "%15x | %3d | %2c%c%c%c | %3d | %8d | %8d | %14lld | %6d ",
 			   iter->peer_id_grp_id, iter->id,
 			   iter->sched ? 's' : 'u',
 			   iter->protection ? 'p' : '-',
 			   iter->trigger ? 't' : '-',
 			   iter->flowtype ? '-' : 'a',
 			   iter->exp, iter->mantissa,
-			   iter->duration, iter->tsf);
-		if ((iter->peer_id_grp_id & MCU_TWT_BTWT_ID_BIT) == 0)
-			seq_printf(s, " |         |            |\n");
-		else {
-			seq_printf(s, " | %7d | %10d | ",
+			   iter->duration, iter->tsf, iter->bss_idx);
+		if ((iter->peer_id_grp_id & MCU_TWT_BTWT_ID_BIT) == 0) {
+			/* Individual TWT: show suspend status */
+			seq_printf(s, " | %6s  |         |            |\n",
+				   iter->suspended ? "SUSP" : "ACTIVE");
+		} else {
+			/* Broadcast TWT: show persist and member info */
+			seq_printf(s, " |         | %7d | %10d | ",
 				   iter->persist, iter->member_cnt);
 			for (i = 0; i < iter->member_cnt; i++)
 				seq_printf(s, "%3d ", iter->sta_list[i]);

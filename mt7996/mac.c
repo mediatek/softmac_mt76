@@ -1582,7 +1582,6 @@ void mt7996_twt_event_work(struct work_struct *work)
 		struct mt7996_twt_flow *flow = NULL;
 		struct mt7996_twt_event *ev;
 		struct mt7996_vif_link *link;
-		u8 i;
 
 		spin_lock_bh(&dev->twt.event_lock);
 		if (list_empty(&dev->twt.event_list)) {
@@ -1595,12 +1594,10 @@ void mt7996_twt_event_work(struct work_struct *work)
 
 		mutex_lock(&dev->mt76.mutex);
 
-		for (i = 0; i < MT7996_MAX_BTWT_AGRT; i++) {
-			if ((dev->twt.table_mask & BIT(i + MT7996_BTWT_AGRT_OFFSET)) &&
-			    (dev->twt.btwt_flow[i].peer_id_grp_id & 0xff) == ev->btwt_id) {
-				flow = &dev->twt.btwt_flow[i];
+		mt7996_for_each_btwt_flow(dev, flow) {
+			if (mt7996_btwt_has_id(flow, ev->btwt_id))
 				break;
-			}
+			flow = NULL;
 		}
 		if (!flow)
 			goto out_unlock;
@@ -3482,45 +3479,83 @@ stop:
 	return 0;
 }
 
-static int
-mt7996_mac_twt_duration_align(int duration)
-{
-	return duration << 8;
-}
-
 static u64
-mt7996_mac_twt_sched_list_add(struct mt7996_dev *dev,
+mt7996_mac_twt_calc_start_tsf(struct mt7996_dev *dev,
 			      struct mt7996_twt_flow *flow)
 {
 	struct mt7996_twt_flow *iter, *iter_next;
 	u32 duration = flow->duration << 8;
-	u64 start_tsf;
+	u64 start_tsf = 0;
+
+	lockdep_assert_held(&dev->mt76.mutex);
 
 	iter = list_first_entry_or_null(&dev->twt_list,
 					struct mt7996_twt_flow, list);
-	if (!iter || !iter->sched || iter->start_tsf > duration) {
-		/* add flow as first entry in the list */
-		list_add(&flow->list, &dev->twt_list);
+	if (!iter || !iter->sched || iter->start_tsf > duration)
 		return 0;
-	}
 
 	list_for_each_entry_safe(iter, iter_next, &dev->twt_list, list) {
-		start_tsf = iter->start_tsf +
-			    mt7996_mac_twt_duration_align(iter->duration);
+		start_tsf = iter->start_tsf + (iter->duration << 8);
+
 		if (list_is_last(&iter->list, &dev->twt_list))
 			break;
 
 		if (!iter_next->sched ||
+		    iter_next->start_tsf > start_tsf + duration)
+			break;
+	}
+
+	return start_tsf;
+}
+
+static void
+mt7996_mac_twt_sched_list_insert(struct mt7996_dev *dev,
+				 struct mt7996_twt_flow *flow)
+{
+	struct mt7996_twt_flow *iter, *iter_next;
+	u32 duration = flow->duration << 8;
+
+	lockdep_assert_held(&dev->mt76.mutex);
+
+	iter = list_first_entry_or_null(&dev->twt_list,
+					struct mt7996_twt_flow, list);
+	if (!iter || !iter->sched || iter->start_tsf > duration) {
+		list_add(&flow->list, &dev->twt_list);
+		return;
+	}
+
+	list_for_each_entry_safe(iter, iter_next, &dev->twt_list, list) {
+		u64 start_tsf = iter->start_tsf + (iter->duration << 8);
+
+		if (list_is_last(&iter->list, &dev->twt_list)) {
+			list_add_tail(&flow->list, &dev->twt_list);
+			return;
+		}
+
+		if (!iter_next->sched ||
 		    iter_next->start_tsf > start_tsf + duration) {
 			list_add(&flow->list, &iter->list);
-			goto out;
+			return;
 		}
 	}
 
-	/* add flow as last entry in the list */
 	list_add_tail(&flow->list, &dev->twt_list);
-out:
-	return start_tsf;
+}
+
+static u64
+mt7996_mac_twt_calc_target_tsf(struct ieee80211_hw *hw,
+			       struct mt7996_vif_link *link,
+			       struct mt7996_twt_flow *flow)
+{
+	u64 interval, flow_tsf, curr_tsf;
+	u32 rem;
+
+	interval = (u64)le16_to_cpu(flow->mantissa) << flow->exp;
+	curr_tsf = __mt7996_get_tsf(hw, link);
+	div_u64_rem(curr_tsf - flow->start_tsf, interval, &rem);
+	flow_tsf = curr_tsf + interval - rem;
+
+	return flow_tsf;
 }
 
 static int mt7996_mac_check_twt_req(struct ieee80211_twt_setup *twt)
@@ -3535,8 +3570,11 @@ static int mt7996_mac_check_twt_req(struct ieee80211_twt_setup *twt)
 		return -EOPNOTSUPP;
 
 	twt_agrt = (struct ieee80211_twt_params *)twt->params;
-	exp = FIELD_GET(IEEE80211_TWT_REQTYPE_WAKE_INT_EXP,
-			le16_to_cpu(twt_agrt->req_type));
+	if (le16_get_bits(twt_agrt->req_type,
+			  IEEE80211_TWT_REQTYPE_SETUP_CMD) > TWT_SETUP_CMD_DEMAND)
+		return -EOPNOTSUPP;
+
+	exp = le16_get_bits(twt_agrt->req_type, IEEE80211_TWT_REQTYPE_WAKE_INT_EXP);
 	if (twt->control & IEEE80211_TWT_CONTROL_NEG_TYPE_BROADCAST) {
 		/* special case for btwt_id=0 that we have to spontaneously add STA to it*/
 		if (le16_get_bits(twt_agrt->bcast.btwt_info, IEEE80211_BTWT_INFO_ID) == 0)
@@ -3560,32 +3598,56 @@ static int mt7996_mac_check_twt_req(struct ieee80211_twt_setup *twt)
 	return 0;
 }
 
-static bool
-mt7996_mac_twt_param_equal(struct mt7996_sta_link *msta_link,
-			   struct ieee80211_twt_params *twt_agrt)
+static void
+mt7996_mac_itwt_flow_set_params(struct ieee80211_hw *hw,
+			       struct mt7996_vif_link *link,
+			       struct mt7996_dev *dev,
+			       struct mt7996_twt_flow *flow,
+			       struct ieee80211_twt_params *twt_agrt)
+{
+	u16 req_type = le16_to_cpu(twt_agrt->req_type);
+	u8 setup_cmd = FIELD_GET(IEEE80211_TWT_REQTYPE_SETUP_CMD, req_type);
+
+	flow->duration = twt_agrt->indiv.min_twt_dur;
+	flow->mantissa = twt_agrt->indiv.mantissa;
+	flow->exp = FIELD_GET(IEEE80211_TWT_REQTYPE_WAKE_INT_EXP, req_type);
+	flow->protection = !!(req_type & IEEE80211_TWT_REQTYPE_PROTECTION);
+	flow->flowtype = !!(req_type & IEEE80211_TWT_REQTYPE_FLOWTYPE);
+	flow->trigger = !!(req_type & IEEE80211_TWT_REQTYPE_TRIGGER);
+	flow->sched = (setup_cmd == TWT_SETUP_CMD_REQUEST);
+
+	if (flow->sched) {
+		flow->start_tsf = mt7996_mac_twt_calc_start_tsf(dev, flow);
+		flow->tsf = mt7996_mac_twt_calc_target_tsf(hw, link, flow);
+		twt_agrt->indiv.twt = cpu_to_le64(flow->tsf);
+	} else {
+		/* AP takes twt from STA for SUGGEST/DEMAND command */
+		flow->tsf = le64_to_cpu(twt_agrt->indiv.twt);
+	}
+}
+
+static enum mt7996_twt_check_result
+mt7996_mac_itwt_check_exist(struct mt7996_sta_link *msta_link,
+			   struct ieee80211_twt_params *twt_agrt,
+			   u8 flowid)
 {
 	u16 type = le16_to_cpu(twt_agrt->req_type);
-	u8 exp;
-	int i;
+	struct mt7996_twt_flow *f;
 
-	exp = FIELD_GET(IEEE80211_TWT_REQTYPE_WAKE_INT_EXP, type);
-	for (i = 0; i < MT7996_MAX_STA_TWT_AGRT; i++) {
-		struct mt7996_twt_flow *f;
+	if (!(msta_link->twt.flowid_mask & BIT(flowid)))
+		return TWT_CHECK_NOT_EXIST;
 
-		if (!(msta_link->twt.flowid_mask & BIT(i)))
-			continue;
+	f = &msta_link->twt.flow[flowid];
 
-		f = &msta_link->twt.flow[i];
-		if (f->duration == twt_agrt->indiv.min_twt_dur &&
-		    f->mantissa == twt_agrt->indiv.mantissa &&
-		    f->exp == exp &&
-		    f->protection == !!(type & IEEE80211_TWT_REQTYPE_PROTECTION) &&
-		    f->flowtype == !!(type & IEEE80211_TWT_REQTYPE_FLOWTYPE) &&
-		    f->trigger == !!(type & IEEE80211_TWT_REQTYPE_TRIGGER))
-			return true;
-	}
+	if (f->duration == twt_agrt->indiv.min_twt_dur &&
+	    f->mantissa == twt_agrt->indiv.mantissa &&
+	    f->exp == FIELD_GET(IEEE80211_TWT_REQTYPE_WAKE_INT_EXP, type) &&
+	    f->protection == !!(type & IEEE80211_TWT_REQTYPE_PROTECTION) &&
+	    f->flowtype == !!(type & IEEE80211_TWT_REQTYPE_FLOWTYPE) &&
+	    f->trigger == !!(type & IEEE80211_TWT_REQTYPE_TRIGGER))
+		return TWT_CHECK_SAME;
 
-	return false;
+	return TWT_CHECK_NEED_MODIFY;
 }
 
 static int mt7996_mac_btwt_add_member(struct mt7996_twt_flow *flow, u16 idx)
@@ -3632,15 +3694,11 @@ static int mt7996_mac_btwt_setup_id_0(struct mt7996_dev *dev,
 				      struct mt7996_sta_link *msta_link)
 {
 	struct mt7996_twt_flow *flow;
-	u8 i;
 
 	/* Multiple btwt with id=0 is allow, so we have to iterate all flows. */
-	for (i = 0; i < MT7996_MAX_BTWT_AGRT; i++) {
-
-		if ((dev->twt.table_mask & BIT(i + MT7996_BTWT_AGRT_OFFSET)) &&
-		    (dev->twt.btwt_flow[i].peer_id_grp_id & 0xff) == 0) {
-			flow = &dev->twt.btwt_flow[i];
-
+	mt7996_for_each_btwt_flow(dev, flow) {
+		if (mt7996_btwt_has_id(flow, 0) &&
+		    flow->bss_idx == link->mt76.idx) {
 			if (mt7996_mac_btwt_add_member(flow, msta_link->wcid.idx))
 				return -EINVAL;
 
@@ -3655,7 +3713,7 @@ static int mt7996_mac_btwt_setup_id_0(struct mt7996_dev *dev,
 }
 
 static int mt7996_mac_btwt_setup(struct ieee80211_hw *hw,
-				 struct ieee80211_sta *sta,
+				 struct ieee80211_sta *sta, u8 link_id,
 				 struct ieee80211_twt_setup *twt)
 {
 	enum ieee80211_twt_setup_cmd setup_cmd = TWT_SETUP_CMD_REJECT;
@@ -3667,7 +3725,7 @@ static int mt7996_mac_btwt_setup(struct ieee80211_hw *hw,
 	struct ieee80211_twt_params *twt_agrt = (void *)twt->params;
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
 	struct mt7996_twt_flow *flow = NULL;
-	u8 i, id;
+	u8 id;
 	int ret = -EINVAL;
 
 	if (mt7996_mac_check_twt_req(twt))
@@ -3676,21 +3734,23 @@ static int mt7996_mac_btwt_setup(struct ieee80211_hw *hw,
 	id = le16_get_bits(twt_agrt->bcast.btwt_info, IEEE80211_BTWT_INFO_ID);
 
 	mutex_lock(&dev->mt76.mutex);
-	msta_link = mt76_dereference(msta->link[0], &dev->mt76);
-	link = mt7996_vif_link(dev, vif, 0);
+	msta_link = mt76_dereference(msta->link[link_id], &dev->mt76);
+	link = mt7996_vif_link(dev, vif, link_id);
+	if (!msta_link || !link)
+		goto unlock;
 
 	if (id == 0) {
 		if (mt7996_mac_btwt_setup_id_0(dev, link, msta_link))
 			goto unlock;
+
 		goto accept;
 	}
 
-	for (i = 0; i < MT7996_MAX_BTWT_AGRT; i++) {
-		if ((dev->twt.table_mask & BIT(i + MT7996_BTWT_AGRT_OFFSET)) &&
-		    (dev->twt.btwt_flow[i].peer_id_grp_id & 0xff) == id) {
-			flow = &dev->twt.btwt_flow[i];
+	mt7996_for_each_btwt_flow(dev, flow) {
+		if (mt7996_btwt_has_id(flow, id) &&
+		    flow->bss_idx == link->mt76.idx)
 			break;
-		}
+		flow = NULL;
 	}
 
 	if (!flow)
@@ -3698,17 +3758,13 @@ static int mt7996_mac_btwt_setup(struct ieee80211_hw *hw,
 
 	if (le16_get_bits(twt_agrt->req_type, IEEE80211_TWT_REQTYPE_SETUP_CMD) ==
 			  TWT_SETUP_CMD_REQUEST) {
-		u64 curr_tsf, interval, future_twt;
-		u32 rem;
+		u64 future_twt;
 
 		/* Calculate the future TSF and fill in the outgoing TWT action frame.
 		 * Since the TWT field in the frame has only 16bits, we need to
 		 * extract TSF[10:25] according to spec
 		 */
-		interval = (u64)le16_to_cpu(flow->mantissa) << flow->exp;
-		curr_tsf = __mt7996_get_tsf(hw, link);
-		div_u64_rem(curr_tsf - flow->start_tsf, interval, &rem);
-		future_twt = curr_tsf + (interval - rem);
+		future_twt = mt7996_mac_twt_calc_target_tsf(hw, link, flow);
 		twt_agrt->bcast.twt = cpu_to_le16((u16)((future_twt >> 10) & 0xffff));
 	}
 
@@ -3723,34 +3779,91 @@ unlock:
 out:
 	le16p_replace_bits(&twt_agrt->req_type, setup_cmd,
 			   IEEE80211_TWT_REQTYPE_SETUP_CMD);
-	twt->control |= IEEE80211_TWT_CONTROL_RX_DISABLED;
+	return ret;
+}
+
+static int mt7996_mac_itwt_modify(struct ieee80211_hw *hw,
+				  struct mt7996_dev *dev,
+				  struct mt7996_vif_link *link,
+				  struct mt7996_sta_link *msta_link,
+				  struct ieee80211_twt_params *twt_agrt)
+{
+	u8 flowid = le16_get_bits(twt_agrt->req_type, IEEE80211_TWT_REQTYPE_FLOWID);
+	struct mt7996_twt_flow *flow = &msta_link->twt.flow[flowid];
+	struct mt7996_twt_flow backup_flow;
+	int ret;
+
+	list_del_init(&flow->list);
+
+	memcpy(&backup_flow, flow, sizeof(backup_flow));
+
+	mt7996_mac_itwt_flow_set_params(hw, link, dev, flow, twt_agrt);
+
+	ret = mt7996_mcu_twt_agrt_update(dev, link, flow, MCU_TWT_AGRT_MODIFY);
+	if (ret)
+		memcpy(flow, &backup_flow, sizeof(*flow));
+
+	if (flow->sched)
+		mt7996_mac_twt_sched_list_insert(dev, flow);
+	else
+		list_add_tail(&flow->list, &dev->twt_list);
+
 	return ret;
 }
 
 static int mt7996_mac_itwt_setup(struct ieee80211_hw *hw,
-				 struct ieee80211_sta *sta,
+				 struct ieee80211_sta *sta, u8 link_id,
 				 struct ieee80211_twt_setup *twt)
 {
-	enum ieee80211_twt_setup_cmd setup_cmd = TWT_SETUP_CMD_REJECT;
 	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
+	struct ieee80211_twt_params *twt_agrt = (void *)twt->params;
 	struct ieee80211_vif *vif =
 		container_of((void *)msta->vif, struct ieee80211_vif, drv_priv);
-	struct ieee80211_twt_params *twt_agrt = (void *)twt->params;
+	enum ieee80211_twt_setup_cmd setup_cmd = TWT_SETUP_CMD_REJECT;
+	enum mt7996_twt_check_result check_result;
+	struct mt7996_dev *dev = mt7996_hw_dev(hw);
 	struct mt7996_sta_link *msta_link;
 	struct mt7996_vif_link *link;
-	u16 req_type = le16_to_cpu(twt_agrt->req_type);
-	enum ieee80211_twt_setup_cmd sta_setup_cmd;
-	struct mt7996_dev *dev = mt7996_hw_dev(hw);
 	struct mt7996_twt_flow *flow;
-	u8 flowid, table_id, exp;
+	u8 flowid, table_id;
 	int ret = -EINVAL;
 
 	if (mt7996_mac_check_twt_req(twt))
 		goto out;
 
 	mutex_lock(&dev->mt76.mutex);
-	msta_link = mt76_dereference(msta->link[0], &dev->mt76);
-	link = mt7996_vif_link(dev, vif, 0);
+	msta_link = mt76_dereference(msta->link[link_id], &dev->mt76);
+	link = mt7996_vif_link(dev, vif, link_id);
+	if (!msta_link || !link)
+		goto unlock;
+
+	flowid = le16_get_bits(twt_agrt->req_type, IEEE80211_TWT_REQTYPE_FLOWID);
+	if (flowid >= ARRAY_SIZE(msta_link->twt.flow))
+		goto unlock;
+
+	check_result = mt7996_mac_itwt_check_exist(msta_link, twt_agrt, flowid);
+
+	switch (check_result) {
+	case TWT_CHECK_SAME:
+		setup_cmd = TWT_SETUP_CMD_ACCEPT;
+		ret = 0;
+		goto unlock;
+	case TWT_CHECK_NEED_MODIFY:
+		ret = mt7996_mac_itwt_modify(hw, dev, link, msta_link,
+					     twt_agrt);
+		if (!ret)
+			setup_cmd = TWT_SETUP_CMD_ACCEPT;
+		goto unlock;
+	case TWT_CHECK_NOT_EXIST:
+		break;
+	}
+
+	/* only check min_twt_dur for newly added agreement */
+	if (twt_agrt->indiv.min_twt_dur < MT7996_MIN_TWT_DUR) {
+		setup_cmd = TWT_SETUP_CMD_DICTATE;
+		twt_agrt->indiv.min_twt_dur = MT7996_MIN_TWT_DUR;
+		goto unlock;
+	}
 
 	if (dev->twt.n_agrt == MT7996_MAX_TWT_AGRT)
 		goto unlock;
@@ -3759,23 +3872,14 @@ static int mt7996_mac_itwt_setup(struct ieee80211_hw *hw,
 	    ARRAY_SIZE(msta_link->twt.flow))
 		goto unlock;
 
-	if (twt_agrt->indiv.min_twt_dur < MT7996_MIN_TWT_DUR) {
-		setup_cmd = TWT_SETUP_CMD_DICTATE;
-		twt_agrt->indiv.min_twt_dur = MT7996_MIN_TWT_DUR;
-		goto unlock;
-	}
-
-	if (mt7996_mac_twt_param_equal(msta_link, twt_agrt))
-		goto unlock;
-
-	flowid = ffs(~msta_link->twt.flowid_mask) - 1;
-	twt_agrt->req_type &= ~cpu_to_le16(IEEE80211_TWT_REQTYPE_FLOWID);
-	twt_agrt->req_type |= le16_encode_bits(flowid,
-					       IEEE80211_TWT_REQTYPE_FLOWID);
-
 	table_id = ffs(~dev->twt.table_mask) - 1;
-	exp = FIELD_GET(IEEE80211_TWT_REQTYPE_WAKE_INT_EXP, req_type);
-	sta_setup_cmd = FIELD_GET(IEEE80211_TWT_REQTYPE_SETUP_CMD, req_type);
+
+	if (le16_get_bits(twt_agrt->req_type, IEEE80211_TWT_REQTYPE_SETUP_CMD) !=
+	    TWT_SETUP_CMD_DEMAND) {
+		flowid = ffs(~msta_link->twt.flowid_mask) - 1;
+		le16p_replace_bits(&twt_agrt->req_type, flowid,
+				   IEEE80211_TWT_REQTYPE_FLOWID);
+	}
 
 	flow = &msta_link->twt.flow[flowid];
 	memset(flow, 0, sizeof(*flow));
@@ -3784,56 +3888,76 @@ static int mt7996_mac_itwt_setup(struct ieee80211_hw *hw,
 	flow->peer_id_grp_id = msta_link->wcid.idx;
 	flow->table_id = table_id;
 	flow->id = flowid;
-	flow->duration = twt_agrt->indiv.min_twt_dur;
-	flow->mantissa = twt_agrt->indiv.mantissa;
-	flow->exp = exp;
-	flow->protection = !!(req_type & IEEE80211_TWT_REQTYPE_PROTECTION);
-	flow->flowtype = !!(req_type & IEEE80211_TWT_REQTYPE_FLOWTYPE);
-	flow->trigger = !!(req_type & IEEE80211_TWT_REQTYPE_TRIGGER);
 
-	if (sta_setup_cmd == TWT_SETUP_CMD_REQUEST ||
-	    sta_setup_cmd == TWT_SETUP_CMD_SUGGEST) {
-		u64 interval = (u64)le16_to_cpu(twt_agrt->indiv.mantissa) << exp;
-		u64 flow_tsf, curr_tsf;
-		u32 rem;
+	mt7996_mac_itwt_flow_set_params(hw, link, dev, flow, twt_agrt);
 
-		flow->sched = true;
-		flow->start_tsf = mt7996_mac_twt_sched_list_add(dev, flow);
-		curr_tsf = __mt7996_get_tsf(hw, link);
-		div_u64_rem(curr_tsf - flow->start_tsf, interval, &rem);
-		flow_tsf = curr_tsf + interval - rem;
-		twt_agrt->indiv.twt = cpu_to_le64(flow_tsf);
-	} else {
-		list_add_tail(&flow->list, &dev->twt_list);
-	}
-	flow->tsf = le64_to_cpu(twt_agrt->indiv.twt);
-
-	if (mt7996_mcu_twt_agrt_update(dev, link, flow,
-				       MCU_TWT_AGRT_ADD))
+	ret = mt7996_mcu_twt_agrt_update(dev, link, flow, MCU_TWT_AGRT_ADD);
+	if (ret)
 		goto unlock;
+
+	if (flow->sched)
+		mt7996_mac_twt_sched_list_insert(dev, flow);
+	else
+		list_add_tail(&flow->list, &dev->twt_list);
 
 	setup_cmd = TWT_SETUP_CMD_ACCEPT;
 	dev->twt.table_mask |= BIT(table_id);
 	msta_link->twt.flowid_mask |= BIT(flowid);
 	dev->twt.n_agrt++;
-	ret = 0;
 
 unlock:
 	mutex_unlock(&dev->mt76.mutex);
 out:
 	le16p_replace_bits(&twt_agrt->req_type, setup_cmd,
 			   IEEE80211_TWT_REQTYPE_SETUP_CMD);
-	twt->control = twt->control & IEEE80211_TWT_CONTROL_RX_DISABLED;
 	return ret;
 }
 
 int mt7996_mac_add_twt_setup(struct ieee80211_hw *hw,
-			     struct ieee80211_sta *sta,
+			     struct ieee80211_sta *sta, u8 link_id,
 			     struct ieee80211_twt_setup *twt)
 {
-	return (twt->control & IEEE80211_TWT_CONTROL_NEG_TYPE_BROADCAST) ?
-		mt7996_mac_btwt_setup(hw, sta, twt) :
-		mt7996_mac_itwt_setup(hw, sta, twt);
+	struct mt7996_dev *dev = mt7996_hw_dev(hw);
+
+	if (link_id >= IEEE80211_LINK_UNSPECIFIED)
+		return -EINVAL;
+
+	if (twt->control & IEEE80211_TWT_CONTROL_NEG_TYPE_BROADCAST)
+		return mt7996_mac_btwt_setup(hw, sta, link_id, twt);
+
+	/* FIXME: Do not support MLO iTWT yet */
+	if (sta->mlo) {
+		mt76_dev_dbg(&dev->mt76,
+			     "FIXME: iTWT setup is not supported for a non-AP MLD");
+		return -EOPNOTSUPP;
+	}
+
+	return mt7996_mac_itwt_setup(hw, sta, link_id, twt);
+}
+
+static int mt7996_mac_btwt_teardown_all(struct mt7996_dev *dev,
+					struct mt7996_vif_link *link,
+					struct mt7996_sta_link *msta_link)
+{
+	struct mt7996_twt_flow *flow;
+	int ret = 0;
+
+	mt7996_for_each_btwt_flow(dev, flow) {
+		if (flow->bss_idx != link->mt76.idx)
+			continue;
+
+		if (mt7996_mac_btwt_del_member(flow, msta_link->wcid.idx))
+			continue;
+
+		if (mt7996_mcu_twt_agrt_update(dev, link, flow, MCU_TWT_AGRT_MODIFY)) {
+			mt76_dev_dbg(&dev->mt76,
+				     "Failed to delete sta wcid %d from btwt flow %d",
+				     msta_link->wcid.idx, flow->table_id);
+			ret = -EINVAL;
+		}
+	}
+
+	return ret;
 }
 
 static int mt7996_mac_btwt_teardown(struct mt7996_dev *dev,
@@ -3842,14 +3966,15 @@ static int mt7996_mac_btwt_teardown(struct mt7996_dev *dev,
 				    struct ieee80211_twt_teardown *td)
 {
 	struct mt7996_twt_flow *flow = NULL;
-	u8 i;
 
-	for (i = 0; i < MT7996_MAX_BTWT_AGRT; i++) {
-		if ((dev->twt.table_mask & BIT(i + MT7996_BTWT_AGRT_OFFSET)) &&
-		    (dev->twt.btwt_flow[i].peer_id_grp_id & 0xff) == td->id) {
-			flow = &dev->twt.btwt_flow[i];
+	if (td->id == 0)
+		return mt7996_mac_btwt_teardown_all(dev, link, msta_link);
+
+	mt7996_for_each_btwt_flow(dev, flow) {
+		if (mt7996_btwt_has_id(flow, td->id) &&
+		    flow->bss_idx == link->mt76.idx)
 			break;
-		}
+		flow = NULL;
 	}
 
 	if (!flow)
@@ -3968,6 +4093,7 @@ int mt7996_mac_add_btwt(struct ieee80211_hw *hw,
 	flow = &dev->twt.btwt_flow[table_id - MT7996_BTWT_AGRT_OFFSET];
 	memset(flow, 0, sizeof(*flow));
 	INIT_LIST_HEAD(&flow->list);
+
 	flow->peer_id_grp_id = btwt->id | MCU_TWT_BTWT_ID_BIT;
 	if (btwt->recommendation == BTWT_RECOMM_RTWT)
 		flow->peer_id_grp_id |= MCU_TWT_RTWT_ID_BIT;
@@ -3977,16 +4103,19 @@ int mt7996_mac_add_btwt(struct ieee80211_hw *hw,
 	flow->mantissa = cpu_to_le16(btwt->wake_intv_mantissa);
 	flow->exp = btwt->wake_intv_exp;
 	flow->persist = btwt->persist;
-	flow->sched = true;
-	flow->start_tsf = mt7996_mac_twt_sched_list_add(dev, flow);
-	curr_tsf = __mt7996_get_tsf(hw, link);
-	interval = (u64) btwt->wake_intv_mantissa << btwt->wake_intv_exp;
-	div_u64_rem(curr_tsf - flow->start_tsf, interval, &rem);
-	flow->tsf = curr_tsf + interval - rem;
 	flow->flowtype = btwt->flow_type;
 	flow->trigger = btwt->trigger;
 	flow->tid_dl_bmp = btwt->dl_tid_bmp;
 	flow->tid_ul_bmp = btwt->ul_tid_bmp;
+	flow->bss_idx = link->mt76.idx;
+
+	flow->sched = true;
+	flow->start_tsf = mt7996_mac_twt_calc_start_tsf(dev, flow);
+
+	curr_tsf = __mt7996_get_tsf(hw, link);
+	interval = (u64)btwt->wake_intv_mantissa << btwt->wake_intv_exp;
+	div_u64_rem(curr_tsf - flow->start_tsf, interval, &rem);
+	flow->tsf = curr_tsf + interval - rem;
 
 	/* Here, we maintain the table_id by ourselves and directly add BTWT SP
 	 * by MCU_TWT_AGRT_ADD. MTK proprietary driver handles it differently.
@@ -3994,19 +4123,61 @@ int mt7996_mac_add_btwt(struct ieee80211_hw *hw,
 	 * managed by MCU. Then, it runs MCU_TWT_AGRT_ADD to add the BTWT SP
 	 * with the allocated table_id.
 	 */
-	if (mt7996_mcu_twt_agrt_update(dev, link, flow, MCU_TWT_AGRT_ADD)) {
-		list_del_init(&flow->list);
+	ret = mt7996_mcu_twt_agrt_update(dev, link, flow, MCU_TWT_AGRT_ADD);
+	if (ret)
 		goto unlock;
-	}
+
+	mt7996_mac_twt_sched_list_insert(dev, flow);
 
 	dev->twt.table_mask |= BIT(table_id);
 	dev->twt.n_agrt++;
 	dev->twt.n_agrt_bc++;
-	ret = 0;
 
 unlock:
 	mutex_unlock(&dev->mt76.mutex);
 	return ret;
+}
+
+void mt7996_mac_btwt_cleanup(struct mt7996_dev *dev,
+			     struct mt7996_vif_link *link)
+{
+	struct mt7996_twt_flow *flow;
+
+	lockdep_assert_held(&dev->mt76.mutex);
+
+	mt7996_for_each_btwt_flow(dev, flow) {
+		if (flow->bss_idx != link->mt76.idx)
+			continue;
+
+		if (mt7996_mcu_twt_agrt_update(dev, link, flow, MCU_TWT_AGRT_DELETE))
+			dev_err(dev->mt76.dev, "Failed to teardown btwt flow %u",
+				flow->table_id);
+	}
+}
+
+static void mt7996_btwt_flow_deinit(struct mt7996_dev *dev,
+				    struct mt7996_twt_flow *flow)
+{
+	dev->twt.table_mask &= ~BIT(flow->table_id);
+	dev->twt.n_agrt--;
+	dev->twt.n_agrt_bc--;
+	list_del_init(&flow->list);
+	memset(flow, 0, sizeof(*flow));
+}
+
+void mt7996_btwt_table_cleanup(struct mt7996_dev *dev,
+			       struct mt7996_vif_link *link)
+{
+	struct mt7996_twt_flow *flow;
+
+	lockdep_assert_held(&dev->mt76.mutex);
+
+	mt7996_for_each_btwt_flow(dev, flow) {
+		if (flow->bss_idx != link->mt76.idx)
+			continue;
+
+		mt7996_btwt_flow_deinit(dev, flow);
+	}
 }
 
 int mt7996_mac_del_btwt(struct ieee80211_hw *hw,
@@ -4017,7 +4188,6 @@ int mt7996_mac_del_btwt(struct ieee80211_hw *hw,
 	struct mt7996_vif_link *link;
 	struct mt7996_twt_flow *flow = NULL;
 	int ret = -EINVAL;
-	u8 i;
 
 	mutex_lock(&dev->mt76.mutex);
 
@@ -4025,12 +4195,11 @@ int mt7996_mac_del_btwt(struct ieee80211_hw *hw,
 	if (!link)
 		goto unlock;
 
-	for (i = 0; i < MT7996_MAX_BTWT_AGRT; i++) {
-		if ((dev->twt.table_mask & BIT(i + MT7996_BTWT_AGRT_OFFSET)) &&
-		    id == (dev->twt.btwt_flow[i].peer_id_grp_id & 0xff)) {
-			flow = &dev->twt.btwt_flow[i];
+	mt7996_for_each_btwt_flow(dev, flow) {
+		if (mt7996_btwt_has_id(flow, id) &&
+		    flow->bss_idx == link->mt76.idx)
 			break;
-		}
+		flow = NULL;
 	}
 
 	if (!flow)
@@ -4039,11 +4208,7 @@ int mt7996_mac_del_btwt(struct ieee80211_hw *hw,
 	if (mt7996_mcu_twt_agrt_update(dev, link, flow, MCU_TWT_AGRT_DELETE))
 		goto unlock;
 
-	dev->twt.table_mask &= ~BIT(flow->table_id);
-	dev->twt.n_agrt--;
-	dev->twt.n_agrt_bc--;
-	list_del_init(&flow->list);
-	memset(flow, 0, sizeof(*flow));
+	mt7996_btwt_flow_deinit(dev, flow);
 	ret = 0;
 
 unlock:
