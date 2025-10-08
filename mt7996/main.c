@@ -328,9 +328,9 @@ int mt7996_vif_link_add(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 	mt7996_mac_wtbl_update(dev, idx,
 			       MT_WTBL_UPDATE_ADM_COUNT_CLEAR);
 
-	if (vif->txq && hweight16(vif->valid_links) <= 1) {
+	if (vif->txq) {
 		mtxq = (struct mt76_txq *)vif->txq->drv_priv;
-		mtxq->wcid = idx;
+		mtxq->wcid = mtxq->wcid ?: idx;
 	}
 	if (vif->type != NL80211_IFTYPE_AP &&
 	    (!mlink->omac_idx || mlink->omac_idx > 3))
@@ -376,6 +376,7 @@ void mt7996_vif_link_remove(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 			    struct mt76_vif_link *mlink)
 {
 	struct mt7996_vif_link *link = container_of(mlink, struct mt7996_vif_link, mt76);
+	struct mt76_txq *mtxq = vif->txq ? (struct mt76_txq *)vif->txq->drv_priv : NULL;
 	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
 	struct mt7996_sta_link *msta_link = &link->msta_link;
 	struct mt7996_phy *phy = link->phy;
@@ -412,6 +413,22 @@ void mt7996_vif_link_remove(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 
 	mvif->mt76.valid_links &= ~BIT(link_id);
 	dev->mld_idx_mask &= ~BIT_ULL(link->mld_idx);
+
+	/* Update mtxq wcid to another link when the original wcid is removed */
+	if (mtxq && mtxq->wcid == idx) {
+		unsigned long valid_links = mvif->mt76.valid_links;
+		mtxq->wcid = 0;
+		for_each_set_bit(link_id, &valid_links, IEEE80211_MLD_MAX_NUM_LINKS) {
+			struct mt7996_sta_link *msta_link_temp =
+				mt76_dereference(mvif->sta.link[link_id], &dev->mt76);
+
+			if (!msta_link_temp)
+				continue;
+
+			mtxq->wcid = msta_link_temp->wcid.idx;
+			break;
+		}
+	}
 
 	spin_lock_bh(&dev->mt76.sta_poll_lock);
 	if (!list_empty(&msta_link->wcid.poll_list))

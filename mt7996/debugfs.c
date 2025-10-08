@@ -1577,6 +1577,7 @@ mt7996_vif_links_info_show(struct seq_file *s, void *data)
 	struct mt7996_dev *dev = mvif->dev;
 	struct mt7996_vif_link *mconf;
 	struct mt7996_sta_link *msta_link;
+	struct mt76_txq *mtxq = (struct mt76_txq *) vif->txq->drv_priv;
 	unsigned long valid_links;
 	u8 link_id, i;
 
@@ -1597,10 +1598,12 @@ mt7996_vif_links_info_show(struct seq_file *s, void *data)
 	seq_printf(s, "mld remap id = %d\n", mvif->mld_remap_idx);
 
 	seq_printf(s, "valid links = 0x%x\n", vif->valid_links);
+	seq_printf(s, "mtxq->wcid = %d\n", mtxq->wcid);
 	for (i = 0; i < __MT_MAX_BAND; i++)
 		seq_printf(s, "band%d_link_id = %d\n", i, mvif->mt76.band_to_link[i]);
 
 	mutex_lock(&dev->mt76.mutex);
+	rcu_read_lock();
 	valid_links = vif->valid_links ?: BIT(0);
 	for_each_set_bit(link_id, &valid_links, IEEE80211_MLD_MAX_NUM_LINKS) {
 		mconf = mt7996_vif_link(dev, vif, link_id);
@@ -1622,6 +1625,7 @@ mt7996_vif_links_info_show(struct seq_file *s, void *data)
 			   mconf->phy->mt76->chanctx->chandef.chan->hw_value,
 			   width_to_bw[mconf->phy->mt76->chanctx->chandef.width]);
 	}
+	rcu_read_unlock();
 	mutex_unlock(&dev->mt76.mutex);
 
 	return 0;
