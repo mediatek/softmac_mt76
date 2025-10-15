@@ -423,8 +423,6 @@ mt7996_mcu_csa_finish(void *priv, u8 *mac, struct ieee80211_vif *vif)
 	if (!link_conf || !link_conf->csa_active || vif->type == NL80211_IFTYPE_STATION)
 		return;
 
-	mvif->cs_ready_links = 0;
-	mvif->cs_link_id = IEEE80211_LINK_UNSPECIFIED;
 	ieee80211_csa_finish(vif, link_id);
 	/* remove CSA for affiliated links */
 	for_each_set_bit(link_id, &valid_links, IEEE80211_MLD_MAX_NUM_LINKS) {
@@ -2150,6 +2148,22 @@ out:
 				     MCU_WMWA_UNI_CMD(BSS_INFO_UPDATE), true);
 }
 
+int mt7996_mcu_update_bss_rfch(struct mt7996_phy *phy, struct mt7996_vif_link *link)
+{
+	struct mt7996_dev *dev = phy->dev;
+	struct sk_buff *skb;
+
+	skb = __mt7996_mcu_alloc_bss_req(&dev->mt76, &link->mt76,
+					 MT7996_BSS_UPDATE_MAX_SIZE);
+	if (IS_ERR(skb))
+		return PTR_ERR(skb);
+
+	mt7996_mcu_bss_rfch_tlv(skb, phy);
+
+	return mt76_mcu_skb_send_msg(&dev->mt76, skb,
+				     MCU_WMWA_UNI_CMD(BSS_INFO_UPDATE), true);
+}
+
 int mt7996_mcu_get_tsf_offset(struct mt7996_phy *phy,
 			      struct mt7996_vif *mvif,
 			      int rpting_link_id,
@@ -3738,6 +3752,63 @@ int mt7996_mcu_teardown_mld_sta(struct mt7996_dev *dev,
 
 	return mt76_mcu_skb_send_msg(&dev->mt76, skb,
 				     MCU_WMWA_UNI_CMD(STA_REC_UPDATE), true);
+}
+
+void mt7996_mcu_update_sta_rec_bw(void *data, struct ieee80211_sta *sta)
+{
+	struct mt7996_vif_link *own_link = (struct mt7996_vif_link *)data;
+	struct mt7996_phy *phy = own_link->phy;
+	struct mt7996_dev *dev = phy->dev;
+	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
+	struct mt7996_vif *mvif = msta->vif;
+	struct ieee80211_vif *vif;
+	struct ieee80211_bss_conf *link_conf;
+	struct ieee80211_link_sta *link_sta;
+	struct mt7996_sta_link *msta_link;
+	struct mt7996_vif_link *link;
+	struct sk_buff *skb;
+	unsigned int link_id;
+
+	link_id = mvif->mt76.band_to_link[phy->mt76->band_idx];
+	if (link_id == IEEE80211_LINK_UNSPECIFIED)
+		return;
+
+	rcu_read_lock();
+
+	link_sta = rcu_dereference(sta->link[link_id]);
+	if (!link_sta)
+		goto out;
+
+	msta_link = rcu_dereference(msta->link[link_id]);
+	if (!msta_link)
+		goto out;
+
+	vif = container_of((void *)mvif, struct ieee80211_vif, drv_priv);
+	link_conf = rcu_dereference(vif->link_conf[link_id]);
+	if (!link_conf)
+		goto out;
+
+	link = (struct mt7996_vif_link *)rcu_dereference(mvif->mt76.link[link_id]);
+	if (!link || link != own_link)
+		goto out;
+
+	skb = __mt76_connac_mcu_alloc_sta_req(&dev->mt76, &link->mt76,
+					      &msta_link->wcid,
+					      MT7996_STA_UPDATE_MAX_SIZE);
+	if (IS_ERR(skb))
+		goto out;
+
+	mt7996_mcu_sta_bfer_tlv(dev, skb, link_conf, link_sta, link);
+	mt7996_mcu_sta_rate_ctrl_tlv(skb, dev, vif, link_conf, link_sta, link);
+
+	rcu_read_unlock();
+
+	mt76_mcu_skb_send_msg(&dev->mt76, skb,
+			      MCU_WMWA_UNI_CMD(STA_REC_UPDATE), true);
+	return;
+
+out:
+	rcu_read_unlock();
 }
 
 static int

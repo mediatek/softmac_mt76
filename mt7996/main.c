@@ -540,6 +540,7 @@ static int mt7996_add_interface(struct ieee80211_hw *hw,
 	mvif->sta.vif = mvif;
 	/* TODO: temporaily set this to prevent some crashes */
 	mvif->deflink.mt76.mvif = &mvif->mt76;
+	mvif->cs_link_id = IEEE80211_LINK_UNSPECIFIED;
 	memset(mvif->mt76.band_to_link, IEEE80211_LINK_UNSPECIFIED,
 	       sizeof(mvif->mt76.band_to_link));
 
@@ -1186,8 +1187,23 @@ mt7996_post_channel_switch(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	struct cfg80211_chan_def *chandef = &link_conf->chanreq.oper;
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
 	struct mt7996_phy *phy = mt7996_band_phy(dev, chandef->chan->band);
+	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
+	struct mt7996_vif_link *link = mt7996_vif_conf_link(dev, vif, link_conf);
+	int ret;
+
+	if (mvif->cs_link_id == IEEE80211_LINK_UNSPECIFIED ||
+	    mvif->cs_link_id != link_conf->link_id)
+		return 0;
+
+	ret = mt7996_mcu_update_bss_rfch(phy, link);
+	if (ret)
+		return ret;
+	ieee80211_iterate_stations_mtx(hw, mt7996_mcu_update_sta_rec_bw, link);
 
 	mt7996_mcu_rdd_resume_tx(phy);
+
+	mvif->cs_ready_links = 0;
+	mvif->cs_link_id = IEEE80211_LINK_UNSPECIFIED;
 
 	if (!phy->mt76->radar_bypass_cal)
 		return 0;
@@ -3017,6 +3033,7 @@ mt7996_sta_channel_switch(struct ieee80211_hw *hw,
 {
 #define TX_PAUSED_GRACE_PERIOD		2000
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
+	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
 	struct ieee80211_bss_conf *conf;
 	struct mt7996_vif_link *mconf;
 	unsigned int link_id = ch_switch->link_id;
@@ -3044,6 +3061,7 @@ mt7996_sta_channel_switch(struct ieee80211_hw *hw,
 			       cfg80211_chandef_dfs_cac_time(hw->wiphy,
 							     &ch_switch->chandef);
 	mconf->next_state = MT7996_STA_CHSW_PAUSE_TX;
+	mvif->cs_link_id = link_id;
 	mutex_unlock(&dev->mt76.mutex);
 
 	cancel_delayed_work(&mconf->sta_chsw_work);
