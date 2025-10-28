@@ -1296,7 +1296,7 @@ mt7996_mac_sta_init_link(struct mt7996_dev *dev,
 	ewma_avg_signal_init(&msta_link->avg_ack_signal);
 
 #ifdef CONFIG_MTK_VENDOR
-	mt7996_vendor_amnt_sta_remove(link->phy, sta);
+	mt7996_vendor_amnt_sta_remove(link->phy, link_sta);
 #endif
 
 error:

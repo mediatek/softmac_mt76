@@ -1518,7 +1518,7 @@ void mt7996_set_wireless_vif(void *data, u8 *mac, struct ieee80211_vif *vif);
 void mt7996_vendor_register(struct mt7996_phy *phy);
 void mt7996_vendor_amnt_fill_rx(struct mt7996_phy *phy, struct sk_buff *skb);
 int mt7996_vendor_amnt_sta_remove(struct mt7996_phy *phy,
-				  struct ieee80211_sta *sta);
+				  struct ieee80211_link_sta *link_sta);
 void mt7996_set_wireless_amsdu(struct ieee80211_hw *hw, u8 en);
 void mt7996_mcu_set_mimo(struct mt7996_phy *phy);
 int mt7996_set_muru_cfg(struct mt7996_dev *dev, u8 action, u8 val);

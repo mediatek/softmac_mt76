@@ -558,7 +558,7 @@ mt7996_vendor_amnt_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 }
 
 int mt7996_vendor_amnt_sta_remove(struct mt7996_phy *phy,
-				  struct ieee80211_sta *sta)
+				  struct ieee80211_link_sta *link_sta)
 {
 	u8 zero[ETH_ALEN] = {};
 	int i;
@@ -567,7 +567,7 @@ int mt7996_vendor_amnt_sta_remove(struct mt7996_phy *phy,
 		return 0;
 
 	for (i = 0; i < MT7996_AIR_MONITOR_MAX_ENTRY; i++)
-		if (ether_addr_equal(sta->addr, phy->amnt_ctrl.entry[i].addr))
+		if (ether_addr_equal(link_sta->addr, phy->amnt_ctrl.entry[i].addr))
 			return mt7996_vendor_amnt_set_addr(phy, i, zero);
 	return 0;
 }
