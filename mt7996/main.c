@@ -2113,6 +2113,36 @@ mt7996_set_coverage_class(struct ieee80211_hw *hw, int radio_idx,
 }
 
 static int
+mt7996_set_radio_antenna(struct ieee80211_hw *hw, int radio_idx, u32 tx_ant, u32 rx_ant)
+{
+	struct mt7996_dev *dev = mt7996_hw_dev(hw);
+	struct mt7996_phy *phy;
+	struct wiphy_radio *radio;
+	int shift;
+
+	if (radio_idx >= hw->wiphy->n_radio)
+		return -EINVAL;
+
+	mutex_lock(&dev->mt76.mutex);
+
+	phy = dev->radio_phy[radio_idx];
+	radio = &dev->radios[radio_idx];
+	shift = dev->mt76.chainshift[phy->mt76->band_idx];
+
+	/* tx_ant is not shifted */
+	phy->mt76->chainmask = tx_ant & (radio->antenna_mask >> shift);
+	phy->mt76->antenna_mask = phy->mt76->chainmask & phy->orig_antenna_mask;
+
+	mt76_set_stream_caps(phy->mt76, true);
+	mt7996_set_stream_vht_txbf_caps(phy);
+	mt7996_set_stream_he_eht_caps(phy);
+
+	mutex_unlock(&dev->mt76.mutex);
+
+	return 0;
+}
+
+static int
 mt7996_set_antenna(struct ieee80211_hw *hw, int radio_idx,
 		   u32 tx_ant, u32 rx_ant)
 {
@@ -2123,6 +2153,9 @@ mt7996_set_antenna(struct ieee80211_hw *hw, int radio_idx,
 
 	if (tx_ant != rx_ant)
 		return -EINVAL;
+
+	if (radio_idx != -1)
+		return mt7996_set_radio_antenna(hw, radio_idx, tx_ant, rx_ant);
 
 	for (i = 0; i < hw->wiphy->n_radio; i++) {
 		phy = dev->radio_phy[i];
