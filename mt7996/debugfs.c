@@ -1234,6 +1234,99 @@ mt7996_airtime_read(struct seq_file *s, void *data)
 	return 0;
 }
 
+static ssize_t mt7996_rdd_radar_th_set(struct file *file,
+				       const char __user *user_buf,
+				       size_t count, loff_t *ppos)
+{
+	struct mt7996_dev *dev = file->private_data;
+	struct mt7996_dfs_pattern p;
+	char buf[100];
+	int ret, radar_type;
+
+	if (count >= sizeof(buf))
+		return -EINVAL;
+
+	if (copy_from_user(buf, user_buf, count))
+		return -EFAULT;
+
+	if (count && buf[count - 1] == '\n')
+		buf[count - 1] = '\0';
+	else
+		buf[count] = '\0';
+
+	if (sscanf(buf,
+		   "%d %hhu %hhu %hhu %hhu %hhu %hhu %u %u %hhu %hhu %hhu %hhu %hhu %hhu %u",
+		   &radar_type, &p.enb, &p.stgr, &p.min_crpn, &p.max_crpn, &p.min_crpr,
+		   &p.min_pw, &p.min_pri, &p.max_pri, &p.max_pw, &p.min_crbn, &p.max_crbn,
+		   &p.min_stgpn, &p.max_stgpn, &p.min_stgpr, &p.min_stgpr_diff) != 16) {
+		dev_err(dev->mt76.dev, "Invalid format\n");
+		return -EINVAL;
+	}
+
+	ret = mt7996_mcu_set_radar_th(dev, radar_type, &p);
+	if (ret)
+		return ret;
+	return count;
+}
+
+static const struct file_operations fops_rdd_radar_th = {
+	.write = mt7996_rdd_radar_th_set,
+	.open = simple_open,
+	.owner = THIS_MODULE,
+	.llseek = default_llseek,
+};
+
+static ssize_t mt7996_rdd_pulse_th_set(struct file *file,
+				       const char __user *user_buf,
+				       size_t count, loff_t *ppos)
+{
+	struct mt7996_dev *dev = file->private_data;
+	struct mt7996_dfs_pulse p;
+	char buf[100];
+	int ret;
+
+	if (count >= sizeof(buf))
+		return -EINVAL;
+
+	if (copy_from_user(buf, user_buf, count))
+		return -EFAULT;
+
+	if (count && buf[count - 1] == '\n')
+		buf[count - 1] = '\0';
+	else
+		buf[count] = '\0';
+
+	if (sscanf(buf,
+		   "%u %d %d %u %u %u %u",
+		   &p.max_width, &p.max_pwr, &p.min_pwr, &p.min_stgr_pri,
+		   &p.max_stgr_pri, &p.min_cr_pri, &p.max_cr_pri) != 7) {
+		dev_err(dev->mt76.dev, "Invalid format\n");
+		return -EINVAL;
+	}
+
+	ret = mt7996_mcu_set_pulse_th(dev, &p);
+	if (ret)
+		return ret;
+	return count;
+}
+
+static const struct file_operations fops_rdd_pulse_th = {
+	.write = mt7996_rdd_pulse_th_set,
+	.open = simple_open,
+	.owner = THIS_MODULE,
+	.llseek = default_llseek,
+};
+
+static int mt7996_rdd_fcc5_lpn_set(void *data, u64 val)
+{
+	struct mt7996_dev *dev = data;
+
+	return mt7996_mcu_set_fcc5_lpn(dev, val);
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(fops_rdd_fcc5_lpn, NULL,
+			 mt7996_rdd_fcc5_lpn_set, "%lld\n");
+
 int mt7996_init_band_debugfs(struct mt7996_phy *phy)
 {
 	struct mt7996_dev *dev = phy->dev;
@@ -1264,6 +1357,9 @@ int mt7996_init_band_debugfs(struct mt7996_phy *phy)
 				    &fops_radar_trigger);
 		debugfs_create_devm_seqfile(dev->mt76.dev, "rdd_monitor", dir,
 					    mt7996_rdd_monitor);
+		debugfs_create_file("rdd_radar_th", 0200, dir, dev, &fops_rdd_radar_th);
+		debugfs_create_file("rdd_pulse_th", 0200, dir, dev, &fops_rdd_pulse_th);
+		debugfs_create_file("rdd_fcc5_lpn", 0200, dir, dev, &fops_rdd_fcc5_lpn);
 	}
 
 #ifdef CONFIG_MTK_DEBUG
