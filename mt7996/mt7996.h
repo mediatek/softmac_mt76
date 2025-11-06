@@ -294,6 +294,8 @@ struct mt7996_vif {
 
 	struct mt7996_vif_link_info link_info[IEEE80211_MLD_MAX_NUM_LINKS];
 
+	struct mt7996_sta sta;
+
 	u8 mld_group_idx;
 	u8 mld_remap_idx;
 

@@ -339,6 +339,9 @@ int mt7996_vif_link_add(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 	msta_link->wcid.tx_info |= MT_WCID_TX_INFO_SET;
 	mt76_wcid_init(&msta_link->wcid, band_idx);
 
+	msta_link->sta = &mvif->sta;
+	msta_link->sta->vif = mvif;
+
 	mt7996_mac_wtbl_update(dev, idx,
 			       MT_WTBL_UPDATE_ADM_COUNT_CLEAR);
 
@@ -361,6 +364,7 @@ int mt7996_vif_link_add(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 		mt7996_mcu_add_sta(dev, link_conf, NULL, link, NULL,
 				   CONN_STATE_PORT_SECURE, true);
 	rcu_assign_pointer(dev->mt76.wcid[idx], &msta_link->wcid);
+	rcu_assign_pointer(mvif->sta.link[link_conf->link_id], msta_link);
 
 	ieee80211_iter_keys(mphy->hw, vif, mt7996_key_iter, &it);
 
@@ -400,6 +404,7 @@ void mt7996_vif_link_remove(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 	mt7996_mcu_add_dev_info(phy, vif, link_conf, mlink, false);
 
 	rcu_assign_pointer(dev->mt76.wcid[idx], NULL);
+	rcu_assign_pointer(mvif->sta.link[link_conf->link_id], NULL);
 
 	if (vif->txq && !mlink->wcid->offchannel &&
 	    mvif->mt76.deflink_id == link_conf->link_id) {
