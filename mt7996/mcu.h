@@ -581,6 +581,29 @@ struct bss_bcn_mbss_tlv {
 	__le16 offset[MAX_BEACON_NUM];
 } __packed __aligned(4);
 
+struct bss_bcn_crit_update_tlv {
+	__le16 tag;
+	__le16 len;
+	__le32 bss_bitmap;
+	/* Bypass the beacon sequence handling in firmware for the
+	 * BSSes in the bitmap. If the flag is set for a BSS, then the
+	 * firmware will not set the beacon of the BSS in sequence.
+	 */
+	__le32 bypass_seq_bitmap;
+	__le16 tim_ie_pos[32];
+	__le16 cap_info_ie_pos[32];
+	bool require_event;
+	u8 rsv[3];
+} __packed;
+
+struct bss_bcn_sta_prof_cntdwn_tlv {
+	__le16 tag;
+	__le16 len;
+	__le16 sta_prof_csa_offs[__MT_MAX_BAND];
+	u8 cs_bss_idx[__MT_MAX_BAND];
+	u8 pkt_content[3];
+} __packed;
+
 struct bss_txcmd_tlv {
 	__le16 tag;
 	__le16 len;
@@ -1057,7 +1080,9 @@ enum {
 					 sizeof(struct bss_bcn_content_tlv) +	\
 					 4 + MT_TXD_SIZE +			\
 					 sizeof(struct bss_bcn_cntdwn_tlv) +	\
-					 sizeof(struct bss_bcn_mbss_tlv))
+					 sizeof(struct bss_bcn_mbss_tlv) +	\
+					 sizeof(struct bss_bcn_crit_update_tlv) +	\
+					 sizeof(struct bss_bcn_sta_prof_cntdwn_tlv))
 #define MT7996_MAX_BSS_OFFLOAD_SIZE	2048
 #define MT7996_MAX_BEACON_SIZE		(MT7996_MAX_BSS_OFFLOAD_SIZE - \
 					 MT7996_BEACON_UPDATE_SIZE)
@@ -1152,6 +1177,26 @@ enum {
 	UNI_CMD_THERMAL_PROTECT_DISABLE,
 	UNI_CMD_THERMAL_PROTECT_DUTY_CONFIG,
 	UNI_CMD_THERMAL_PROTECT_INFO,
+};
+
+struct mt7996_mcu_bss_event {
+	struct mt7996_mcu_rxd rxd;
+
+	/* fixed field */
+	u8 bss_idx;
+	u8 __rsv[3];
+	/* tlv */
+	u8 buf[];
+} __packed;
+
+struct mt7996_mcu_bss_bcn_crit_update_event {
+	__le16 tag;
+	__le16 len;
+	u8 rsv[4];
+} __packed;
+
+enum {
+	UNI_EVENT_BSS_BCN_CRIT_UPDATE = 0x01,
 };
 
 struct tx_power_ctrl {

@@ -452,6 +452,7 @@ struct mt7996_vif_link {
 	struct cfg80211_bitrate_mask bitrate_mask;
 
 	u8 mld_idx;
+	u8 bpcc;
 };
 
 struct mt7996_vif_link_info {

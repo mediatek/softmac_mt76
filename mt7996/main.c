@@ -434,6 +434,8 @@ int mt7996_vif_link_add(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 		mtxq->wcid = idx;
 	}
 
+	link->bpcc = 0;
+
 	mt76_bss_dbg(vif, "band=%u, bss_idx=%u, link_id=%u, wcid=%u",
 		     phy->mt76->band_idx, mlink->idx, link_conf->link_id,
 		     msta_link->wcid.idx);
@@ -1063,7 +1065,11 @@ mt7996_link_info_changed(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 		link->mt76.beacon_rates_idx =
 			mt7996_get_rates_table(phy, info, true, false);
 
-		mt7996_mcu_add_beacon(hw, vif, info, info->enable_beacon);
+		/* The CSA beacon will be set in channel_switch_beacon,
+		 * but beacon can be disabled during CSA for DFS channel.
+		 */
+		if (!info->enable_beacon || !info->csa_active)
+			mt7996_mcu_add_beacon(hw, vif, info, info->enable_beacon);
 	}
 
 	if (changed & (BSS_CHANGED_UNSOL_BCAST_PROBE_RESP |
