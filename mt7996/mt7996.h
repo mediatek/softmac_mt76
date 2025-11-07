@@ -15,6 +15,7 @@
 #define MT7996_MAX_RADIOS		3
 #define MT7996_MAX_INTERFACES		19	/* per-band */
 #define MT7996_MAX_WMM_SETS		4
+#define MT7996_MAX_MBSSID		16
 #define MT7996_WTBL_BMC_SIZE		(is_mt7996(&dev->mt76) ? 64 : 32)
 #define MT7996_WTBL_RESERVED		(mt7996_wtbl_size(dev) - 1)
 #define MT7996_WTBL_STA			(MT7996_WTBL_RESERVED - \
@@ -482,6 +483,7 @@ struct mt7996_vif_link {
 
 	u8 mld_idx;
 	u8 bpcc;
+	u8 mbssid_idx;
 
 	s64 tsf_offset[IEEE80211_MLD_MAX_NUM_LINKS];
 };
@@ -513,6 +515,9 @@ struct mt7996_vif {
 
 	/* QoS map support */
 	u8 qos_map[IP_DSCP_NUM];
+
+	/* sta channel switch */
+	u16 tx_paused_links;
 };
 
 /* crash-dump */
@@ -786,6 +791,8 @@ struct mt7996_phy {
 	bool mru_probe_enable:1;
 #endif
 	u8 user_edcca_threshold[EDCCA_MAX_BW_NUM];
+	/* Index 0 (TxBSS) is not used */
+	struct mt7996_vif_link __rcu *mbssid_conf[MT7996_MAX_MBSSID];
 };
 
 struct mt7996_dev {
@@ -1150,6 +1157,30 @@ mt7996_sta_link_protected(struct mt7996_dev *dev, struct mt7996_sta *msta,
 	for (int __i = 0; __i < ARRAY_SIZE((dev)->radio_phy); __i++)	\
 		if (((phy) = (dev)->radio_phy[__i]) != NULL)
 
+static inline void
+mt7996_get_merged_ttlm(struct ieee80211_vif *vif,
+		       struct ieee80211_neg_ttlm *merged_ttlm)
+{
+	u16 map = vif->valid_links;
+	int tid;
+
+	if (vif->neg_ttlm.valid) {
+		memcpy(merged_ttlm->downlink, vif->neg_ttlm.downlink,
+		       sizeof(merged_ttlm->downlink));
+		memcpy(merged_ttlm->uplink, vif->neg_ttlm.uplink,
+		       sizeof(merged_ttlm->uplink));
+		return;
+	}
+
+	if (vif->adv_ttlm.active)
+		map &= vif->adv_ttlm.map;
+
+	for (tid = 0; tid < IEEE80211_TTLM_NUM_TIDS; tid++) {
+		merged_ttlm->downlink[tid] = map;
+		merged_ttlm->uplink[tid] = map;
+	}
+}
+
 extern const struct ieee80211_ops mt7996_ops;
 extern struct pci_driver mt7996_pci_driver;
 extern struct pci_driver mt7996_hif_driver;
@@ -1321,6 +1352,11 @@ int mt7996_mcu_mld_reconf_stop_link(struct mt7996_dev *dev,
 int mt7996_mcu_mld_link_oper(struct mt7996_phy *phy,
 			     struct ieee80211_bss_conf *conf,
 			     struct mt7996_vif_link *mconf, bool add);
+int mt7996_mcu_mld_set_attlm(struct mt7996_dev *dev, struct ieee80211_vif *vif,
+			     u16 disabled_links, u16 switch_time, u32 duration);
+int mt7996_mcu_peer_mld_ttlm_req(struct mt7996_dev *dev, struct ieee80211_vif *vif,
+				 struct ieee80211_sta *sta,
+				 struct ieee80211_neg_ttlm *neg_ttlm);
 
 static inline bool mt7996_has_hwrro(struct mt7996_dev *dev)
 {

@@ -437,6 +437,12 @@ int mt7996_vif_link_add(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 		mtxq->wcid = idx;
 	}
 
+	if (link_conf->nontransmitted && link_conf->bssid_index != 0 &&
+	    link_conf->bssid_index < MT7996_MAX_MBSSID) {
+		rcu_assign_pointer(phy->mbssid_conf[link_conf->bssid_index], link);
+		link->mbssid_idx = link_conf->bssid_index;
+	}
+
 	link->bpcc = 0;
 	memset(link->tsf_offset, 0, sizeof(link->tsf_offset));
 
@@ -474,6 +480,11 @@ void mt7996_vif_link_remove(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 
 	if (!mlink->wcid->offchannel)
 		ieee80211_iter_keys(mphy->hw, vif, mt7996_key_iter, &it);
+
+	if (link->mbssid_idx != 0 && link->mbssid_idx < MT7996_MAX_MBSSID) {
+		rcu_assign_pointer(phy->mbssid_conf[link->mbssid_idx], NULL);
+		link->mbssid_idx = 0;
+	}
 
 	mt7996_mcu_add_sta(dev, vif, link_conf, NULL, link, msta_link,
 			   CONN_STATE_DISCONNECT, false);
@@ -2987,6 +2998,70 @@ out:
 	return ret;
 }
 
+static int
+mt7996_set_ttlm(struct ieee80211_hw *hw, struct ieee80211_vif *vif)
+{
+	struct ieee80211_neg_ttlm merged_ttlm;
+	struct mt7996_dev *dev = mt7996_hw_dev(hw);
+	struct ieee80211_sta *sta;
+	int ret;
+
+	/* TODO check the intersection between Adv-TTLM and Neg-TTLM */
+	if (vif->type != NL80211_IFTYPE_STATION ||
+	    (vif->adv_ttlm.active && vif->neg_ttlm.valid))
+		return -EOPNOTSUPP;
+
+	mutex_lock(&dev->mt76.mutex);
+	sta = ieee80211_find_sta(vif, vif->cfg.ap_addr);
+	if (!sta) {
+		mutex_unlock(&dev->mt76.mutex);
+		return -EINVAL;
+	}
+
+	mt7996_get_merged_ttlm(vif, &merged_ttlm);
+
+	ret = mt7996_mcu_peer_mld_ttlm_req(dev, vif, sta, &merged_ttlm);
+	mutex_unlock(&dev->mt76.mutex);
+	return ret;
+}
+
+static int
+mt7996_set_sta_ttlm(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+		    struct ieee80211_sta *sta, struct ieee80211_neg_ttlm *neg_ttlm)
+{
+	struct mt7996_dev *dev = mt7996_hw_dev(hw);
+	int ret;
+
+	mutex_lock(&dev->mt76.mutex);
+	ret = mt7996_mcu_peer_mld_ttlm_req(dev, vif, sta, neg_ttlm);
+	mutex_unlock(&dev->mt76.mutex);
+	return ret;
+}
+
+static int
+mt7996_set_attlm(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+		 u16 disabled_links, u16 switch_time, u32 duration)
+{
+	struct mt7996_dev *dev = mt7996_hw_dev(hw);
+	int ret;
+
+	mutex_lock(&dev->mt76.mutex);
+	ret = mt7996_mcu_mld_set_attlm(dev, vif, disabled_links, switch_time, duration);
+	mutex_unlock(&dev->mt76.mutex);
+	return ret;
+}
+
+static enum ieee80211_neg_ttlm_res
+mt7996_can_neg_ttlm(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+		    struct ieee80211_neg_ttlm *neg_ttlm)
+{
+	/* TODO check intersection between adv-TTLM and neg-TTLM
+	 * For now, we reject all possible overlapping cases of Adv-TTLM and
+	 * Neg-TTLM
+	 */
+	return vif->adv_ttlm.active ? NEG_TTLM_RES_REJECT : NEG_TTLM_RES_ACCEPT;
+}
+
 static void
 mt7996_reconfig_complete(struct ieee80211_hw *hw,
 			 enum ieee80211_reconfig_type reconfig_type)
@@ -3176,4 +3251,8 @@ const struct ieee80211_ops mt7996_ops = {
 	CFG80211_TESTMODE_CMD(mt76_testmode_cmd)
 	CFG80211_TESTMODE_DUMP(mt76_testmode_dump)
 	.set_qos_map = mt7996_set_qos_map,
+	.set_attlm = mt7996_set_attlm,
+	.set_sta_ttlm = mt7996_set_sta_ttlm,
+	.can_neg_ttlm = mt7996_can_neg_ttlm,
+	.set_ttlm = mt7996_set_ttlm,
 };

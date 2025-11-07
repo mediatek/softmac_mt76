@@ -724,6 +724,23 @@ mt7996_mac_write_txwi_8023(struct mt7996_dev *dev, __le32 *txwi,
 		txwi[3] |= cpu_to_le32(MT_TXD3_HW_AMSDU);
 }
 
+static bool mt7996_use_altxq(struct ieee80211_mgmt *mgmt)
+{
+	__le16 fc = mgmt->frame_control;
+
+	if (ieee80211_is_action(fc) &&
+	    mgmt->u.action.category == WLAN_CATEGORY_PROTECTED_EHT &&
+	    (mgmt->u.action.u.ttlm_req.action_code ==
+	    WLAN_PROTECTED_EHT_ACTION_TTLM_REQ ||
+	    mgmt->u.action.u.ttlm_req.action_code ==
+	    WLAN_PROTECTED_EHT_ACTION_TTLM_RES ||
+	    mgmt->u.action.u.ttlm_req.action_code ==
+	    WLAN_PROTECTED_EHT_ACTION_TTLM_TEARDOWN))
+		return true;
+
+	return false;
+}
+
 static void
 mt7996_mac_write_txwi_80211(struct mt7996_dev *dev, __le32 *txwi,
 			    struct sk_buff *skb,
@@ -740,6 +757,9 @@ mt7996_mac_write_txwi_80211(struct mt7996_dev *dev, __le32 *txwi,
 	bool hw_bigtk = false;
 	u8 fc_type, fc_stype;
 	u32 val;
+
+	if (mt7996_use_altxq(mgmt))
+		le32p_replace_bits(&txwi[0], MT_LMAC_ALTX0, MT_TXD0_Q_IDX);
 
 	if (ieee80211_is_action(fc) &&
 	    skb->len >= IEEE80211_MIN_ACTION_SIZE + 1 &&
