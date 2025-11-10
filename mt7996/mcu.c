@@ -3467,6 +3467,8 @@ static int mt7996_load_patch(struct mt7996_dev *dev)
 
 	dev_info(dev->mt76.dev, "HW/SW Version: 0x%x, Build Time: %.16s\n",
 		 be32_to_cpu(hdr->hw_sw_ver), hdr->build_date);
+	strscpy(dev->patch_build_date, hdr->build_date,
+		sizeof(hdr->build_date));
 
 	for (i = 0; i < be32_to_cpu(hdr->desc.n_region); i++) {
 		struct mt7996_patch_sec *sec;
@@ -3593,6 +3595,9 @@ static int __mt7996_load_ram(struct mt7996_dev *dev, const char *fw_type,
 	}
 
 	hdr = (const void *)(fw->data + fw->size - sizeof(*hdr));
+	strscpy(dev->ram_build_date[ram_type],
+		hdr->build_date,
+		sizeof(hdr->build_date));
 	dev_info(dev->mt76.dev, "%s Firmware Version: %.10s, Build Time: %.15s\n",
 		 fw_type, hdr->fw_ver, hdr->build_date);
 
