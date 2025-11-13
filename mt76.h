@@ -163,6 +163,7 @@ enum mt76_rxq_id {
 	MT_RXQ_RRO_RXDMAD_C,
 	MT_RXQ_NPU0,
 	MT_RXQ_NPU1,
+	MT_RXQ_WED_RX_DATA,
 	__MT_RXQ_MAX
 };
 

@@ -2144,7 +2144,8 @@ mt7996_mac_restart(struct mt7996_dev *dev)
 		mt7996_rro_hw_init(dev);
 		mt76_for_each_q_rx(&dev->mt76, i) {
 			if (mt76_queue_is_wed_rro_ind(&dev->mt76.q_rx[i]) ||
-			    mt76_queue_is_wed_rro_msdu_pg(&dev->mt76.q_rx[i]))
+			    mt76_queue_is_wed_rro_msdu_pg(&dev->mt76.q_rx[i]) ||
+			    mt76_queue_is_wed_rro_rxdmad_c(&dev->mt76.q_rx[i]))
 				mt76_queue_rx_reset(dev, i);
 		}
 

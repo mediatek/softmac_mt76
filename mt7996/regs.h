@@ -541,6 +541,7 @@ enum offs_rev {
 #define MT_INT_RX_DONE_WA_MAIN			BIT(2)
 #define MT_INT_RX_DONE_WA_EXT			BIT(3) /* for mt7992 */
 #define MT_INT_RX_DONE_WA_TRI			BIT(3)
+#define MT_INT_RX_DONE_WED_RX_DATA_MT7996	BIT(4) /* for mt7996 */
 #define MT_INT_RX_TXFREE_MAIN			BIT(17)
 #define MT_INT_RX_TXFREE_BAND1			BIT(15)
 #define MT_INT_RX_TXFREE_TRI			BIT(15)
@@ -558,6 +559,7 @@ enum offs_rev {
 #define MT_INT_RX_DONE_RRO_RXDMAD_C		BIT(11)
 #define MT_INT_RX_DONE_MSDU_PG_BAND0		BIT(18)
 #define MT_INT_RX_DONE_MSDU_PG_BAND1		BIT(19)
+#define MT_INT_RX_DONE_WED_RX_DATA		BIT(19) /* for mt7992 and mt7990 */
 #define MT_INT_RX_DONE_MSDU_PG_BAND2		BIT(23)
 
 #define MT_INT_RX(q)				(dev->q_int_mask[__RXQ(q)])

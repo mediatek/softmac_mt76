@@ -11,6 +11,9 @@
 #include "mac.h"
 #include "../trace.h"
 
+static int rro_mode = MT76_HWRRO_OFF;
+module_param(rro_mode, int, 0644);
+
 static LIST_HEAD(hif_list);
 static DEFINE_SPINLOCK(hif_lock);
 static u32 hif_idx;
@@ -136,6 +139,19 @@ static int mt7996_pci_probe(struct pci_dev *pdev,
 		return PTR_ERR(dev);
 
 	mdev = &dev->mt76;
+	switch (rro_mode) {
+	case MT76_HWRRO_V3:
+		mdev->hwrro_mode = rro_mode;
+		break;
+	case MT76_HWRRO_V3_1:
+		mdev->hwrro_mode = is_mt7996(mdev) ? MT76_HWRRO_V3 : MT76_HWRRO_V3_1;
+		break;
+	case MT76_HWRRO_OFF:
+	default:
+		mdev->hwrro_mode = MT76_HWRRO_OFF;
+		break;
+	}
+
 	mt7996_wfsys_reset(dev);
 	hif2 = mt7996_pci_init_hif2(pdev);
 	dev->hif2 = hif2;

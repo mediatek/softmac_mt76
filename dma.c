@@ -534,7 +534,8 @@ mt76_dma_get_buf(struct mt76_dev *dev, struct mt76_queue *q, int idx,
 		t->ptr = NULL;
 
 		mt76_put_rxwi(dev, t);
-		if (drop)
+		/* only wed v2 rx path handle by wo */
+		if (drop && dev->mmio.wed.version == MTK_WED_HW_V2)
 			*drop |= !!(buf1 & MT_DMA_CTL_WO_DROP);
 	} else {
 		dma_sync_single_for_cpu(dev->dma_dev, e->dma_addr[0],
