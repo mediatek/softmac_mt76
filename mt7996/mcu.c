@@ -425,6 +425,10 @@ mt7996_mcu_csa_finish(void *priv, u8 *mac, struct ieee80211_vif *vif)
 		return;
 
 	ieee80211_csa_finish(vif, link_conf->link_id);
+	/* remove CSA for affiliated links */
+	valid_links = vif->valid_links & ~BIT(link_conf->link_id);
+	for_each_set_bit(link_id, &valid_links, IEEE80211_MLD_MAX_NUM_LINKS)
+		ieee80211_csa_finish(vif, link_id);
 }
 
 static void
