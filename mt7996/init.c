@@ -118,6 +118,8 @@ static const struct wiphy_iftype_ext_capab iftypes_ext_capa[] = {
 			FIELD_PREP_CONST(IEEE80211_MLD_CAP_OP_MAX_SIMUL_LINKS,
 					 MT7996_MAX_RADIOS - 1) |
 			MT7996_NEG_TTLM_SUPPORT,
+		.ext_mld_capa_and_ops =
+			IEEE80211_EHT_ML_EXT_MLD_CAPA_EMLSR_ENA_ON_ONE_LINK,
 	}, {
 		.iftype = NL80211_IFTYPE_STATION,
 		.extended_capabilities = if_types_ext_capa_sta,
