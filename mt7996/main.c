@@ -1294,6 +1294,13 @@ mt7996_mac_sta_event(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 			if (err)
 				goto unlock;
 
+			if (link_sta->eht_cap.has_eht &&
+			    vif->type == NL80211_IFTYPE_STATION) {
+				err = mt7996_mcu_set_pp_sta_dscb(link->phy, &link_conf->chanreq.oper, link->mt76.omac_idx);
+				if (err)
+					return err;
+			}
+
 			msta_link->wcid.tx_info |= MT_WCID_TX_INFO_SET;
 			break;
 		case MT76_STA_EVENT_AUTHORIZE:

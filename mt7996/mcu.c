@@ -1040,6 +1040,43 @@ mt7996_mcu_wed_rro_event(struct mt7996_dev *dev, struct sk_buff *skb)
 }
 
 static void
+mt7996_mcu_pp_event(struct mt7996_dev *dev, struct sk_buff *skb)
+{
+	struct mt7996_mcu_pp_basic_event *event;
+	struct mt7996_mcu_pp_dscb_event *dscb_event;
+	struct mt7996_phy *phy;
+	struct mt76_phy *mphy;
+	u16 report_bitmap;
+
+	event = (struct mt7996_mcu_pp_basic_event *)skb->data;
+
+	switch (le16_to_cpu(event->tag)) {
+	case UNI_EVENT_STATIC_PP_TAG_CSA_DSCB_IE:
+	case UNI_EVENT_STATIC_PP_TAG_DSCB_IE:
+		if (!mt7996_band_valid(dev, event->band_idx))
+			return;
+
+		mphy = mt76_dev_phy(&dev->mt76, event->band_idx);
+		phy = mphy->priv;
+
+		dscb_event = (struct mt7996_mcu_pp_dscb_event *)event;
+		report_bitmap = le16_to_cpu(dscb_event->punct_bitmap);
+
+		if (phy->punct_bitmap == report_bitmap)
+			return;
+
+		if (phy->pp_mode == PP_FW_MODE) {
+			phy->punct_bitmap = report_bitmap;
+			mt7996_vendor_pp_bitmap_update(phy, report_bitmap);
+		}
+		break;
+	case UNI_EVENT_PP_TAG_ALG_CTRL:
+		mt7996_dump_pp_statistic_event(dev, (struct mt7996_mcu_pp_alg_ctrl_event *)event);
+		break;
+	}
+}
+
+static void
 mt7996_mcu_uni_rx_unsolicited_event(struct mt7996_dev *dev, struct sk_buff *skb)
 {
 	struct mt7996_mcu_rxd *rxd = (struct mt7996_mcu_rxd *)skb->data;
@@ -1059,6 +1096,9 @@ mt7996_mcu_uni_rx_unsolicited_event(struct mt7996_dev *dev, struct sk_buff *skb)
 		break;
 	case MCU_UNI_EVENT_WED_RRO:
 		mt7996_mcu_wed_rro_event(dev, skb);
+		break;
+	case MCU_UNI_EVENT_PP:
+		mt7996_mcu_pp_event(dev, skb);
 		break;
 	case MCU_UNI_EVENT_THERMAL:
 		mt7996_mcu_rx_thermal_info_query(dev, skb);
@@ -5865,4 +5905,119 @@ int mt7996_mcu_set_dup_wtbl(struct mt7996_dev *dev)
 
 	return mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(CHIP_CONFIG), &req,
 				 sizeof(req), true);
+}
+
+int mt7996_mcu_set_pp_en(struct mt7996_phy *phy, u8 mode, u16 bitmap)
+{
+	struct mt7996_dev *dev = phy->dev;
+	bool pp_auto = (mode == PP_FW_MODE);
+	struct {
+		u8 _rsv1[4];
+
+		__le16 tag;
+		__le16 len;
+		u8 mgmt_mode;
+		u8 band_idx;
+		u8 force_bitmap_ctrl;
+		u8 auto_mode;
+		__le16 bitmap;
+		u8 csa_enable;
+		u8 _rsv2;
+	} __packed req = {
+		.tag = cpu_to_le16(UNI_CMD_PP_EN_CTRL),
+		.len = cpu_to_le16(sizeof(req) - 4),
+
+		.mgmt_mode = !pp_auto,
+		.band_idx = phy->mt76->band_idx,
+		.force_bitmap_ctrl = (mode == PP_USR_MODE) ? 2 : 0,
+		.auto_mode = pp_auto,
+		.bitmap = cpu_to_le16(bitmap),
+		.csa_enable = false,
+	};
+
+	if (phy->mt76->chandef.chan->band == NL80211_BAND_2GHZ ||
+	    mode > PP_USR_MODE)
+		return 0;
+
+	if (bitmap && phy->punct_bitmap == bitmap)
+		return 0;
+
+	phy->punct_bitmap = bitmap;
+	phy->pp_mode = mode;
+
+#ifdef CONFIG_MTK_DEBUG
+	/* Configuring PP would cause FW to disable MRU Probe by default. */
+	if (!is_mt7996(&dev->mt76))
+		phy->mru_probe_enable = false;
+#endif
+
+	return mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(PP),
+				 &req, sizeof(req), false);
+}
+
+int mt7996_mcu_set_pp_sta_dscb(struct mt7996_phy *phy,
+			       struct cfg80211_chan_def *chandef,
+			       u8 omac_idx)
+{
+	struct mt7996_dev *dev = phy->dev;
+	struct {
+		u8 _rsv1[4];
+
+		__le16 tag;
+		__le16 len;
+		u8 band_idx;
+		u8 omac_idx;
+		u8 eht_op_present;
+		u8 dscb_present;
+		__le16 dscb;
+		u8 ctrl;
+		u8 ccfs0;
+		u8 ccfs1;
+		u8 rsv2[3];
+	} __packed req = {
+		.tag = cpu_to_le16(UNI_CMD_PP_DSCB_CTRL),
+		.len = cpu_to_le16(sizeof(req) - 4),
+
+		.band_idx = phy->mt76->band_idx,
+		.omac_idx = omac_idx,
+		.eht_op_present = true,
+		.dscb_present = !!chandef->punctured,
+		.dscb = cpu_to_le16(chandef->punctured),
+		.ctrl = 0,
+		.ccfs0 = ieee80211_frequency_to_channel(chandef->center_freq1),
+		.ccfs1 = ieee80211_frequency_to_channel(chandef->center_freq1),
+	};
+
+	if (phy->mt76->chandef.chan->band == NL80211_BAND_2GHZ ||
+	    phy->punct_bitmap == chandef->punctured)
+		return 0;
+
+	switch (chandef->width) {
+	case NL80211_CHAN_WIDTH_320:
+		req.ctrl |= IEEE80211_EHT_OPER_CHAN_WIDTH_320MHZ;
+		if (chandef->chan->hw_value < req.ccfs1)
+			req.ccfs0 -= 16;
+		else
+			req.ccfs0 += 16;
+		break;
+	case NL80211_CHAN_WIDTH_160:
+		req.ctrl |= IEEE80211_EHT_OPER_CHAN_WIDTH_160MHZ;
+		if (chandef->chan->hw_value < req.ccfs1)
+			req.ccfs0 -= 8;
+		else
+			req.ccfs0 += 8;
+		break;
+	case NL80211_CHAN_WIDTH_80:
+		req.ctrl |= IEEE80211_EHT_OPER_CHAN_WIDTH_80MHZ;
+		req.ccfs0 = 0;
+		break;
+	default:
+		return 0;
+		break;
+	}
+
+	phy->punct_bitmap = cpu_to_le16(chandef->punctured);
+
+	return mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(PP),
+				 &req, sizeof(req), false);
 }
