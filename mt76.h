@@ -1043,6 +1043,8 @@ struct mt76_dev {
 	};
 
 	atomic_t bus_hung;
+
+	u8 chainshift[__MT_MAX_BAND];
 };
 
 /* per-phy stats.  */

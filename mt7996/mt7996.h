@@ -430,8 +430,6 @@ struct mt7996_dev {
 	struct cfg80211_chan_def rdd2_chandef;
 	struct mt7996_phy *rdd2_phy;
 
-	u16 chainmask;
-	u8 chainshift[__MT_MAX_BAND];
 	u32 hif_idx;
 
 	struct work_struct init_work;

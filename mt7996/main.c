@@ -1671,28 +1671,32 @@ mt7996_set_antenna(struct ieee80211_hw *hw, int radio_idx,
 		   u32 tx_ant, u32 rx_ant)
 {
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
+	struct mt7996_phy *phy;
+	struct wiphy_radio *radio;
 	int i;
 
 	if (tx_ant != rx_ant)
 		return -EINVAL;
 
 	for (i = 0; i < hw->wiphy->n_radio; i++) {
-		struct mt7996_phy *phy = dev->radio_phy[i];
+		phy = dev->radio_phy[i];
+		radio = &dev->radios[i];
 
-		if (!(tx_ant & phy->orig_chainmask))
+		if (!(tx_ant & radio->antenna_mask))
 			return -EINVAL;
 	}
 
 	mutex_lock(&dev->mt76.mutex);
 
 	for (i = 0; i < hw->wiphy->n_radio; i++) {
-		struct mt7996_phy *phy = dev->radio_phy[i];
-		u8 band_idx = phy->mt76->band_idx;
-		u8 shift = dev->chainshift[band_idx];
+		int shift;
 
-		phy->mt76->chainmask = tx_ant & phy->orig_chainmask;
-		phy->mt76->antenna_mask = (phy->mt76->chainmask >> shift) &
-					  phy->orig_antenna_mask;
+		phy = dev->radio_phy[i];
+		radio = &dev->radios[i];
+		shift = dev->mt76.chainshift[phy->mt76->band_idx];
+
+		phy->mt76->chainmask = (tx_ant & radio->antenna_mask) >> shift;
+		phy->mt76->antenna_mask = phy->mt76->chainmask & phy->orig_antenna_mask;
 
 		mt76_set_stream_caps(phy->mt76, true);
 		mt7996_set_stream_vht_txbf_caps(phy);

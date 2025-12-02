@@ -463,10 +463,11 @@ mt7996_init_wiphy_band(struct ieee80211_hw *hw, struct mt7996_phy *phy)
 	radio->n_freq_range = 1;
 	radio->iface_combinations = &if_comb;
 	radio->n_iface_combinations = 1;
+	radio->antenna_mask = phy->mt76->chainmask << dev->mt76.chainshift[phy->mt76->band_idx];
 	hw->wiphy->n_radio++;
 
-	wiphy->available_antennas_rx |= phy->mt76->chainmask;
-	wiphy->available_antennas_tx |= phy->mt76->chainmask;
+	wiphy->available_antennas_rx |= radio->antenna_mask;
+	wiphy->available_antennas_tx |= radio->antenna_mask;
 
 	mt76_set_stream_caps(phy->mt76, true);
 	mt7996_set_stream_vht_txbf_caps(phy);

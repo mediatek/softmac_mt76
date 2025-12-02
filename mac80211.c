@@ -1970,9 +1970,11 @@ int mt76_get_antenna(struct ieee80211_hw *hw, int radio_idx, u32 *tx_ant,
 
 	mutex_lock(&dev->mutex);
 	*tx_ant = 0;
-	for (i = 0; i < ARRAY_SIZE(dev->phys); i++)
-		if (dev->phys[i] && dev->phys[i]->hw == hw)
-			*tx_ant |= dev->phys[i]->chainmask;
+	for (i = 0; i < ARRAY_SIZE(dev->phys); i++) {
+		phy = dev->phys[i];
+		if (phy && phy->hw == hw)
+			*tx_ant |= phy->chainmask << dev->chainshift[phy->band_idx];
+	}
 	*rx_ant = *tx_ant;
 	mutex_unlock(&dev->mutex);
 
