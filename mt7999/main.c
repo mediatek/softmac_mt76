@@ -834,11 +834,12 @@ static int mt7999_set_key(struct ieee80211_hw *hw, enum set_key_cmd cmd,
 
 	/* The hardware does not support per-STA RX GTK, fallback
 	 * to software mode for these.
+	 *
+	 * Also, the firmware does not support mesh BMC frames encryption with
+	 * TX GTK, fallback to software mode.
 	 */
 	if ((vif->type == NL80211_IFTYPE_ADHOC ||
 	     vif->type == NL80211_IFTYPE_MESH_POINT) &&
-	    (key->cipher == WLAN_CIPHER_SUITE_TKIP ||
-	     key->cipher == WLAN_CIPHER_SUITE_CCMP) &&
 	    !(key->flags & IEEE80211_KEY_FLAG_PAIRWISE))
 		return -EOPNOTSUPP;
 
