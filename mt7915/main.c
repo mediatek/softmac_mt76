@@ -781,6 +781,7 @@ int mt7915_mac_sta_add(struct mt76_dev *mdev, struct ieee80211_vif *vif,
 
 	INIT_LIST_HEAD(&msta->rc_list);
 	INIT_LIST_HEAD(&msta->wcid.poll_list);
+	INIT_LIST_HEAD(&msta->stats_list);
 	msta->vif = mvif;
 	msta->wcid.sta_disabled = 1;
 	msta->wcid.idx = idx;
@@ -910,6 +911,7 @@ void mt7915_mac_sta_remove(struct mt76_dev *mdev, struct ieee80211_vif *vif,
 {
 	struct mt7915_dev *dev = container_of(mdev, struct mt7915_dev, mt76);
 	struct mt7915_sta *msta = (struct mt7915_sta *)sta->drv_priv;
+	struct mt7915_phy *phy = msta->vif->phy;
 
 	mt7915_mac_wtbl_update(dev, msta->wcid.idx,
 			       MT_WTBL_UPDATE_ADM_COUNT_CLEAR);
@@ -920,6 +922,11 @@ void mt7915_mac_sta_remove(struct mt76_dev *mdev, struct ieee80211_vif *vif,
 	if (!list_empty(&msta->rc_list))
 		list_del_init(&msta->rc_list);
 	spin_unlock_bh(&mdev->sta_poll_lock);
+
+	spin_lock_bh(&phy->stats_lock);
+	if (!list_empty(&msta->stats_list))
+		list_del_init(&msta->stats_list);
+	spin_unlock_bh(&phy->stats_lock);
 }
 
 static void mt7915_tx(struct ieee80211_hw *hw,
