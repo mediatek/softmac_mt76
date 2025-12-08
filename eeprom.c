@@ -464,7 +464,7 @@ s8 mt76_get_rate_power_limits(struct mt76_phy *phy,
 	if (!IS_ENABLED(CONFIG_OF))
 		return target_power;
 
-	np = mt76_find_power_limits_node(dev);
+	np = mt76_find_power_limits_node(phy->dev);
 	if (!np)
 		return target_power;
 
@@ -509,6 +509,12 @@ s8 mt76_get_rate_power_limits(struct mt76_phy *phy,
 	val = mt76_get_of_array_s8(np, "rates-ru", &len, ARRAY_SIZE(dest->ru[0]) + 1);
 	mt76_apply_multi_array_limit(dev, dest->ru[0], ARRAY_SIZE(dest->ru[0]),
 				     ARRAY_SIZE(dest->ru), val, len, target_power,
+				     txs_delta, &max_power, n_chains, MT76_SKU_RATE);
+
+	val = mt76_get_of_array_s8(np, "rates-eht", &len,
+				   ARRAY_SIZE(dest->eht[0]) + 1);
+	mt76_apply_multi_array_limit(dev, dest->eht[0], ARRAY_SIZE(dest->eht[0]),
+				     ARRAY_SIZE(dest->eht), val, len, target_power,
 				     txs_delta, &max_power, n_chains, MT76_SKU_RATE);
 
 	val = mt76_get_of_array_s8(np, "paths-cck", &len, ARRAY_SIZE(dest->path.cck));

@@ -447,6 +447,8 @@ struct mt7996_phy {
 	bool has_aux_rx;
 	bool counter_reset;
 	bool rdd_tx_paused;
+	bool sku_limit_en;
+	bool sku_path_en;
 };
 
 struct mt7996_dev {
