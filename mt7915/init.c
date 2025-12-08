@@ -287,7 +287,11 @@ static void __mt7915_init_txpower(struct mt7915_phy *phy,
 	int i, n_chains = hweight16(phy->mt76->chainmask);
 	int path_delta = mt76_tx_power_path_delta(n_chains);
 	int pwr_delta = mt7915_eeprom_get_power_delta(dev, sband->band);
-	struct mt76_power_limits limits;
+	struct mt76_power_limits *limits;
+
+	limits = kzalloc(sizeof(*limits), GFP_KERNEL);
+	if (!limits)
+		return;
 
 	phy->sku_limit_en = true;
 	phy->sku_path_en = true;
@@ -305,11 +309,11 @@ static void __mt7915_init_txpower(struct mt7915_phy *phy,
 
 		target_power += pwr_delta;
 		target_power = mt76_get_rate_power_limits(phy->mt76, chan,
-							  &limits,
+							  limits,
 							  target_power);
 
 		/* MT7915N can not enable Backoff table without setting value in dts */
-		if (!limits.path.ofdm[0])
+		if (!limits->path.ofdm[0])
 			phy->sku_path_en = false;
 
 		target_power += path_delta;
@@ -318,6 +322,7 @@ static void __mt7915_init_txpower(struct mt7915_phy *phy,
 					target_power);
 		chan->orig_mpwr = target_power;
 	}
+	kfree(limits);
 }
 
 void mt7915_init_txpower(struct mt7915_phy *phy)

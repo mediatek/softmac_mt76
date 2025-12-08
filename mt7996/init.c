@@ -361,23 +361,38 @@ static void __mt7996_init_txpower(struct mt7996_phy *phy,
 	int i, n_chains = hweight16(phy->mt76->chainmask);
 	int path_delta = mt76_tx_power_path_delta(n_chains);
 	int pwr_delta = mt7996_eeprom_get_power_delta(dev, sband->band);
-	struct mt76_power_limits limits;
+	struct mt76_power_limits *limits;
+	struct device_node *np;
 
+	limits = kzalloc(sizeof(*limits), GFP_KERNEL);
+	if (!limits)
+		return;
+
+	phy->sku_limit_en = true;
+	phy->sku_path_en = true;
+	np = mt76_find_power_limits_node(&dev->mt76);
 	for (i = 0; i < sband->n_channels; i++) {
 		struct ieee80211_channel *chan = &sband->channels[i];
 		int target_power = mt7996_eeprom_get_target_power(dev, chan);
 
 		target_power += pwr_delta;
 		target_power = mt76_get_rate_power_limits(phy->mt76, chan,
-							  &limits,
+							  limits,
 							  target_power);
+		if (!limits->path.ofdm[0])
+			phy->sku_path_en = false;
+
 		target_power += path_delta;
 		target_power = DIV_ROUND_UP(target_power, 2);
-		chan->max_power = min_t(int, chan->max_reg_power,
-					target_power);
+		if (!np)
+			chan->max_power = min_t(int, chan->max_reg_power,
+						target_power);
+		else
+			chan->max_power = target_power;
 		phy->txpower = max(phy->txpower, chan->max_power);
 		chan->orig_mpwr = target_power;
 	}
+	kfree(limits);
 }
 
 void mt7996_init_txpower(struct mt7996_phy *phy)
