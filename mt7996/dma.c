@@ -18,13 +18,13 @@ int mt7996_init_tx_queues(struct mt7996_phy *phy, int idx, int n_desc,
 		idx -= MT_TXQ_ID(0);
 
 		if (wed == &dev->mt76.mmio.wed_hif2)
-			flags = MT_WED_Q_TX(0);
+			flags |= MT_WED_Q_TX(0);
 		else
-			flags = MT_WED_Q_TX(idx);
+			flags |= MT_WED_Q_TX(idx);
 	}
 
 	if (mt76_npu_device_active(&dev->mt76))
-		flags = MT_NPU_Q_TX(phy->mt76->band_idx);
+		flags |= MT_NPU_Q_TX(phy->mt76->band_idx);
 
 	return mt76_connac_init_tx_queues(phy->mt76, idx, n_desc,
 					  ring_base, wed, flags);

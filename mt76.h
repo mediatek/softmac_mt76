@@ -70,6 +70,7 @@
 #define MT_QFLAG_WED_RRO_EN	BIT(7)
 #define MT_QFLAG_EMI_EN		BIT(8)
 #define MT_QFLAG_NPU		BIT(9)
+#define MT_QFLAG_CHECK_DDONE	BIT(10)
 
 #define __MT_WED_Q(_type, _n)	(MT_QFLAG_WED | \
 				 FIELD_PREP(MT_QFLAG_WED_TYPE, _type) | \
