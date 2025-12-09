@@ -1770,17 +1770,30 @@ EXPORT_SYMBOL_GPL(mt76_get_power_bound);
 int mt76_get_txpower(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 		     unsigned int link_id, int *dbm)
 {
-	struct mt76_phy *phy = mt76_vif_phy(hw, vif);
-	int n_chains, delta;
+	struct mt76_phy *phy = hw->priv;
+	struct mt76_dev *dev = phy->dev;
+	struct mt76_vif_link *mlink;
+	int n_chains, delta, ret = -EINVAL;
 
+	mutex_lock(&dev->mutex);
+
+	mlink = mt76_vif_link(dev, vif, link_id);
+	if (!mlink)
+		goto out;
+
+	phy = mt76_vif_link_phy(mlink);
 	if (!phy)
-		return -EINVAL;
+		goto out;
 
 	n_chains = hweight16(phy->chainmask);
 	delta = mt76_tx_power_path_delta(n_chains);
 	*dbm = DIV_ROUND_UP(phy->txpower_cur + delta, 2);
 
-	return 0;
+	ret = 0;
+out:
+	mutex_unlock(&dev->mutex);
+
+	return ret;
 }
 EXPORT_SYMBOL_GPL(mt76_get_txpower);
 
