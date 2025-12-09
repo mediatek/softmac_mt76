@@ -871,6 +871,7 @@ struct mt76_phy {
 	spinlock_t tx_lock;
 	struct list_head tx_list;
 	struct mt76_queue *q_tx[__MT_TXQ_MAX];
+	int tokens;
 
 	atomic_t mgmt_tx_pending;
 
@@ -980,6 +981,7 @@ struct mt76_dev {
 	u16 token_count;
 	u16 token_start;
 	u16 token_size;
+	u16 token_threshold;
 
 	spinlock_t rx_token_lock;
 	struct idr rx_token;
@@ -2062,7 +2064,8 @@ static inline bool mt76_queue_is_npu_txfree(struct mt76_queue *q)
 
 struct mt76_txwi_cache *
 mt76_token_release(struct mt76_dev *dev, int token, bool *wake);
-int mt76_token_consume(struct mt76_dev *dev, struct mt76_txwi_cache **ptxwi);
+int mt76_token_consume(struct mt76_dev *dev, struct mt76_txwi_cache **ptxwi,
+		       u8 phy_idx);
 void __mt76_set_tx_blocked(struct mt76_dev *dev, bool blocked);
 struct mt76_txwi_cache *mt76_rx_token_release(struct mt76_dev *dev, int token);
 int mt76_rx_token_consume(struct mt76_dev *dev, void *ptr,
