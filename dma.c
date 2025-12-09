@@ -438,6 +438,10 @@ mt76_dma_tx_cleanup(struct mt76_dev *dev, struct mt76_queue *q, bool flush)
 		last = mt76_dma_read_dma_idx(q, -1);
 
 	while (q->queued > 0 && q->tail != last) {
+		if ((q->flags & MT_QFLAG_CHECK_DDONE) &&
+		    !(q->desc[q->tail].ctrl & cpu_to_le32(MT_DMA_CTL_DMA_DONE)))
+			break;
+
 		mt76_dma_tx_cleanup_idx(dev, q, q->tail, &entry);
 		mt76_npu_txdesc_cleanup(q, q->tail);
 		mt76_queue_tx_complete(dev, q, &entry);
