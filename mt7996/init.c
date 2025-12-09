@@ -1795,6 +1795,8 @@ int mt7996_register_device(struct mt7996_dev *dev)
 
 	ieee80211_queue_work(mt76_hw(dev), &dev->init_work);
 
+	dev->mt76.token_threshold = MT7996_PER_BAND_TOKEN_SIZE;
+
 	dev->recovery.hw_init_done = true;
 
 	ret = mt7996_init_debugfs(dev);

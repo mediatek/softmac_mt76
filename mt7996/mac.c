@@ -1066,9 +1066,33 @@ int mt7996_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
 	t = (struct mt76_txwi_cache *)(txwi + mdev->drv->txwi_size);
 	t->skb = tx_info->skb;
 
-	id = mt76_token_consume(mdev, &t);
-	if (id < 0)
+	id = mt76_token_consume(mdev, &t, wcid->phy_idx);
+	if (id == -EBUSY && sta && sta->mlo) {
+		unsigned long valid_links = vif->valid_links ?: BIT(0);
+		struct mt7996_vif_link *mconf_temp;
+		unsigned int link_id_temp;
+
+		/* For MLO station, try to get token from affiliated link */
+		for_each_set_bit(link_id_temp, &valid_links,
+				 IEEE80211_MLD_MAX_NUM_LINKS) {
+			mconf_temp = (struct mt7996_vif_link *)
+				     rcu_dereference(mvif->mt76.link[link_id_temp]);
+			if (!mconf_temp)
+				continue;
+
+			id = mt76_token_consume(mdev, &t, mconf_temp->mt76.band_idx);
+			if (id >= 0)
+				break;
+		}
+	}
+
+	if (id < 0) {
+		mdev->tx_dbg_stats.tx_drop[MT_TX_DROP_GET_TOKEN_FAIL]++;
 		return id;
+	}
+#ifdef CONFIG_MTK_DEBUG
+	t->jiffies = jiffies;
+#endif
 
 	/* Since the rules of HW MLD address translation are not fully
 	 * compatible with 802.11 EAPOL frame, we do the translation by
@@ -2223,8 +2247,11 @@ void mt7996_tx_token_put(struct mt7996_dev *dev)
 
 	spin_lock_bh(&dev->mt76.token_lock);
 	idr_for_each_entry(&dev->mt76.token, txwi, id) {
+		struct mt76_phy *phy = mt76_dev_phy(&dev->mt76, txwi->phy_idx);
+
 		mt7996_txwi_free(dev, txwi, NULL, NULL, NULL);
 		dev->mt76.token_count--;
+		phy->tokens--;
 	}
 	spin_unlock_bh(&dev->mt76.token_lock);
 	idr_destroy(&dev->mt76.token);
