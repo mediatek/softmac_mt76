@@ -675,8 +675,13 @@ static int mt7996_add_interface(struct ieee80211_hw *hw,
 	for (i = 0; i < MT7996_MAX_RADIOS; i++) {
 		struct mt7996_phy *phy = dev->radio_phy[i];
 
-		if (!phy || !(wdev->radio_mask & BIT(i)) ||
-		    test_bit(MT76_STATE_RUNNING, &phy->mt76->state))
+		if (!phy || !(wdev->radio_mask & BIT(i)))
+			continue;
+
+		if (!mvif->deflink.phy)
+			mvif->deflink.phy = phy;
+
+		if (test_bit(MT76_STATE_RUNNING, &phy->mt76->state))
 			continue;
 
 		err = mt7996_run(phy);
@@ -687,9 +692,6 @@ static int mt7996_add_interface(struct ieee80211_hw *hw,
 			mt7996_set_monitor(phy, true);
 			phy->mt76->monitor_vif = vif;
 		}
-
-		if (!mvif->deflink.phy)
-			mvif->deflink.phy = phy;
 	}
 
 	mt76_vif_init(vif, &mvif->mt76);
