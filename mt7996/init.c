@@ -1355,7 +1355,7 @@ reset:
 			struct mt76_wcid *wcid;
 
 			rcu_read_lock();
-			wcid = rcu_dereference(dev->mt76.wcid[e->wcid]);
+			wcid = mt76_wcid_ptr(dev, e->wcid);
 			sta = wcid_to_sta(wcid);
 			if (sta) {
 				msta = (struct mt7996_sta *)sta->drv_priv;

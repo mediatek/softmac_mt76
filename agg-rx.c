@@ -150,7 +150,7 @@ void mt76_rx_aggr_reorder(struct mt76_dev *dev, struct sk_buff *skb,
 			  struct sk_buff_head *frames)
 {
 	struct mt76_rx_status *status = (struct mt76_rx_status *)skb->cb;
-	struct mt76_wcid *wcid = rcu_dereference(dev->wcid[status->wcid_idx]);
+	struct mt76_wcid *wcid = __mt76_wcid_ptr(dev, status->wcid_idx);
 	struct ieee80211_sta *sta;
 	struct mt76_rx_tid *tid;
 	struct mt76_phy *phy;

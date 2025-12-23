@@ -1635,7 +1635,7 @@ void mt7996_mac_ba_trigger(struct mt7996_dev *dev, u16 wlan_idx, u8 tid)
 	struct mt7996_sta *msta;
 	struct mt76_wcid *wcid;
 
-	if (wlan_idx >= mt7996_wtbl_size(dev) || tid >= IEEE80211_NUM_TIDS) {
+	if (tid >= IEEE80211_NUM_TIDS) {
 		dev_err(dev->mt76.dev,
 			"Invalid ba parameters wlan_idx = %d, tid = %d\n",
 			wlan_idx, tid);
@@ -1643,7 +1643,7 @@ void mt7996_mac_ba_trigger(struct mt7996_dev *dev, u16 wlan_idx, u8 tid)
 	}
 
 	rcu_read_lock();
-	wcid = rcu_dereference(dev->mt76.wcid[wlan_idx]);
+	wcid = mt76_wcid_ptr(dev, wlan_idx);
 	sta = wcid_to_sta(wcid);
 	if (!sta)
 		goto out;

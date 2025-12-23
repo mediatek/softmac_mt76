@@ -3402,7 +3402,7 @@ mt7996_reset_counter(void *data, u64 val)
 
 	/* Reset counters in MT76. */
 	rcu_read_lock();
-	wcid = rcu_dereference(dev->mt76.wcid[dev->wlan_idx]);
+	wcid = mt76_wcid_ptr(dev, dev->wlan_idx);
 	if (wcid)
 		memset(&wcid->stats, 0, sizeof(struct mt76_sta_stats));
 	else
@@ -4247,23 +4247,21 @@ mt7996_show_sta_acq_info(struct seq_file *s, unsigned long *ple_stat,
 				struct mt76_wcid *wcid;
 				size_t idx;
 
-				if (wlan_idx >= MT76_N_WCIDS) {
-					seq_printf(s, "Error: WCID %hu exceeded threshold.\n", wlan_idx);
-					continue;
-				}
-				wcid = rcu_dereference(dev->mt76.wcid[wlan_idx]);
-				if (!wcid) {
-					seq_printf(s, "Error: STA %hu does not exist.\n", wlan_idx);
-					continue;
-				}
-				msta_link = container_of(wcid, struct mt7996_sta_link, wcid);
-				wmmidx = msta_link->sta->vif->deflink.mt76.wmm_idx;
-
 				seq_printf(s, "\tSTA%hu AC%hhu: ", wlan_idx, acq_idx);
 				mt7996_get_ple_queue_info(dev, ENUM_UMAC_LMAC_PORT_2, acq_idx,
 							  0, wlan_idx, &hfid, &tfid, &pktcnt);
 				seq_printf(s, "tail/head fid = 0x%04x/0x%04x, pkt cnt = 0x%04x",
 					   tfid, hfid, pktcnt);
+
+				rcu_read_lock();
+				wcid = mt76_wcid_ptr(dev, wlan_idx);
+				if (!wcid) {
+					seq_printf(s, ", Error: STA %hu does not exist.\n", wlan_idx);
+					rcu_read_unlock();
+					continue;
+				}
+				msta_link = container_of(wcid, struct mt7996_sta_link, wcid);
+				wmmidx = msta_link->sta->vif->deflink.mt76.wmm_idx;
 
 				idx = wcid->phy_idx * cr_num_of_all_ac + j;
 				if (sta_pause[idx] & BIT(i))
@@ -4275,6 +4273,7 @@ mt7996_show_sta_acq_info(struct seq_file *s, unsigned long *ple_stat,
 
 				seq_printf(s, ", ctrl = %s (wmmidx=%hhu, band=%hhu)\n",
 					   sta_ctrl_reg[ctrl], wmmidx, wcid->phy_idx);
+				rcu_read_unlock();
 			}
 		}
 	}

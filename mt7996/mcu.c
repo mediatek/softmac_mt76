@@ -873,7 +873,7 @@ mt7996_mcu_rx_all_sta_info_event(struct mt7996_dev *dev, struct sk_buff *skb)
 			break;
 		case UNI_ALL_STA_TXRX_AIR_TIME:
 			wlan_idx = le16_to_cpu(res->airtime[i].wlan_idx);
-			wcid = rcu_dereference(dev->mt76.wcid[wlan_idx]);
+			wcid = mt76_wcid_ptr(dev, wlan_idx);
 			sta = wcid_to_sta(wcid);
 			if (!sta)
 				continue;
@@ -891,7 +891,7 @@ mt7996_mcu_rx_all_sta_info_event(struct mt7996_dev *dev, struct sk_buff *skb)
 			break;
 		case UNI_ALL_STA_RX_MPDU_COUNT:
 			wlan_idx = le16_to_cpu(res->rx_mpdu_cnt[i].wlan_idx);
-			wcid = rcu_dereference(dev->mt76.wcid[wlan_idx]);
+			wcid = mt76_wcid_ptr(dev, wlan_idx);
 			if (!wcid)
 				break;
 
@@ -901,7 +901,7 @@ mt7996_mcu_rx_all_sta_info_event(struct mt7996_dev *dev, struct sk_buff *skb)
 			break;
 		case UNI_ALL_STA_TX_STAT:
 			wlan_idx = le16_to_cpu(res->tx_mpdu_stat[i].wlan_idx);
-			wcid = rcu_dereference(dev->mt76.wcid[wlan_idx]);
+			wcid = mt76_wcid_ptr(dev, wlan_idx);
 			if (!wcid)
 				break;
 
@@ -911,7 +911,7 @@ mt7996_mcu_rx_all_sta_info_event(struct mt7996_dev *dev, struct sk_buff *skb)
 		/* Multiple retries of a single MPDU only increase the counter by 1 */
 		case UNI_ALL_STA_DATA_TX_RETRY_COUNT:
 			wlan_idx = le16_to_cpu(res->tx_mpdu_retry_cnt[i].wlan_idx);
-			wcid = rcu_dereference(dev->mt76.wcid[wlan_idx]);
+			wcid = mt76_wcid_ptr(dev, wlan_idx);
 			if (!wcid)
 				break;
 
@@ -7405,7 +7405,7 @@ int mt7996_mcu_get_per_sta_info(struct mt76_dev *dev, u16 tag,
 			u16 rx_mask;
 
 			wlan_idx = le16_to_cpu(rssi->wlan_idx);
-			wcid = rcu_dereference(dev->wcid[wlan_idx]);
+			wcid = __mt76_wcid_ptr(dev, wlan_idx);
 			msta_link = container_of(wcid, struct mt7996_sta_link, wcid);
 			if (!msta_link)
 				continue;
@@ -7430,7 +7430,7 @@ int mt7996_mcu_get_per_sta_info(struct mt76_dev *dev, u16 tag,
 	case UNI_PER_STA_SNR:
 		for (i = 0; i < sta_num; ++i) {
 			wlan_idx = le16_to_cpu(res->snr[i].wlan_idx);
-			wcid = rcu_dereference(dev->wcid[wlan_idx]);
+			wcid = __mt76_wcid_ptr(dev, wlan_idx);
 			msta_link = container_of(wcid, struct mt7996_sta_link, wcid);
 			if (msta_link)
 				memcpy(msta_link->chain_ack_snr, res->snr[i].val,
@@ -7440,7 +7440,7 @@ int mt7996_mcu_get_per_sta_info(struct mt76_dev *dev, u16 tag,
 	case UNI_PER_STA_PKT_CNT:
 		for (i = 0; i < sta_num; ++i) {
 			wlan_idx = le16_to_cpu(res->msdu_cnt[i].wlan_idx);
-			wcid = rcu_dereference(dev->wcid[wlan_idx]);
+			wcid = __mt76_wcid_ptr(dev, wlan_idx);
 			if (wcid) {
 				u32 retries = le32_to_cpu(res->msdu_cnt[i].tx_retries),
 				    drops = le32_to_cpu(res->msdu_cnt[i].tx_drops);
