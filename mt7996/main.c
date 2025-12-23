@@ -493,6 +493,9 @@ static void mt7996_vif_link_destroy(struct mt7996_phy *phy,
 
 	cancel_delayed_work(&link->sta_chsw_work);
 
+	if (dev->recovery.hw_full_reset)
+		goto cleanup;
+
 	if (dev->testmode_enable) {
 		if (!mt76_testmode_enabled(phy->mt76))
 			goto cleanup;
@@ -507,15 +510,16 @@ static void mt7996_vif_link_destroy(struct mt7996_phy *phy,
 	if (!mlink->wcid->offchannel)
 		ieee80211_iter_keys(phy->mt76->hw, vif, mt7996_key_iter, &it);
 
-	if (link->mbssid_idx != 0 && link->mbssid_idx < MT7996_MAX_MBSSID) {
-		rcu_assign_pointer(phy->mbssid_conf[link->mbssid_idx], NULL);
-		link->mbssid_idx = 0;
-	}
-
 	mt7996_mcu_add_sta(dev, link_conf, NULL, link, NULL,
 			   CONN_STATE_DISCONNECT, false);
 	mt7996_mcu_add_bss_info(phy, vif, link_conf, mlink, msta_link, false);
 	mt7996_mcu_add_dev_info(phy, vif, link_conf, mlink, false);
+
+cleanup:
+	if (link->mbssid_idx != 0 && link->mbssid_idx < MT7996_MAX_MBSSID) {
+		rcu_assign_pointer(phy->mbssid_conf[link->mbssid_idx], NULL);
+		link->mbssid_idx = 0;
+	}
 
 	rcu_assign_pointer(dev->mt76.wcid[idx], NULL);
 	rcu_assign_pointer(mvif->sta.link[link_id], NULL);
