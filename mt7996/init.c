@@ -1015,11 +1015,8 @@ static void mt7996_low_power_config(struct mt7996_dev *dev)
 	mt7996_mcu_set_pst(dev, 0xff, 0, !!(lp_ctrl & BIT(LOW_POWER_TX_PST)));
 }
 
-static void mt7996_init_work(struct work_struct *work)
+void mt7996_init_work_reset(struct mt7996_dev *dev)
 {
-	struct mt7996_dev *dev = container_of(work, struct mt7996_dev,
-				 init_work);
-
 	mt7996_mcu_set_eeprom(dev);
 	mt7996_mac_init(dev);
 	mt7996_txbf_init(dev);
@@ -1031,6 +1028,14 @@ static void mt7996_init_work(struct work_struct *work)
 	mt7996_set_pcie_l1ss(dev,
 		is_mt7990(&dev->mt76) && (lp_ctrl & BIT(LOW_POWER_PCIE_L1SS)));
 	mt7996_mcu_ba_trigger_enable(dev, true);
+}
+
+static void mt7996_init_work(struct work_struct *work)
+{
+	struct mt7996_dev *dev = container_of(work, struct mt7996_dev,
+				 init_work);
+
+	mt7996_init_work_reset(dev);
 }
 
 void mt7996_wfsys_reset(struct mt7996_dev *dev)

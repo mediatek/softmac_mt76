@@ -2580,25 +2580,11 @@ mt7996_mac_restart(struct mt7996_dev *dev)
 	}
 
 	/* set the necessary init items */
-	ret = mt7996_mcu_set_eeprom(dev);
-	if (ret)
-		goto out;
+	mt7996_init_work_reset(dev);
 
-	mt7996_mac_init(dev);
+	/* Clear running state for subsequent mt7996_run to reset it again */
 	mt7996_for_each_phy(dev, phy)
-		mt7996_init_txpower(phy);
-	ret = mt7996_txbf_init(dev);
-	if (ret)
-		goto out;
-
-	mt7996_for_each_phy(dev, phy) {
-		if (!test_bit(MT76_STATE_RUNNING, &phy->mt76->state))
-			continue;
-
-		ret = mt7996_run(phy);
-		if (ret)
-			goto out;
-	}
+		clear_bit(MT76_STATE_RUNNING, &phy->mt76->state);
 
 out:
 	/* reset done */
@@ -2644,19 +2630,19 @@ mt7996_mac_reset_vif_iter(void *data, u8 *mac, struct ieee80211_vif *vif)
 	struct mt76_vif_link *mlink = (struct mt76_vif_link *)vif->drv_priv;
 	struct mt76_vif_data *mvif = mlink->mvif;
 	struct mt7996_dev *dev = data;
-	int i;
+	struct mt7996_vif_link *mconf;
+	int link_id;
+	unsigned long rem;
 
-	rcu_read_lock();
-	for (i = 0; i < ARRAY_SIZE(mvif->link); i++) {
-
-		mlink = mt76_dereference(mvif->link[i], &dev->mt76);
-		if (!mlink || mlink == (struct mt76_vif_link *)vif->drv_priv)
+	/* remove all links and fallback to non-MLO interface */
+	rem = mvif->valid_links;
+	for_each_set_bit(link_id, &rem, IEEE80211_MLD_MAX_NUM_LINKS) {
+		mconf = mt7996_vif_link(dev, vif, link_id);
+		if (!mconf || !mconf->phy)
 			continue;
 
-		rcu_assign_pointer(mvif->link[i], NULL);
-		kfree_rcu(mlink, rcu_head);
+		mt7996_vif_link_remove(mconf->phy->mt76, vif, NULL, &mconf->mt76);
 	}
-	rcu_read_unlock();
 }
 
 static void
