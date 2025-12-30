@@ -54,6 +54,8 @@ enum mt7996_prek_rev {
 	GROUP_SIZE_2G,
 	GROUP_SIZE_5G,
 	GROUP_SIZE_6G,
+	GROUP_SIZE_2G_V2,
+	GROUP_SIZE_ABAND_V2,
 	ADCDCOC_SIZE_2G,
 	ADCDCOC_SIZE_5G,
 	ADCDCOC_SIZE_6G,
@@ -86,14 +88,13 @@ static const u32 mt7996_prek_rev_233[] = {
 	[DPD_OTFG0_SIZE] =			2 * MT_EE_CAL_UNIT,
 };
 
-/* kite 2/5g config */
 static const u32 mt7992_prek_rev[] = {
 	[GROUP_SIZE_2G] =			4 * MT_EE_CAL_UNIT,
-	[GROUP_SIZE_5G] =			110 * MT_EE_CAL_UNIT,
-	[GROUP_SIZE_6G] =			0,
+	[GROUP_SIZE_5G] =			45 * MT_EE_CAL_UNIT,
+	[GROUP_SIZE_6G] =			110 * MT_EE_CAL_UNIT,
 	[ADCDCOC_SIZE_2G] =			4 * 4,
 	[ADCDCOC_SIZE_5G] =			4 * 5,
-	[ADCDCOC_SIZE_6G] =			0,
+	[ADCDCOC_SIZE_6G] =			4 * 5,
 	[DPD_LEGACY_SIZE] =			5 * MT_EE_CAL_UNIT,
 	[DPD_MEM_SIZE] =			16 * MT_EE_CAL_UNIT,
 	[DPD_OTFG0_SIZE] =			2 * MT_EE_CAL_UNIT,
@@ -103,6 +104,8 @@ static const u32 mt7990_prek_rev[] = {
 	[GROUP_SIZE_2G] =			4 * MT_EE_CAL_UNIT,
 	[GROUP_SIZE_5G] =			45 * MT_EE_CAL_UNIT,
 	[GROUP_SIZE_6G] =			90 * MT_EE_CAL_UNIT,
+	[GROUP_SIZE_2G_V2] =			6 * MT_EE_CAL_UNIT,
+	[GROUP_SIZE_ABAND_V2] =			106 * MT_EE_CAL_UNIT,
 	[ADCDCOC_SIZE_2G] =			4 * 2,
 	[ADCDCOC_SIZE_5G] =			4 * 3,
 	[ADCDCOC_SIZE_6G] =			4 * 3,

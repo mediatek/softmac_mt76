@@ -532,7 +532,8 @@ mt7996_tm_group_prek(struct mt7996_phy *phy, enum mt76_testmode_state state)
 		},
 	};
 	u32 i, group_size, dpd_size, size, offs, *pre_cal;
-	u8 *eeprom, do_precal;
+	u32 wait_on_prek_offset;
+	u8 *eeprom, do_precal = 0;
 	int ret = 0;
 
 	if (!dev->flash_mode) {
@@ -547,9 +548,26 @@ mt7996_tm_group_prek(struct mt7996_phy *phy, enum mt76_testmode_state state)
 	dpd_size = MT_EE_CAL_DPD_SIZE;
 	size = group_size + dpd_size;
 	offs = MT_EE_DO_PRE_CAL;
-	do_precal = (MT_EE_WIFI_CAL_GROUP_2G * !!PREK(GROUP_SIZE_2G)) |
-		    (MT_EE_WIFI_CAL_GROUP_5G * !!PREK(GROUP_SIZE_5G)) |
-		    (MT_EE_WIFI_CAL_GROUP_6G * !!PREK(GROUP_SIZE_6G));
+
+	if (mt7996_band_phy(dev, NL80211_BAND_2GHZ))
+		do_precal |= MT_EE_WIFI_CAL_GROUP_2G;
+	if (mt7996_band_phy(dev, NL80211_BAND_5GHZ))
+		do_precal |= MT_EE_WIFI_CAL_GROUP_5G;
+	if (mt7996_band_phy(dev, NL80211_BAND_6GHZ))
+		do_precal |= MT_EE_WIFI_CAL_GROUP_6G;
+
+	/* For 7990, the flash memory layout uses the old definitions,
+	 * but the valid size follows the new one
+	 */
+	if (is_mt7990(&dev->mt76))
+		wait_on_prek_offset = PREK(GROUP_SIZE_2G_V2) + PREK(ADCDCOC_SIZE_2G) +
+				      PREK(GROUP_SIZE_ABAND_V2) + PREK(ADCDCOC_SIZE_5G);
+	else if (is_mt7992(&dev->mt76))
+		wait_on_prek_offset = PREK(GROUP_SIZE_2G) + PREK(ADCDCOC_SIZE_2G) +
+				      max(PREK(GROUP_SIZE_5G) + PREK(ADCDCOC_SIZE_5G),
+					  PREK(GROUP_SIZE_6G) + PREK(ADCDCOC_SIZE_6G));
+	else
+		wait_on_prek_offset = group_size;
 
 	switch (state) {
 	case MT76_TM_STATE_GROUP_PREK:
@@ -561,7 +579,8 @@ mt7996_tm_group_prek(struct mt7996_phy *phy, enum mt76_testmode_state state)
 
 		ret = mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(TESTMODE_CTRL), &req,
 					sizeof(req), false);
-		wait_event_timeout(mdev->mcu.wait, dev->cur_prek_offset == group_size,
+		wait_event_timeout(mdev->mcu.wait,
+				   dev->cur_prek_offset == wait_on_prek_offset,
 				   30 * HZ);
 
 		if (ret)
