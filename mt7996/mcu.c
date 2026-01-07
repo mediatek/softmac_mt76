@@ -7406,10 +7406,10 @@ int mt7996_mcu_get_per_sta_info(struct mt76_dev *dev, u16 tag,
 
 			wlan_idx = le16_to_cpu(rssi->wlan_idx);
 			wcid = __mt76_wcid_ptr(dev, wlan_idx);
-			msta_link = container_of(wcid, struct mt7996_sta_link, wcid);
-			if (!msta_link)
+			if (!wcid)
 				continue;
 
+			msta_link = container_of(wcid, struct mt7996_sta_link, wcid);
 			mphy = dev->phys[wcid->phy_idx];
 			phy = mphy->priv;
 			rx_mask = mt7996_rx_chainmask(phy);
@@ -7431,30 +7431,32 @@ int mt7996_mcu_get_per_sta_info(struct mt76_dev *dev, u16 tag,
 		for (i = 0; i < sta_num; ++i) {
 			wlan_idx = le16_to_cpu(res->snr[i].wlan_idx);
 			wcid = __mt76_wcid_ptr(dev, wlan_idx);
+			if (!wcid)
+				continue;
+
 			msta_link = container_of(wcid, struct mt7996_sta_link, wcid);
-			if (msta_link)
-				memcpy(msta_link->chain_ack_snr, res->snr[i].val,
-				       sizeof(res->snr[i].val));
+			memcpy(msta_link->chain_ack_snr, res->snr[i].val,
+			       sizeof(res->snr[i].val));
 		}
 		break;
 	case UNI_PER_STA_PKT_CNT:
 		for (i = 0; i < sta_num; ++i) {
 			wlan_idx = le16_to_cpu(res->msdu_cnt[i].wlan_idx);
 			wcid = __mt76_wcid_ptr(dev, wlan_idx);
-			if (wcid) {
-				u32 retries = le32_to_cpu(res->msdu_cnt[i].tx_retries),
-				    drops = le32_to_cpu(res->msdu_cnt[i].tx_drops);
+			if (!wcid)
+				continue;
 
-				/* Retry counter is increased by 1 when an MSDU is
-				 * successfully transmitted after one or more retries
-				 */
-				wcid->stats.tx_packets_retried += retries;
+			/* Retry counter is increased by 1 when an MSDU is
+			 * successfully transmitted after one or more retries
+			 */
+			wcid->stats.tx_packets_retried +=
+				le32_to_cpu(res->msdu_cnt[i].tx_retries);
 
-				/* Drop counter is increased by 1 when an MSDU is
-				 * dropped due to retry limit or exceeded TXOP
-				 */
-				wcid->stats.tx_packets_failed += drops;
-			}
+			/* Drop counter is increased by 1 when an MSDU is
+			 * dropped due to retry limit or exceeded TXOP
+			 */
+			wcid->stats.tx_packets_failed +=
+				le32_to_cpu(res->msdu_cnt[i].tx_drops);
 		}
 		break;
 	default:
