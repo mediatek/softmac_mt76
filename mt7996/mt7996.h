@@ -669,6 +669,16 @@ int mt7996_mcu_set_muru_qos_cfg(struct mt7996_dev *dev, u16 wlan_idx, u8 dir,
 				u8 scs_id, u8 req_type, u8 *qos_ie, u8 qos_ie_len);
 #endif
 
+enum edcca_bw_id {
+	EDCCA_BW_20 = 0,
+	EDCCA_BW_40,
+	EDCCA_BW_80,
+	EDCCA_BW_160,
+	EDCCA_MAX_BW_NUM,
+};
+
+#define MT7996_EDCCA_DEFAULT_THRESHOLD 0x7f
+
 struct mt7996_rro_hif {
 	u32 rx_blk_base_l;
 	u32 rx_blk_base_h: 4;
@@ -801,6 +811,7 @@ struct mt7996_phy {
 	bool thermal_protection_enable:1;
 	bool mru_probe_enable:1;
 #endif
+	u8 user_edcca_threshold[EDCCA_MAX_BW_NUM];
 	/* Index 0 (TxBSS) is not used */
 	struct mt7996_vif_link __rcu *mbssid_conf[MT7996_MAX_MBSSID];
 };
@@ -1536,14 +1547,6 @@ int mt7996_mcu_edcca_threshold_ctrl(struct mt7996_phy *phy, u8 *value, bool set)
 int mt7996_mcu_set_tpo(struct mt7996_dev *dev, u8 type, u8 val);
 int mt7996_mcu_set_lp_option(struct mt7996_dev *dev, u8 *arg);
 int mt7996_mcu_set_pst(struct mt7996_dev *dev, u32 band, u32 cmd, u32 val);
-
-enum edcca_bw_id {
-	EDCCA_BW_20 = 0,
-	EDCCA_BW_40,
-	EDCCA_BW_80,
-	EDCCA_BW_160,
-	EDCCA_MAX_BW_NUM,
-};
 
 #ifdef CONFIG_MTK_DEBUG
 void mt7996_mtk_init_dev_debugfs(struct mt7996_dev *dev, struct dentry *dir);

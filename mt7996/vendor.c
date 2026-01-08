@@ -729,8 +729,7 @@ static int mt7996_vendor_edcca_ctrl(struct wiphy *wiphy, struct wireless_dev *wd
 	struct mt7996_phy *phy = &dev->phy;
 	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_EDCCA_CTRL];
 	int err;
-	u8 edcca_mode, radio_idx;
-	u8 edcca_value[EDCCA_MAX_BW_NUM];
+	u8 edcca_mode, edcca_enable, radio_idx;
 
 	err = nla_parse(tb, MTK_VENDOR_ATTR_EDCCA_CTRL_MAX, data, data_len,
 			edcca_ctrl_policy, NULL);
@@ -753,9 +752,9 @@ static int mt7996_vendor_edcca_ctrl(struct wiphy *wiphy, struct wireless_dev *wd
 		if (!tb[MTK_VENDOR_ATTR_EDCCA_CTRL_PRI20_VAL])
 			return -EINVAL;
 
-		edcca_value[0] = nla_get_u8(tb[MTK_VENDOR_ATTR_EDCCA_CTRL_PRI20_VAL]);
+		edcca_enable = nla_get_u8(tb[MTK_VENDOR_ATTR_EDCCA_CTRL_PRI20_VAL]);
 
-		return mt7996_mcu_edcca_enable(phy, !!edcca_value[0]);
+		return mt7996_mcu_edcca_enable(phy, !!edcca_enable);
 	case EDCCA_CTRL_SET_THRES:
 		if (!tb[MTK_VENDOR_ATTR_EDCCA_CTRL_PRI20_VAL] ||
 		    !tb[MTK_VENDOR_ATTR_EDCCA_CTRL_SEC40_VAL] ||
@@ -763,16 +762,17 @@ static int mt7996_vendor_edcca_ctrl(struct wiphy *wiphy, struct wireless_dev *wd
 		    !tb[MTK_VENDOR_ATTR_EDCCA_CTRL_SEC160_VAL])
 			return -EINVAL;
 
-		edcca_value[EDCCA_BW_20] =
+		phy->user_edcca_threshold[EDCCA_BW_20] =
 			nla_get_u8(tb[MTK_VENDOR_ATTR_EDCCA_CTRL_PRI20_VAL]);
-		edcca_value[EDCCA_BW_40] =
+		phy->user_edcca_threshold[EDCCA_BW_40] =
 			nla_get_u8(tb[MTK_VENDOR_ATTR_EDCCA_CTRL_SEC40_VAL]);
-		edcca_value[EDCCA_BW_80] =
+		phy->user_edcca_threshold[EDCCA_BW_80] =
 			nla_get_u8(tb[MTK_VENDOR_ATTR_EDCCA_CTRL_SEC80_VAL]);
-		edcca_value[EDCCA_BW_160] =
+		phy->user_edcca_threshold[EDCCA_BW_160] =
 			nla_get_u8(tb[MTK_VENDOR_ATTR_EDCCA_CTRL_SEC160_VAL]);
 
-		return mt7996_mcu_edcca_threshold_ctrl(phy, edcca_value, true);
+		return mt7996_mcu_edcca_threshold_ctrl(phy, phy->user_edcca_threshold,
+						       true);
 	default:
 		return -EINVAL;
 	}

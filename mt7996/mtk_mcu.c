@@ -105,7 +105,7 @@ int mt7996_mcu_edcca_threshold_ctrl(struct mt7996_phy *phy, u8 *value, bool set)
 
 		__le16 tag;
 		__le16 len;
-		u8 threshold[4];
+		u8 threshold[EDCCA_MAX_BW_NUM];
 		bool init;
 		u8 _rsv2[3];
 	} __packed *res, req = {
@@ -116,10 +116,8 @@ int mt7996_mcu_edcca_threshold_ctrl(struct mt7996_phy *phy, u8 *value, bool set)
 	};
 	struct sk_buff *skb;
 	int ret;
-	int i;
 
-	for (i = 0; i < EDCCA_MAX_BW_NUM; i++)
-		req.threshold[i] = value[i];
+	memcpy(req.threshold, value, EDCCA_MAX_BW_NUM);
 
 	if (set)
 		return mt76_mcu_send_msg(&phy->dev->mt76, MCU_WM_UNI_CMD(BAND_CONFIG),
@@ -133,9 +131,7 @@ int mt7996_mcu_edcca_threshold_ctrl(struct mt7996_phy *phy, u8 *value, bool set)
 		return ret;
 
 	res = (void *)skb->data;
-
-	for (i = 0; i < EDCCA_MAX_BW_NUM; i++)
-		value[i] = res->threshold[i];
+	memcpy(value, res->threshold, EDCCA_MAX_BW_NUM);
 
 	dev_kfree_skb(skb);
 
