@@ -1026,8 +1026,8 @@ int mt7996_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
 	struct mt76_txwi_cache *t;
 	int id, i, pid, nbuf = tx_info->nbuf - 1;
 	bool is_8023 = info->flags & IEEE80211_TX_CTL_HW_80211_ENCAP;
+	__le32 *ptr = (__le32 *)txwi_ptr;
 	u8 *txwi = (u8 *)txwi_ptr;
-	const __le32 *txwi_le32 = (__le32 *)txwi_ptr;
 	u8 link_id;
 
 	if (unlikely(tx_info->skb->len <= ETH_HLEN)) {
@@ -1148,27 +1148,34 @@ int mt7996_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
 		pr_info("EAPOL: a1=%pM, a2=%pM, a3=%pM\n", hdr->addr1, hdr->addr2, hdr->addr3);
 	}
 
-	/* mt7996/mt7992 requires driver to provide the MAC TXP for AddBA req */
-	if (le32_to_cpu(txwi_le32[7]) & MT_TXD7_MAC_TXD) {
-		__le32 *mac_txp = (__le32 *)(txwi + MT_TXD_SIZE);
-		u32 val;
+	/* MT7996 and MT7992 require driver to provide the MAC TXP for AddBA
+	 * req
+	 */
+	if (le32_to_cpu(ptr[7]) & MT_TXD7_MAC_TXD) {
+		u32 val, mac_txp_size = sizeof(struct mt76_connac_hw_txp);
 
-		memset((void *)mac_txp, 0, sizeof(struct mt76_connac_fw_txp));
+		ptr = (__le32 *)(txwi + MT_TXD_SIZE);
+		memset((void *)ptr, 0, mac_txp_size);
 
-		val = FIELD_PREP(MT_TXP0_TOKEN_ID0, id) | MT_TXP0_TOKEN_ID0_VALID_MASK;
-		mac_txp[0] = cpu_to_le32(val);
+		val = FIELD_PREP(MT_TXP0_TOKEN_ID0, id) |
+		      MT_TXP0_TOKEN_ID0_VALID_MASK;
+		ptr[0] = cpu_to_le32(val);
 
-		val = FIELD_PREP(MT_TXP1_TID_ADDBA, tx_info->skb->priority &
-						    IEEE80211_QOS_CTL_TID_MASK);
-		mac_txp[1] = cpu_to_le32(val);
+		val = FIELD_PREP(MT_TXP1_TID_ADDBA,
+				 tx_info->skb->priority &
+				 IEEE80211_QOS_CTL_TID_MASK);
+		ptr[1] = cpu_to_le32(val);
+		ptr[2] = cpu_to_le32(tx_info->buf[1].addr & 0xFFFFFFFF);
 
-		mac_txp[2] = cpu_to_le32(tx_info->buf[1].addr & 0xFFFFFFFF);
-
-		val = FIELD_PREP(MT_TXP_BUF_LEN, tx_info->buf[1].len) | MT_TXP3_ML0_MASK;
+		val = FIELD_PREP(MT_TXP_BUF_LEN, tx_info->buf[1].len) |
+		      MT_TXP3_ML0_MASK;
 #ifdef CONFIG_ARCH_DMA_ADDR_T_64BIT
-		val |= FIELD_PREP(MT_TXP3_DMA_ADDR_H, tx_info->buf[1].addr >> 32);
+		val |= FIELD_PREP(MT_TXP3_DMA_ADDR_H,
+				  tx_info->buf[1].addr >> 32);
 #endif
-		mac_txp[3] = cpu_to_le32(val);
+		ptr[3] = cpu_to_le32(val);
+
+		tx_info->buf[0].len = MT_TXD_SIZE + mac_txp_size;
 	} else {
 		struct mt76_connac_txp_common *txp =
 			(struct mt76_connac_txp_common *)(txwi + MT_TXD_SIZE);
