@@ -729,6 +729,7 @@ mt7999_mac_write_txwi_80211(struct mt7999_dev *dev, __le32 *txwi,
 	struct ieee80211_hdr *hdr = (struct ieee80211_hdr *)skb->data;
 	struct ieee80211_mgmt *mgmt = (struct ieee80211_mgmt *)skb->data;
 	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
+	struct ieee80211_vif *vif = info->control.vif;
 	bool multicast = is_multicast_ether_addr(hdr->addr1);
 	u8 tid = skb->priority & IEEE80211_QOS_CTL_TID_MASK;
 	__le16 fc = hdr->frame_control, sc = hdr->seq_ctrl;
@@ -791,7 +792,7 @@ mt7999_mac_write_txwi_80211(struct mt7999_dev *dev, __le32 *txwi,
 						  MT_TX_UNLIMIT_RETRY));
 	}
 
-	if (multicast && ieee80211_vif_is_mld(info->control.vif)) {
+	if (multicast && ieee80211_vif_is_mld(vif)) {
 		val = MT_TXD3_SN_VALID |
 		      FIELD_PREP(MT_TXD3_SEQ, IEEE80211_SEQ_TO_SN(seqno));
 		txwi[3] |= cpu_to_le32(val);
@@ -811,19 +812,25 @@ mt7999_mac_write_txwi_80211(struct mt7999_dev *dev, __le32 *txwi,
 		txwi[6] &= ~cpu_to_le32(MT_TXD6_HW_AMSDU);
 	}
 
-	if (ieee80211_vif_is_mld(info->control.vif) &&
+	if (ieee80211_vif_is_mld(vif) &&
 	    (multicast || unlikely(skb->protocol == cpu_to_be16(ETH_P_PAE)) ||
 	     info->flags & IEEE80211_TX_CTL_INJECTED))
 		txwi[3] |= cpu_to_le32(MT_TXD3_FL);
 
 	if (ieee80211_is_nullfunc(fc) && ieee80211_has_a4(fc) &&
-	    ieee80211_vif_is_mld(info->control.vif)) {
+	    ieee80211_vif_is_mld(vif)) {
 		txwi[3] |= cpu_to_le32(MT_TXD3_FL);
 		txwi[6] |= cpu_to_le32(MT_TXD6_DIS_MAT);
 	}
 
 	if (!wcid->sta && ieee80211_is_mgmt(fc))
 		txwi[6] |= cpu_to_le32(MT_TXD6_DIS_MAT);
+
+	if (vif->type == NL80211_IFTYPE_MESH_POINT && ieee80211_is_data_qos(fc) &&
+	    is_unicast_ether_addr(hdr->addr1) && wcid->amsdu &&
+	    likely(skb->protocol != cpu_to_be16(ETH_P_PAE)) &&
+	    !ieee80211_is_nullfunc(fc))
+		txwi[6] |= cpu_to_le32(MT_TXD6_HW_AMSDU);
 }
 
 void mt7999_mac_write_txwi(struct mt7999_dev *dev, __le32 *txwi,
