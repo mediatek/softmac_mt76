@@ -91,9 +91,19 @@ static const u8 if_types_ext_capa_sta[] = {
 	[7] = WLAN_EXT_CAPA8_OPMODE_NOTIF,
 };
 
-#define MT7999_NEG_TTLM_SUPPORT FIELD_PREP_CONST( \
-		IEEE80211_MLD_CAP_OP_TID_TO_LINK_MAP_NEG_SUPP, \
-		IEEE80211_MLD_CAP_OP_TID_TO_LINK_MAP_NEG_SUPP_DIFF)
+#define MT76_MLD_CAPA_OPS_AP \
+	FIELD_PREP_CONST(IEEE80211_MLD_CAP_OP_MAX_SIMUL_LINKS, \
+			 MT7999_MAX_RADIOS - 1) | \
+	FIELD_PREP_CONST(IEEE80211_MLD_CAP_OP_TID_TO_LINK_MAP_NEG_SUPP, \
+			 IEEE80211_MLD_CAP_OP_TID_TO_LINK_MAP_NEG_SUPP_DIFF) | \
+	IEEE80211_MLD_CAP_OP_LINK_RECONF_SUPPORT
+
+#define MT76_MLD_CAPA_OPS_STA \
+	FIELD_PREP_CONST(IEEE80211_MLD_CAP_OP_FREQ_SEP_TYPE_IND, 1) |	\
+	FIELD_PREP_CONST(IEEE80211_MLD_CAP_OP_MAX_SIMUL_LINKS, \
+			 MT7999_MAX_RADIOS - 1) | \
+	FIELD_PREP_CONST(IEEE80211_MLD_CAP_OP_TID_TO_LINK_MAP_NEG_SUPP, \
+			 IEEE80211_MLD_CAP_OP_TID_TO_LINK_MAP_NEG_SUPP_DIFF)
 
 static const struct wiphy_iftype_ext_capab iftypes_ext_capa[] = {
 	{
@@ -102,10 +112,7 @@ static const struct wiphy_iftype_ext_capab iftypes_ext_capa[] = {
 		.extended_capabilities_mask = if_types_ext_capa_ap,
 		.extended_capabilities_len = sizeof(if_types_ext_capa_ap),
 		.eml_capabilities = IEEE80211_EML_CAP_EMLSR_SUPP,
-		.mld_capa_and_ops =
-			FIELD_PREP_CONST(IEEE80211_MLD_CAP_OP_MAX_SIMUL_LINKS,
-					 MT7999_MAX_RADIOS - 1) |
-			MT7999_NEG_TTLM_SUPPORT,
+		.mld_capa_and_ops = MT76_MLD_CAPA_OPS_AP,
 		.ext_mld_capa_and_ops =
 			IEEE80211_EHT_ML_EXT_MLD_CAPA_EMLSR_ENA_ON_ONE_LINK,
 	}, {
@@ -113,11 +120,7 @@ static const struct wiphy_iftype_ext_capab iftypes_ext_capa[] = {
 		.extended_capabilities = if_types_ext_capa_sta,
 		.extended_capabilities_mask = if_types_ext_capa_sta,
 		.extended_capabilities_len = sizeof(if_types_ext_capa_sta),
-		.mld_capa_and_ops =
-			FIELD_PREP_CONST(IEEE80211_MLD_CAP_OP_FREQ_SEP_TYPE_IND, 1) |
-			FIELD_PREP_CONST(IEEE80211_MLD_CAP_OP_MAX_SIMUL_LINKS,
-					 MT7999_MAX_RADIOS - 1) |
-			MT7999_NEG_TTLM_SUPPORT,
+		.mld_capa_and_ops = MT76_MLD_CAPA_OPS_STA,
 	},
 };
 
