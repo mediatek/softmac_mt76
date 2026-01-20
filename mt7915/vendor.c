@@ -1707,6 +1707,12 @@ static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 
 void mt7915_vendor_register(struct mt7915_phy *phy)
 {
+	/* Temporarily disable vendor commands to avoid command
+	 * failures during Wi-Fi 6 and 7 codebase integration
+	 */
+	dev_warn(phy->mt76->dev->dev, "temporarily disable vendor commands\n");
+	return;
+
 	phy->mt76->hw->wiphy->vendor_commands = mt7915_vendor_commands;
 	phy->mt76->hw->wiphy->n_vendor_commands = ARRAY_SIZE(mt7915_vendor_commands);
 }
