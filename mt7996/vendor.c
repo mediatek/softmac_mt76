@@ -168,6 +168,7 @@ txpower_ctrl_policy[NUM_MTK_VENDOR_ATTRS_TXPOWER_CTRL] = {
 	[MTK_VENDOR_ATTR_TXPOWER_CTRL_LINK_ID] = { .type = NLA_U8 },
 	[MTK_VENDOR_ATTR_TXPOWER_CTRL_AFC_TABLE] = { .type = NLA_BINARY },
 	[MTK_VENDOR_ATTR_TXPOWER_CTRL_AFC_LPI] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_FILENAME] = { .type = NLA_STRING },
 };
 
 static const struct nla_policy
@@ -1651,10 +1652,23 @@ static int mt7996_vendor_txpower_ctrl(struct wiphy *wiphy,
 			return err;
 	}
 
-	if (tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_IDX]) {
-		struct mt76_power_limits *la = NULL;
-		struct ieee80211_channel *chan = mphy->main_chandef.chan;
+	if (tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_FILENAME]) {
+		err = nla_strscpy(mphy->sku_filename,
+				  tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_FILENAME],
+				  SKU_FILENAME_MAX);
+
+		if (err > 0 && mphy->sku_filename[0]) {
+			mt7996_init_txpower(phy);
+			phy->sku_limit_en = true;
+			phy->sku_path_en = true;
+		} else {
+			mphy->sku_filename[0] = '\0';
+			phy->sku_limit_en = false;
+			phy->sku_path_en = false;
+		}
+	} else if (tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_IDX]) {
 		u8 orig_sku_idx = mphy->sku_idx;
+		struct ieee80211_channel *chan = mphy->main_chandef.chan;
 
 		mphy->sku_idx = nla_get_u8(tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_IDX]);
 
@@ -1667,20 +1681,13 @@ static int mt7996_vendor_txpower_ctrl(struct wiphy *wiphy,
 
 		phy->sku_limit_en = true;
 		phy->sku_path_en = true;
-		la = kzalloc(sizeof(*la), GFP_KERNEL);
-		if (!la)
-			return -ENOMEM;
-
-		mt76_get_rate_power_limits(mphy, chan, la, 127);
-		if (!la->path.ofdm[0])
-			phy->sku_path_en = false;
 
 #ifdef CONFIG_MTK_DEBUG
 		/* To make sure the sku is still enabled when we restart AP. */
 		dev->dbg.sku_disable = false;
 #endif
-		kfree(la);
 	} else {
+		mphy->sku_filename[0] = '\0';
 		phy->sku_limit_en = false;
 		phy->sku_path_en = false;
 	}

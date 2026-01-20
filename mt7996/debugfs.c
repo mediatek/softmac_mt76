@@ -10,6 +10,98 @@
 #include "mac.h"
 
 #define FW_BIN_LOG_MAGIC	0x44d9c99a
+static ssize_t
+mt7996_sku_filename_set(struct file *file, const char __user *user_buf,
+		    size_t count, loff_t *ppos)
+{
+	struct mt7996_phy *phy = file->private_data;
+	struct mt76_phy *mphy = phy->mt76;
+	char buf[SKU_FILENAME_MAX];
+	ssize_t ret;
+	bool en;
+	s8 delta, limit;
+
+	/* It’s possible that the user sets power without setting AP channel */
+	if (!cfg80211_chandef_valid(&mphy->chandef) ||
+	    !cfg80211_chandef_valid(&mphy->main_chandef))
+		return -EFAULT;
+
+	if (count >= sizeof(buf))
+		return -EINVAL;
+
+	if (copy_from_user(buf, user_buf, count))
+		return -EFAULT;
+
+	if (count && buf[count - 1] == '\n')
+		buf[count - 1] = '\0';
+	else
+		buf[count] = '\0';
+
+	if (buf[0])
+		snprintf(mphy->sku_filename, SKU_FILENAME_MAX, "%s", buf);
+	else
+		mphy->sku_filename[0] = '\0';
+
+	en = !!buf[0];
+
+	if (en)
+		mt7996_init_txpower(phy);
+	else // "TODO: disable sku_filename, turn to sku_idx?"
+		mt76_phy_dbg(mphy, "Clear sku_filename to disable the sku!");
+
+	phy->sku_path_en = en;
+	phy->sku_limit_en = en;
+
+	ret = mt7996_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_SKU_POWER_LIMIT_CTRL,
+					   phy->sku_limit_en);
+	if (ret)
+		goto error;
+
+	ret = mt7996_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_BACKOFF_POWER_LIMIT_CTRL,
+					   phy->sku_path_en);
+	if (ret)
+		goto error;
+
+	limit = mphy->main_chandef.chan->max_power;
+
+	delta = mt76_tx_power_path_delta(hweight16(mphy->chainmask));
+	delta = DIV_ROUND_UP(mphy->txpower_cur + delta, 2);
+	limit = min_t(s8, delta, limit);
+
+	ret = mt7996_mcu_set_txpower_sku(phy, limit);
+	if (ret)
+		goto error;
+
+	return count;
+
+error:
+	mphy->sku_filename[0] = '\0';
+	phy->sku_path_en = false;
+	phy->sku_limit_en = false;
+	return ret;
+}
+
+static ssize_t
+mt7996_sku_filename_get(struct file *file, char __user *user_buf,
+		    size_t count, loff_t *ppos)
+{
+	struct mt7996_phy *phy = file->private_data;
+	struct mt76_phy *mphy = phy->mt76;
+	char buf[SKU_FILENAME_MAX + 8];
+	int len;
+
+	len = snprintf(buf, sizeof(buf), "%s\n",
+		       mphy->sku_filename[0] ? mphy->sku_filename : "");
+
+	return simple_read_from_buffer(user_buf, count, ppos, buf, len);
+}
+
+static const struct file_operations fops_mt7996_sku_filename = {
+	.write = mt7996_sku_filename_set,
+	.read = mt7996_sku_filename_get,
+	.open = simple_open,
+	.llseek = default_llseek,
+};
 
 /** global debugfs **/
 
@@ -1506,7 +1598,8 @@ int mt7996_init_band_debugfs(struct mt7996_phy *phy)
 		debugfs_create_file("rdd_pulse_th", 0200, dir, dev, &fops_rdd_pulse_th);
 		debugfs_create_file("rdd_fcc5_lpn", 0200, dir, dev, &fops_rdd_fcc5_lpn);
 	}
-
+	debugfs_create_file("power_table_filename", 0600, dir, phy,
+			    &fops_mt7996_sku_filename);
 #ifdef CONFIG_MTK_DEBUG
 	mt7996_mtk_init_band_debugfs(phy, dir);
 #endif

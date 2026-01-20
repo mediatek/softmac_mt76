@@ -402,7 +402,8 @@ static void __mt7996_init_txpower(struct mt7996_phy *phy,
 	int path_delta = mt76_tx_power_path_delta(n_chains);
 	int pwr_delta = mt7996_eeprom_get_power_delta(dev, sband->band);
 	struct mt76_power_limits *limits;
-	struct device_node *np;
+	struct device_node *np = NULL;
+	char *file = NULL;
 
 	limits = kzalloc(sizeof(*limits), GFP_KERNEL);
 	if (!limits)
@@ -410,21 +411,31 @@ static void __mt7996_init_txpower(struct mt7996_phy *phy,
 
 	phy->sku_limit_en = true;
 	phy->sku_path_en = true;
-	np = mt76_find_power_limits_node(phy->mt76);
+
+	if (phy->mt76->sku_filename[0])
+		file = mt76_find_power_limits_section_file(phy->mt76);
+	else
+		np = mt76_find_power_limits_node(phy->mt76);
+
 	for (i = 0; i < sband->n_channels; i++) {
 		struct ieee80211_channel *chan = &sband->channels[i];
 		int target_power = mt7996_eeprom_get_target_power(dev, chan);
 
 		target_power += pwr_delta;
-		target_power = mt76_get_rate_power_limits(phy->mt76, chan,
-							  limits,
-							  target_power);
+		if (file)
+			target_power = mt76_get_rate_power_limits_file(phy->mt76, chan,
+								       limits,
+								       target_power);
+		else
+			target_power = mt76_get_rate_power_limits(phy->mt76, chan,
+								  limits,
+								  target_power);
 		if (!limits->path.ofdm[0])
 			phy->sku_path_en = false;
 
 		target_power += path_delta;
 		target_power = DIV_ROUND_UP(target_power, 2);
-		if (!np)
+		if (!np && !file)
 			chan->max_power = min_t(int, chan->max_reg_power,
 						target_power);
 		else
@@ -432,7 +443,9 @@ static void __mt7996_init_txpower(struct mt7996_phy *phy,
 		phy->txpower = max(phy->txpower, chan->max_power);
 		chan->orig_mpwr = target_power;
 	}
+
 	kfree(limits);
+	kfree(file);
 }
 
 void mt7996_init_txpower(struct mt7996_phy *phy)

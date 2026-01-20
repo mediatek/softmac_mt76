@@ -8088,6 +8088,7 @@ int mt7996_mcu_set_txpower_sku(struct mt7996_phy *phy,
 	};
 	struct mt76_power_limits *la;
 	struct sk_buff *skb;
+	struct ieee80211_channel *chan = mphy->main_chandef.chan;
 	int i, ret, txpower_limit;
 
 	if (txpower_setting == INT_MIN || txpower_setting > 127)
@@ -8103,13 +8104,21 @@ int mt7996_mcu_set_txpower_sku(struct mt7996_phy *phy,
 	if (!la)
 		return -ENOMEM;
 
-	txpower_limit = mt76_get_rate_power_limits(mphy, mphy->main_chandef.chan,
-						   la, txpower_limit);
+	if (mphy->sku_filename[0])
+		txpower_limit =
+			mt76_get_rate_power_limits_file(mphy, chan, la, txpower_limit);
+	else
+		txpower_limit =
+			mt76_get_rate_power_limits(mphy, chan, la, txpower_limit);
+
+	if (!la->path.ofdm[0])
+		phy->sku_path_en = false;
+
 	if(phy->mt76->cap.has_6ghz && dev->mt76.afc_power_table) {
-		ret = mt7996_afc_update_power_limit(dev, mphy->main_chandef.chan, la,
-						    &txpower_limit, &mphy->main_chandef);
+		ret = mt7996_afc_update_power_limit(dev, chan, la, &txpower_limit,
+						    &mphy->main_chandef);
 		if (ret)
-			return ret;
+			goto out;
 	}
 
 	mt7996_update_max_txpower_cur(phy, txpower_limit);

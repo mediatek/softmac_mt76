@@ -92,6 +92,7 @@
 #define MT_NPU_Q_RX(_n)		__MT_NPU_Q(MT76_WED_Q_RX, _n)
 #define MT_NPU_Q_TXFREE(_n)	(FIELD_PREP(MT_QFLAG_WED_TYPE, MT76_WED_Q_TXFREE) | \
 				 FIELD_PREP(MT_QFLAG_WED_RING, _n))
+#define SKU_FILENAME_MAX	64
 
 struct mt76_dev;
 struct mt76_phy;
@@ -1127,6 +1128,7 @@ struct mt76_phy {
 
 	int txpower_cur;
 	u8 sku_idx;
+	char sku_filename[SKU_FILENAME_MAX];
 	u8 antenna_mask;
 	u16 chainmask;
 
@@ -2253,6 +2255,12 @@ s8 mt76_get_rate_power_limits(struct mt76_phy *phy,
 			      struct ieee80211_channel *chan,
 			      struct mt76_power_limits *dest,
 			      s8 target_power);
+
+s8 mt76_get_rate_power_limits_file(struct mt76_phy *phy,
+				   struct ieee80211_channel *chan,
+				   struct mt76_power_limits *dest,
+				   s8 target_power);
+char *mt76_find_power_limits_section_file(struct mt76_phy *phy);
 
 static inline bool mt76_queue_is_rx(struct mt76_dev *dev, struct mt76_queue *q)
 {
