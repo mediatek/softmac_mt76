@@ -3735,6 +3735,10 @@ mt7996_mcu_sta_mld_setup_tlv(struct mt7996_dev *dev, struct sk_buff *skb,
 	}
 	mld_setup->seconed_id = cpu_to_le16(msta_link->wcid.idx);
 	mld_setup->link_num = nlinks;
+	/* the flag is used for informing FW to use PEER_MLD for MLD setup, and
+	 * the MLD_SETUP command is now used mainly for link addition
+	 */
+	mld_setup->extra_info = EXTRA_INFO_MLD_SKIP;
 
 	mld_setup_link = (struct mld_setup_link *)mld_setup->link_info;
 	mt76_sta_dbg(vif, "STA %pM pri_link=%u, pri_wcid=%u, sec_link=%u, sec_wcid=%u",
@@ -4253,7 +4257,7 @@ int mt7996_mcu_peer_mld_ttlm_req(struct mt7996_dev *dev, struct ieee80211_vif *v
 {
 	struct mt7996_sta_link *msta_link;
 	struct mt7996_sta *msta;
-	struct peer_mld_req_hdr hdr = { .mld_idx = 0xff };
+	struct peer_mld_req_hdr hdr = { .fw_mld_idx = cpu_to_le16(0xff) };
 	struct peer_mld_ttlm_req *req;
 	struct sk_buff *skb;
 	struct tlv *tlv;
@@ -4275,7 +4279,7 @@ int mt7996_mcu_peer_mld_ttlm_req(struct mt7996_dev *dev, struct ieee80211_vif *v
 	if (!skb)
 		return -ENOMEM;
 
-	dev_dbg(dev->mt76.dev, "Setup TTLM for %pM\n", sta->addr);
+	mt76_mlo_dbg(vif, "Setup TTLM for %pM\n", sta->addr);
 	skb_put_data(skb, &hdr, sizeof(hdr));
 	tlv = mt7996_mcu_add_uni_tlv(skb, UNI_CMD_PEER_MLD_TTLM_REQ,
 				     sizeof(*req));
@@ -4283,7 +4287,7 @@ int mt7996_mcu_peer_mld_ttlm_req(struct mt7996_dev *dev, struct ieee80211_vif *v
 
 	memcpy(req->mld_addr, vif->addr, ETH_ALEN);
 	req->enabled_link_bitmap = cpu_to_le16(vif->valid_links);
-	rcu_read_lock();
+
 	for_each_set_bit(link_id, &valid_links, IEEE80211_MLD_MAX_NUM_LINKS) {
 		msta_link = mt76_dereference(msta->link[link_id], &dev->mt76);
 		if (!msta_link)
@@ -4307,10 +4311,111 @@ int mt7996_mcu_peer_mld_ttlm_req(struct mt7996_dev *dev, struct ieee80211_vif *v
 			req->ul_tid_map[link_id]);
 	}
 
-	rcu_read_unlock();
-
 	return mt76_mcu_skb_send_msg(&dev->mt76, skb, MCU_WM_UNI_CMD(PEER_MLD),
 				     true);
+}
+
+int mt7996_mcu_set_peer_mld(struct mt7996_dev *dev, struct ieee80211_vif *vif,
+			    struct ieee80211_sta *sta)
+{
+	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
+	struct mt7996_sta_link *msta_link;
+	struct peer_mld_req_hdr *hdr;
+	struct peer_mld_info *info;
+	struct peer_mld_link_info *link_info;
+	struct peer_mld_cap *cap;
+	struct peer_mld_cap_entry *cap_entry;
+	struct sk_buff *skb;
+	struct tlv *tlv;
+	unsigned long valid_links = msta->valid_links;
+	u8 link_num = hweight16(msta->valid_links);
+	int link_id, len, min_amsdu_size = INT_MAX;
+
+	msta_link = mt76_dereference(msta->link[msta->deflink_id], &dev->mt76);
+	if (!msta_link)
+		return -EINVAL;
+
+	len = sizeof(*hdr) + sizeof(*info) + link_num * sizeof(link_info) +
+	      sizeof(*cap) + 2 * sizeof(*cap_entry);
+	skb = mt76_mcu_msg_alloc(&dev->mt76, NULL, len);
+	if (!skb)
+		return -ENOMEM;
+
+	hdr = skb_put_zero(skb, sizeof(*hdr));
+	hdr->fw_mld_idx = cpu_to_le16(msta_link->wcid.idx);
+	memcpy(hdr->peer_mld_addr, sta->addr, ETH_ALEN);
+
+	len = sizeof(*info) + link_num * sizeof(link_info);
+	tlv = mt7996_mcu_add_uni_tlv(skb, UNI_CMD_PEER_MLD_INFO, len);
+	info = (struct peer_mld_info *)tlv;
+	info->link_num = link_num;
+	info->hw_info.primary_id = cpu_to_le16(msta_link->wcid.idx);
+	info->hw_info.setup_wcid = cpu_to_le16(msta_link->wcid.idx);
+
+	msta_link = mt76_dereference(msta->link[msta->seclink_id], &dev->mt76);
+	if (!msta_link)
+		goto error;
+
+	info->hw_info.second_id = cpu_to_le16(msta_link->wcid.idx);
+
+	link_info = (struct peer_mld_link_info *)info->link_info;
+	for_each_set_bit(link_id, &valid_links, IEEE80211_MLD_MAX_NUM_LINKS) {
+		struct ieee80211_link_sta *link_sta;
+		struct mt7996_vif_link *link;
+
+		msta_link = mt76_dereference(msta->link[link_id], &dev->mt76);
+		if (!msta_link)
+			goto error;
+
+		link = mt7996_vif_link(dev, vif, link_id);
+		if (!link)
+			goto error;
+
+		link_sta = link_sta_dereference_protected(sta, link_id);
+		if (link_sta && link_sta->agg.max_amsdu_len < min_amsdu_size)
+			min_amsdu_size = link_sta->agg.max_amsdu_len;
+
+		link_info->fw_link_id = cpu_to_le16(msta_link->wcid.idx);
+		link_info->link_id = msta_link->wcid.link_id;
+		link_info->bss_idx = link->mt76.idx;
+
+		link_info->hw_info.wlan_idx = cpu_to_le16(msta_link->wcid.idx);
+		link_info->hw_info.band_idx = link->mt76.band_idx;
+
+		link_info++;
+	}
+
+	len = sizeof(*cap) + 2 * sizeof(*cap_entry);
+	tlv = mt7996_mcu_add_uni_tlv(skb, UNI_CMD_PEER_MLD_CAP, len);
+	cap = (struct peer_mld_cap *)tlv;
+
+	switch (min_amsdu_size) {
+	case IEEE80211_MAX_MPDU_LEN_VHT_11454:
+		min_amsdu_size = IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_11454;
+		break;
+	case IEEE80211_MAX_MPDU_LEN_HT_7935:
+	case IEEE80211_MAX_MPDU_LEN_VHT_7991:
+		min_amsdu_size = IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_7991;
+		break;
+	default:
+		min_amsdu_size = IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_3895;
+		break;
+	}
+
+	cap_entry = (struct peer_mld_cap_entry *)cap->entry;
+	cap_entry->type = cpu_to_le32(UNI_CMD_PEER_MLD_CAP_TYPE_AMSDU_MAX_LEN);
+	cap_entry->val = cpu_to_le32(min_amsdu_size);
+	cap_entry++;
+
+	cap_entry->type = cpu_to_le32(UNI_CMD_PEER_MLD_CAP_TYPE_AMSDU_MAX_CNT);
+	cap_entry->val = cpu_to_le32(31);
+
+	return mt76_mcu_skb_send_msg(&dev->mt76, skb,
+				     MCU_WMWA_UNI_CMD(PEER_MLD), true);
+
+error:
+	dev_kfree_skb(skb);
+	return -EINVAL;
 }
 
 static void

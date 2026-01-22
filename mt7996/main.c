@@ -1653,6 +1653,12 @@ mt7996_mac_sta_event(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 
 		switch (ev) {
 		case MT76_STA_EVENT_ASSOC:
+			if (links == msta->valid_links && sta->mlo) {
+				err = mt7996_mcu_set_peer_mld(dev, vif, sta);
+				if (err)
+					goto unlock;
+			}
+
 			err = mt7996_mcu_add_sta(dev, vif, link_conf, link_sta,
 						 link, msta_link,
 						 CONN_STATE_CONNECT, true);
@@ -1710,9 +1716,10 @@ mt7996_mac_sta_event(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 							    msta_link);
 			msta_link->wcid.sta_disabled = 1;
 			msta_link->wcid.sta = 0;
-			links = links & ~BIT(link_id);
 			break;
 		}
+
+		links = links & ~BIT(link_id);
 	}
 unlock:
 	mutex_unlock(&dev->mt76.mutex);
