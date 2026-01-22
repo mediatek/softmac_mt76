@@ -1624,7 +1624,7 @@ mt7996_mcu_sta_amsdu_tlv(struct mt7996_dev *dev, struct sk_buff *skb,
 
 	tlv = mt76_connac_mcu_add_tlv(skb, STA_REC_HW_AMSDU, sizeof(*amsdu));
 	amsdu = (struct sta_rec_amsdu *)tlv;
-	amsdu->max_amsdu_num = 8;
+	amsdu->max_amsdu_num = 31;
 	amsdu->amsdu_en = true;
 	msta_link->wcid.amsdu = true;
 
