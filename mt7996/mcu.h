@@ -1463,6 +1463,21 @@ struct peer_mld_cap {
 	DECLARE_FLEX_ARRAY(struct peer_mld_cap_entry, entry);
 } __packed;
 
+struct peer_mld_ba {
+	__le16 tag;
+	__le16 len;
+	u8 tid;
+	u8 ba_type;
+	u8 amsdu;
+	u8 ba_en;
+	__le16 ssn;
+	__le16 winsize;
+	u8 ba_add_rro;
+	u8 pn_check_en;
+	u8 ba_mode;
+	u8 rsv;
+} __packed;
+
 enum {
 	UNI_CMD_PEER_MLD_TTLM_REQ = 0x0,
 	UNI_CMD_PEER_MLD_INFO,

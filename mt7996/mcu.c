@@ -2402,25 +2402,41 @@ mt7996_mcu_sta_ba(struct mt7996_dev *dev, struct mt76_vif_link *mvif,
 }
 
 static int
-mt7996_mcu_sta_tx_cap(struct mt7996_dev *dev, struct mt76_vif_link *mvif,
-		      struct mt76_wcid *wcid)
+mt7996_mcu_peer_mld_ba(struct mt7996_dev *dev, struct ieee80211_vif *vif,
+		       struct ieee80211_sta *sta, struct ieee80211_ampdu_params *params,
+		       bool enable, bool tx)
 {
-	struct sta_rec_tx_cap *tx_cap;
+	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
+	struct mt7996_sta_link *msta_link;
+	struct peer_mld_req_hdr *hdr;
+	struct peer_mld_ba *ba;
 	struct sk_buff *skb;
 	struct tlv *tlv;
 
-	skb = __mt76_connac_mcu_alloc_sta_req(&dev->mt76, mvif, wcid,
-					      MT7996_STA_UPDATE_MAX_SIZE);
-	if (IS_ERR(skb))
-		return PTR_ERR(skb);
+	msta_link = mt76_dereference(msta->link[msta->deflink_id], &dev->mt76);
+	if (!msta_link)
+		return -EINVAL;
 
-	tlv = mt76_connac_mcu_add_tlv(skb, STA_REC_TX_CAP, sizeof(*tx_cap));
+	skb = mt76_mcu_msg_alloc(&dev->mt76, NULL, sizeof(*hdr) + sizeof(*ba));
+	if (!skb)
+		return -ENOMEM;
 
-	tx_cap = (struct sta_rec_tx_cap *)tlv;
-	tx_cap->ampdu_limit_en = true;
+	hdr = skb_put_zero(skb, sizeof(*hdr));
+	hdr->fw_mld_idx = cpu_to_le16(msta_link->wcid.idx);
+	memcpy(hdr->peer_mld_addr, sta->addr, ETH_ALEN);
+
+	tlv = mt7996_mcu_add_uni_tlv(skb, UNI_CMD_PEER_MLD_BA, sizeof(*ba));
+	ba = (struct peer_mld_ba *)tlv;
+	ba->ba_type = tx ? MT_BA_TYPE_ORIGINATOR : MT_BA_TYPE_RECIPIENT;
+	ba->winsize = cpu_to_le16(params->buf_size);
+	ba->ssn = cpu_to_le16(params->ssn);
+	ba->ba_en = enable << params->tid;
+	ba->amsdu = params->amsdu;
+	ba->tid = params->tid;
+	ba->ba_add_rro = !tx && enable && mt7996_has_hwrro(dev);
 
 	return mt76_mcu_skb_send_msg(&dev->mt76, skb,
-				     MCU_WM_UNI_CMD(STA_REC_UPDATE), true);
+				     MCU_WMWA_UNI_CMD(PEER_MLD), true);
 }
 
 static bool
@@ -2483,6 +2499,42 @@ mt7996_check_limit_ampdu_en(struct mt7996_dev *dev,
 	return BW320 && BW160;
 }
 
+static int
+mt7996_mcu_sta_tx_cap(struct mt7996_dev *dev, struct ieee80211_vif *vif,
+		      struct ieee80211_sta *sta, struct ieee80211_ampdu_params *params)
+{
+	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
+	struct mt7996_sta_link *msta_link;
+	struct mt76_vif_link *mlink;
+	struct sta_rec_tx_cap *tx_cap;
+	struct sk_buff *skb;
+	struct tlv *tlv;
+
+	if (!mt7996_check_limit_ampdu_en(dev, params))
+		return 0;
+
+	msta_link = mt76_dereference(msta->link[msta->deflink_id], &dev->mt76);
+	if (!msta_link)
+		return -EINVAL;
+
+	mlink = mt76_vif_link(&dev->mt76, vif, msta->deflink_id);
+	if (!mlink)
+		return -EINVAL;
+
+	skb = __mt76_connac_mcu_alloc_sta_req(&dev->mt76, mlink, &msta_link->wcid,
+					      MT7996_STA_UPDATE_MAX_SIZE);
+	if (IS_ERR(skb))
+		return PTR_ERR(skb);
+
+	tlv = mt76_connac_mcu_add_tlv(skb, STA_REC_TX_CAP, sizeof(*tx_cap));
+	tx_cap = (struct sta_rec_tx_cap *)tlv;
+	tx_cap->ampdu_limit_en = true;
+
+	return mt76_mcu_skb_send_msg(&dev->mt76, skb,
+				     MCU_WM_UNI_CMD(STA_REC_UPDATE), true);
+}
+
+
 /** starec & wtbl **/
 int mt7996_mcu_add_tx_ba(struct mt7996_dev *dev,
 			 struct ieee80211_ampdu_params *params,
@@ -2491,39 +2543,32 @@ int mt7996_mcu_add_tx_ba(struct mt7996_dev *dev,
 	struct ieee80211_sta *sta = params->sta;
 	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
 	unsigned int link_id;
-	int ret = 0;
 	unsigned long valid_links = sta->valid_links ?: BIT(0);
-	bool limit_ampdu_en = mt7996_check_limit_ampdu_en(dev, params);
+	int ret;
 
 	for_each_set_bit(link_id, &valid_links, IEEE80211_MLD_MAX_NUM_LINKS) {
 		struct mt7996_sta_link *msta_link;
-		struct mt7996_vif_link *link;
 
 		msta_link = mt7996_sta_link_protected(dev, msta, link_id);
 		if (!msta_link)
 			continue;
 
-		link = mt7996_vif_link(dev, vif, link_id);
-		if (!link)
-			continue;
-
 		if (enable && !params->amsdu)
 			msta_link->wcid.amsdu = false;
-
-		ret = mt7996_mcu_sta_ba(dev, &link->mt76, params,
-					&msta_link->wcid, enable, true);
-		if (ret)
-			break;
-
-		if (limit_ampdu_en) {
-			ret = mt7996_mcu_sta_tx_cap(dev, &link->mt76,
-						    &msta_link->wcid);
-			if (ret)
-				break;
-		}
 	}
 
-	return ret;
+	if (!sta->mlo) {
+		struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
+
+		return mt7996_mcu_sta_ba(dev, &mvif->deflink.mt76, params,
+					 &msta->deflink.wcid, enable, true);
+	}
+
+	ret = mt7996_mcu_sta_tx_cap(dev, vif, sta, params);
+	if (ret)
+		return ret;
+
+	return mt7996_mcu_peer_mld_ba(dev, vif, sta, params, enable, true);
 }
 
 int mt7996_mcu_add_rx_ba(struct mt7996_dev *dev,
@@ -2531,30 +2576,16 @@ int mt7996_mcu_add_rx_ba(struct mt7996_dev *dev,
 			 struct ieee80211_vif *vif, bool enable)
 {
 	struct ieee80211_sta *sta = params->sta;
-	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
-	unsigned int link_id;
-	int ret = 0;
-	unsigned long valid_links = sta->valid_links ?: BIT(0);
 
-	for_each_set_bit(link_id, &valid_links, IEEE80211_MLD_MAX_NUM_LINKS) {
-		struct mt7996_sta_link *msta_link;
-		struct mt7996_vif_link *link;
+	if (!sta->mlo) {
+		struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
+		struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
 
-		msta_link = mt7996_sta_link_protected(dev, msta, link_id);
-		if (!msta_link)
-			continue;
-
-		link = mt7996_vif_link(dev, vif, link_id);
-		if (!link)
-			continue;
-
-		ret = mt7996_mcu_sta_ba(dev, &link->mt76, params,
-					&msta_link->wcid, enable, false);
-		if (ret)
-			break;
+		return mt7996_mcu_sta_ba(dev, &mvif->deflink.mt76, params,
+					 &msta->deflink.wcid, enable, false);
 	}
 
-	return ret;
+	return mt7996_mcu_peer_mld_ba(dev, vif, sta, params, enable, false);
 }
 
 static void
