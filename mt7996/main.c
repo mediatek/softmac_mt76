@@ -398,11 +398,15 @@ void mt7996_vif_link_remove(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 
 	cancel_delayed_work(&link->sta_chsw_work);
 
+	if (dev->recovery.hw_full_reset)
+		goto cleanup;
+
 	mt7996_mcu_add_sta(dev, vif, link_conf, NULL, link, NULL,
 			   CONN_STATE_DISCONNECT, false);
 	mt7996_mcu_add_bss_info(phy, vif, link_conf, mlink, msta_link, false);
 	mt7996_mcu_add_dev_info(phy, vif, link_conf, mlink, false);
 
+cleanup:
 	rcu_assign_pointer(dev->mt76.wcid[idx], NULL);
 	rcu_assign_pointer(mvif->mt76.link[link_id], NULL);
 	rcu_assign_pointer(mvif->sta.link[link_id], NULL);
@@ -2993,6 +2997,19 @@ mt7996_can_neg_ttlm(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 }
 
 static void
+mt7996_reconfig_complete(struct ieee80211_hw *hw,
+			 enum ieee80211_reconfig_type reconfig_type)
+{
+	struct mt7996_dev *dev = mt7996_hw_dev(hw);
+	struct mt7996_phy *phy;
+
+	ieee80211_wake_queues(hw);
+	mt7996_for_each_phy(dev, phy)
+		ieee80211_queue_delayed_work(hw, &phy->mt76->mac_work,
+					     MT7996_WATCHDOG_TIME);
+}
+
+static void
 mt7996_event_callback(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 		      const struct ieee80211_event *event)
 {
@@ -3191,6 +3208,7 @@ const struct ieee80211_ops mt7996_ops = {
 	.event_callback = mt7996_event_callback,
 	.change_vif_links = mt7996_change_vif_links,
 	.change_sta_links = mt7996_mac_sta_change_links,
+	.reconfig_complete = mt7996_reconfig_complete,
 	.set_qos_map = mt7996_set_qos_map,
 	.set_attlm = mt7996_set_attlm,
 	.set_sta_ttlm = mt7996_set_sta_ttlm,

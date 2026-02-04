@@ -2500,12 +2500,9 @@ void mt7996_tx_token_put(struct mt7996_dev *dev)
 static int
 mt7996_mac_restart(struct mt7996_dev *dev)
 {
-	struct mt7996_phy *phy2, *phy3;
 	struct mt76_dev *mdev = &dev->mt76;
+	struct mt7996_phy *phy;
 	int i, ret;
-
-	phy2 = mt7996_phy2(dev);
-	phy3 = mt7996_phy3(dev);
 
 	if (dev->hif2) {
 		mt76_wr(dev, MT_INT1_MASK_CSR, 0x0);
@@ -2518,20 +2515,14 @@ mt7996_mac_restart(struct mt7996_dev *dev)
 			mt76_wr(dev, MT_PCIE1_MAC_INT_ENABLE, 0x0);
 	}
 
-	set_bit(MT76_RESET, &dev->mphy.state);
 	set_bit(MT76_MCU_RESET, &dev->mphy.state);
+	mt7996_for_each_phy(dev, phy)
+		set_bit(MT76_RESET, &phy->mt76->state);
 	wake_up(&dev->mt76.mcu.wait);
-	if (phy2)
-		set_bit(MT76_RESET, &phy2->mt76->state);
-	if (phy3)
-		set_bit(MT76_RESET, &phy3->mt76->state);
 
 	/* lock/unlock all queues to ensure that no tx is pending */
-	mt76_txq_schedule_all(&dev->mphy);
-	if (phy2)
-		mt76_txq_schedule_all(phy2->mt76);
-	if (phy3)
-		mt76_txq_schedule_all(phy3->mt76);
+	mt7996_for_each_phy(dev, phy)
+		mt76_txq_schedule_all(phy->mt76);
 
 	/* disable all tx/rx napi */
 	mt76_worker_disable(&dev->mt76.tx_worker);
@@ -2609,41 +2600,16 @@ mt7996_mac_restart(struct mt7996_dev *dev)
 	}
 
 	/* set the necessary init items */
-	ret = mt7996_mcu_set_eeprom(dev);
-	if (ret)
-		goto out;
+	mt7996_init_work_reset(dev);
 
-	mt7996_mac_init(dev);
-	mt7996_init_txpower(&dev->phy);
-	mt7996_init_txpower(phy2);
-	mt7996_init_txpower(phy3);
-	ret = mt7996_txbf_init(dev);
-
-	if (test_bit(MT76_STATE_RUNNING, &dev->mphy.state)) {
-		ret = mt7996_run(&dev->phy);
-		if (ret)
-			goto out;
-	}
-
-	if (phy2 && test_bit(MT76_STATE_RUNNING, &phy2->mt76->state)) {
-		ret = mt7996_run(phy2);
-		if (ret)
-			goto out;
-	}
-
-	if (phy3 && test_bit(MT76_STATE_RUNNING, &phy3->mt76->state)) {
-		ret = mt7996_run(phy3);
-		if (ret)
-			goto out;
-	}
+	/* Clear running state for subsequent mt7996_run to reset it again */
+	mt7996_for_each_phy(dev, phy)
+		clear_bit(MT76_STATE_RUNNING, &phy->mt76->state);
 
 out:
 	/* reset done */
-	clear_bit(MT76_RESET, &dev->mphy.state);
-	if (phy2)
-		clear_bit(MT76_RESET, &phy2->mt76->state);
-	if (phy3)
-		clear_bit(MT76_RESET, &phy3->mt76->state);
+	mt7996_for_each_phy(dev, phy)
+		clear_bit(MT76_RESET, &phy->mt76->state);
 
 	napi_enable(&dev->mt76.tx_napi);
 	local_bh_disable();
@@ -2655,76 +2621,119 @@ out:
 }
 
 static void
-mt7996_mac_full_reset(struct mt7996_dev *dev)
+mt7996_mac_reset_sta_iter(void *data, struct ieee80211_sta *sta)
 {
-	struct mt7996_phy *phy2, *phy3;
+	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
+	struct mt7996_dev *dev = data;
 	int i;
 
-	phy2 = mt7996_phy2(dev);
-	phy3 = mt7996_phy3(dev);
+	for (i = 0; i < ARRAY_SIZE(msta->link); i++) {
+		struct mt7996_sta_link *msta_link = NULL;
+
+		msta_link = rcu_replace_pointer(msta->link[i], msta_link,
+						lockdep_is_held(&dev->mt76.mutex));
+		if (!msta_link)
+			continue;
+
+		spin_lock_bh(&dev->mt76.sta_poll_lock);
+		if (!list_empty(&msta_link->wcid.poll_list))
+			list_del_init(&msta_link->wcid.poll_list);
+		if (!list_empty(&msta_link->rc_list))
+			list_del_init(&msta_link->rc_list);
+		spin_unlock_bh(&dev->mt76.sta_poll_lock);
+
+		mt76_wcid_cleanup(&dev->mt76, &msta_link->wcid);
+		mt76_wcid_mask_clear(dev->mt76.wcid_mask, msta_link->wcid.idx);
+
+		if (msta->deflink_id == i) {
+			msta->deflink_id = IEEE80211_LINK_UNSPECIFIED;
+			continue;
+		}
+
+		kfree_rcu(msta_link, rcu_head);
+	}
+}
+
+static void
+mt7996_mac_reset_vif_iter(void *data, u8 *mac, struct ieee80211_vif *vif)
+{
+	struct mt76_vif_link *mlink = (struct mt76_vif_link *)vif->drv_priv;
+	struct mt76_vif_data *mvif = mlink->mvif;
+	struct mt7996_dev *dev = data;
+	struct mt7996_vif_link *mconf;
+	int link_id;
+	unsigned long rem;
+
+	/* remove all links and fallback to non-MLO interface */
+	rem = mvif->valid_links;
+	for_each_set_bit(link_id, &rem, IEEE80211_MLD_MAX_NUM_LINKS) {
+		mconf = mt7996_vif_link(dev, vif, link_id);
+		if (!mconf || !mconf->phy)
+			continue;
+
+		mt7996_vif_link_remove(mconf->phy->mt76, vif, NULL, &mconf->mt76);
+	}
+}
+
+static void
+mt7996_mac_full_reset(struct mt7996_dev *dev)
+{
+	struct ieee80211_hw *hw = mt76_hw(dev);
+	struct mt7996_phy *phy;
+	LIST_HEAD(list);
+	int i;
+
 	dev->recovery.hw_full_reset = true;
 
-	ieee80211_stop_queues(mt76_hw(dev));
-	if (phy2)
-		ieee80211_stop_queues(phy2->mt76->hw);
-	if (phy3)
-		ieee80211_stop_queues(phy3->mt76->hw);
-
-	set_bit(MT76_RESET, &dev->mphy.state);
-	set_bit(MT76_MCU_RESET, &dev->mphy.state);
 	wake_up(&dev->mt76.mcu.wait);
-	if (phy2) {
-		set_bit(MT76_RESET, &phy2->mt76->state);
-		set_bit(MT76_MCU_RESET, &phy2->mt76->state);
-	}
-	if (phy3) {
-		set_bit(MT76_RESET, &phy3->mt76->state);
-		set_bit(MT76_MCU_RESET, &phy3->mt76->state);
-	}
+	ieee80211_stop_queues(hw);
 
 	cancel_work_sync(&dev->wed_rro.work);
-	cancel_delayed_work_sync(&dev->mphy.mac_work);
-	if (phy2)
-		cancel_delayed_work_sync(&phy2->mt76->mac_work);
-	if (phy3)
-		cancel_delayed_work_sync(&phy3->mt76->mac_work);
 	cancel_delayed_work_sync(&dev->scs_work);
+	mt7996_for_each_phy(dev, phy)
+		cancel_delayed_work_sync(&phy->mt76->mac_work);
 
 	mutex_lock(&dev->mt76.mutex);
 	for (i = 0; i < 10; i++) {
 		if (!mt7996_mac_restart(dev))
 			break;
 	}
-	mutex_unlock(&dev->mt76.mutex);
 
 	if (i == 10)
 		dev_err(dev->mt76.dev, "chip full reset failed\n");
 
-	ieee80211_restart_hw(mt76_hw(dev));
-	if (phy2)
-		ieee80211_restart_hw(phy2->mt76->hw);
-	if (phy3)
-		ieee80211_restart_hw(phy3->mt76->hw);
+	mt7996_for_each_phy(dev, phy)
+		phy->omac_mask = 0;
 
-	ieee80211_wake_queues(mt76_hw(dev));
-	if (phy2)
-		ieee80211_wake_queues(phy2->mt76->hw);
-	if (phy3)
-		ieee80211_wake_queues(phy3->mt76->hw);
+	ieee80211_iterate_stations_atomic(hw, mt7996_mac_reset_sta_iter, dev);
+	ieee80211_iterate_active_interfaces_atomic(hw,
+						   IEEE80211_IFACE_SKIP_SDATA_NOT_IN_DRIVER,
+						   mt7996_mac_reset_vif_iter, dev);
+	mt76_reset_device(&dev->mt76);
 
+	INIT_LIST_HEAD(&dev->sta_rc_list);
+	INIT_LIST_HEAD(&dev->twt_list);
+
+	spin_lock_bh(&dev->wed_rro.lock);
+	list_splice_init(&dev->wed_rro.poll_list, &list);
+	spin_unlock_bh(&dev->wed_rro.lock);
+
+	while (!list_empty(&list)) {
+		struct mt7996_wed_rro_session_id *e;
+
+		e = list_first_entry(&list, struct mt7996_wed_rro_session_id,
+				     list);
+		list_del_init(&e->list);
+		kfree(e);
+	}
+
+	i = mt76_wcid_alloc(dev->mt76.wcid_mask, MT7996_WTBL_STA);
+	dev->mt76.global_wcid.idx = i;
 	dev->recovery.hw_full_reset = false;
-	ieee80211_queue_delayed_work(mt76_hw(dev),
-				     &dev->mphy.mac_work,
-				     MT7996_WATCHDOG_TIME);
-	if (phy2)
-		ieee80211_queue_delayed_work(phy2->mt76->hw,
-					     &phy2->mt76->mac_work,
-					     MT7996_WATCHDOG_TIME);
-	if (phy3)
-		ieee80211_queue_delayed_work(phy3->mt76->hw,
-					     &phy3->mt76->mac_work,
-					     MT7996_WATCHDOG_TIME);
-	ieee80211_queue_delayed_work(mt76_hw(dev), &dev->scs_work, HZ);
+
+	mutex_unlock(&dev->mt76.mutex);
+
+	ieee80211_restart_hw(mt76_hw(dev));
 }
 
 void mt7996_mac_reset_work(struct work_struct *work)
