@@ -129,8 +129,7 @@ void mt76_scan_work(struct work_struct *work)
 
 	dev->scan.chan = req->channels[dev->scan.chan_idx++];
 	cfg80211_chandef_create(&chandef, dev->scan.chan, NL80211_CHAN_HT20);
-	if (phy->main_chandef.chan &&
-	    phy->main_chandef.chan->center_freq == dev->scan.chan->center_freq) {
+	if (phy->main_chandef.chan == dev->scan.chan) {
 		chandef = phy->main_chandef;
 		offchannel = false;
 	}
@@ -140,9 +139,7 @@ void mt76_scan_work(struct work_struct *work)
 	if (!req->n_ssids)
 		goto out;
 
-	if ((chandef.chan->flags & (IEEE80211_CHAN_NO_IR |
-				    IEEE80211_CHAN_RADAR)) &&
-	    offchannel) {
+	if (chandef.chan->flags & (IEEE80211_CHAN_NO_IR | IEEE80211_CHAN_RADAR)) {
 		dev->scan.beacon_received = false;
 		dev->scan.beacon_wait = true;
 		goto out;
