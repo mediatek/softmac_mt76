@@ -177,6 +177,7 @@
 #define MT7996_MAX_PROBE_TRIES		2
 
 #define IP_DSCP_NUM			64
+#define ADDBA_RETRY_PERIOD		(5 * HZ)
 
 #define MT7996_HW_DROP_STAT	4
 #define MT7996_HW_DROP_REASON	0x20
@@ -439,6 +440,8 @@ struct mt7996_sta {
 	struct mt7996_vif *vif;
 
 	bool stop_rx_ba_in_progress;
+
+	unsigned long last_addba_req_time[IEEE80211_NUM_TIDS];
 };
 
 struct mt7996_vif_link {
@@ -1286,6 +1289,7 @@ int mt7996_mcu_set_scs(struct mt7996_phy *phy, u8 enable);
 void mt7996_mcu_scs_sta_poll(struct work_struct *work);
 int mt7996_mcu_set_band_confg(struct mt7996_phy *phy, u16 option, bool enable);
 void mt7996_mcu_wmm_pbc_work(struct work_struct *work);
+int mt7996_mcu_ba_trigger_enable(struct mt7996_dev *dev, u8 enable);
 
 static inline bool mt7996_has_hwrro(struct mt7996_dev *dev)
 {
@@ -1447,6 +1451,7 @@ void mt7996_vif_add_debugfs(struct ieee80211_hw *hw, struct ieee80211_vif *vif);
 int mt7996_mmio_wed_init(struct mt7996_dev *dev, void *pdev_ptr,
 			 bool hif2, int *irq);
 u32 mt7996_wed_init_buf(void *ptr, dma_addr_t phys, int token_id);
+void mt7996_mac_ba_trigger(struct mt7996_dev *dev, u16 wlan_idx, u8 tid);
 
 int mt7996_dma_rro_init(struct mt7996_dev *dev);
 void mt7996_dma_rro_start(struct mt7996_dev *dev);
