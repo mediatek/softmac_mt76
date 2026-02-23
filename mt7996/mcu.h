@@ -472,6 +472,15 @@ struct mt7996_mcu_bss_acq_pkt_cnt_event {
 	} __packed bss[BSS_ACQ_PKT_CNT_BSS_NUM];
 } __packed;
 
+struct mt7996_mcu_ba_trigger {
+	struct mt7996_mcu_rxd rxd;
+
+	u8 wlan_idx_lo;
+	u8 tid;
+	u8 wlan_idx_hi;
+	u8 rsv;
+} __packed;
+
 enum {
 	MCU_WA_PARAM_PDMA_RX = 0x04,
 	MCU_WA_PARAM_CPU_UTIL = 0x0b,

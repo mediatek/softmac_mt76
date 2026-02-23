@@ -1296,6 +1296,48 @@ mt7996_mcu_rx_bss_acq_pkt_cnt(struct mt7996_dev *dev, struct sk_buff *skb)
 	}
 }
 
+int mt7996_mcu_ba_trigger_enable(struct mt7996_dev *dev, u8 enable)
+{
+#define MT7996_BA_TIMEOUT 1000
+	struct {
+		u8 rsv[4];
+		__le16 tag;
+		__le16 len;
+		struct {
+			u8 enable;
+			u8 target;
+			u8 rsv[2];
+			__le32 timeout;
+		} __packed data;
+	} __packed req = {
+		.tag = cpu_to_le16(UNI_CMD_SDO_AUTO_BA),
+		.len = cpu_to_le16(sizeof(req) - 4),
+		.data.enable = enable,
+		.data.target = 0,
+		.data.timeout = cpu_to_le32(MT7996_BA_TIMEOUT),
+	};
+	int ret;
+
+	if (is_mt7990(&dev->mt76))
+		ret = mt76_mcu_send_msg(&dev->mt76, MCU_WA_UNI_CMD(SDO),
+					&req, sizeof(req), false);
+	else
+		ret = mt76_mcu_send_msg(&dev->mt76, MCU_WA_EXT_CMD(AUTO_BA),
+					&req.data, sizeof(req.data), true);
+
+	return ret;
+}
+
+static void mt7996_mcu_rx_ba_trigger(struct mt7996_dev *dev, struct sk_buff *skb)
+{
+	struct mt7996_mcu_ba_trigger *event = (struct mt7996_mcu_ba_trigger *)skb->data;
+	u16 wlan_idx = u16_encode_bits(event->wlan_idx_hi, GENMASK(15, 8)) |
+		       u16_encode_bits(event->wlan_idx_lo, GENMASK(7, 0));
+	u8 tid = event->tid;
+
+	mt7996_mac_ba_trigger(dev, wlan_idx, tid);
+}
+
 static void
 mt7996_mcu_rx_ext_event(struct mt7996_dev *dev, struct sk_buff *skb)
 {
@@ -1307,6 +1349,10 @@ mt7996_mcu_rx_ext_event(struct mt7996_dev *dev, struct sk_buff *skb)
 		break;
 	case MCU_EXT_EVENT_BSS_ACQ_PKT_CNT:
 		mt7996_mcu_rx_bss_acq_pkt_cnt(dev, skb);
+		break;
+	case MCU_EXT_EVENT_BA_TRIGGER:
+		mt7996_mcu_rx_ba_trigger(dev, skb);
+		break;
 	default:
 		break;
 	}
@@ -2276,6 +2322,88 @@ mt7996_mcu_sta_ba(struct mt7996_dev *dev, struct mt76_vif_link *mvif,
 				     MCU_WMWA_UNI_CMD(STA_REC_UPDATE), true);
 }
 
+static int
+mt7996_mcu_sta_tx_cap(struct mt7996_dev *dev, struct mt76_vif_link *mvif,
+		      struct mt76_wcid *wcid)
+{
+	struct sta_rec_tx_cap *tx_cap;
+	struct sk_buff *skb;
+	struct tlv *tlv;
+
+	skb = __mt76_connac_mcu_alloc_sta_req(&dev->mt76, mvif, wcid,
+					      MT7996_STA_UPDATE_MAX_SIZE);
+	if (IS_ERR(skb))
+		return PTR_ERR(skb);
+
+	tlv = mt76_connac_mcu_add_tlv(skb, STA_REC_TX_CAP, sizeof(*tx_cap));
+
+	tx_cap = (struct sta_rec_tx_cap *)tlv;
+	tx_cap->ampdu_limit_en = true;
+
+	return mt76_mcu_skb_send_msg(&dev->mt76, skb,
+				     MCU_WM_UNI_CMD(STA_REC_UPDATE), true);
+}
+
+static bool
+mt7996_check_limit_ampdu_en(struct mt7996_dev *dev,
+			    struct ieee80211_ampdu_params *params) {
+	struct ieee80211_sta *sta = params->sta;
+	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
+	struct mt7996_vif *mvif = msta->vif;
+	struct ieee80211_vif *vif = container_of((void *)mvif, struct ieee80211_vif,
+						 drv_priv);
+	unsigned long valid_links = sta->valid_links ?: BIT(0);
+	unsigned int link_id;
+	bool BW320 = false, BW160 = false;
+
+	if (params->buf_size < 1024)
+		return false;
+
+	for_each_set_bit(link_id, &valid_links, IEEE80211_MLD_MAX_NUM_LINKS) {
+		struct ieee80211_link_sta __rcu *link =
+			link_sta_dereference_protected(sta, link_id);
+		struct mt7996_vif_link *mconf =
+			mt7996_vif_link(dev, vif, link_id);
+		struct mt76_phy *phy = mconf->phy->mt76;
+		struct ieee80211_eht_mcs_nss_supp_bw *ss = NULL;
+		u8 sta_bw, ap_nss, sta_nss;
+
+		switch (phy->chandef.width) {
+		case NL80211_CHAN_WIDTH_160:
+			if (link->bandwidth >= IEEE80211_STA_RX_BW_160) {
+				ss = &link->eht_cap.eht_mcs_nss_supp.bw._160;
+				sta_bw = NL80211_CHAN_WIDTH_160;
+			}
+			break;
+		case NL80211_CHAN_WIDTH_320:
+			if (link->bandwidth == IEEE80211_STA_RX_BW_320) {
+				ss = &link->eht_cap.eht_mcs_nss_supp.bw._320;
+				sta_bw = NL80211_CHAN_WIDTH_320;
+			}
+			break;
+		default:
+			break;
+		}
+
+		if (!ss)
+			continue;
+
+		ap_nss = hweight8(phy->antenna_mask);
+		sta_nss = max(u8_get_bits(ss->rx_tx_mcs11_max_nss, IEEE80211_EHT_MCS_NSS_RX),
+			      u8_get_bits(ss->rx_tx_mcs13_max_nss, IEEE80211_EHT_MCS_NSS_RX));
+
+		if (min(ap_nss, sta_nss) <= 2)
+			continue;
+
+		if (sta_bw == NL80211_CHAN_WIDTH_160)
+			BW160 = true;
+		else if (sta_bw == NL80211_CHAN_WIDTH_320)
+			BW320 = true;
+	}
+
+	return BW320 && BW160;
+}
+
 /** starec & wtbl **/
 int mt7996_mcu_add_tx_ba(struct mt7996_dev *dev,
 			 struct ieee80211_ampdu_params *params,
@@ -2283,11 +2411,12 @@ int mt7996_mcu_add_tx_ba(struct mt7996_dev *dev,
 {
 	struct ieee80211_sta *sta = params->sta;
 	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
-	struct ieee80211_link_sta *link_sta;
 	unsigned int link_id;
 	int ret = 0;
+	unsigned long valid_links = sta->valid_links ?: BIT(0);
+	bool limit_ampdu_en = mt7996_check_limit_ampdu_en(dev, params);
 
-	for_each_sta_active_link(vif, sta, link_sta, link_id) {
+	for_each_set_bit(link_id, &valid_links, IEEE80211_MLD_MAX_NUM_LINKS) {
 		struct mt7996_sta_link *msta_link;
 		struct mt7996_vif_link *link;
 
@@ -2306,6 +2435,13 @@ int mt7996_mcu_add_tx_ba(struct mt7996_dev *dev,
 					&msta_link->wcid, enable, true);
 		if (ret)
 			break;
+
+		if (limit_ampdu_en) {
+			ret = mt7996_mcu_sta_tx_cap(dev, &link->mt76,
+						    &msta_link->wcid);
+			if (ret)
+				break;
+		}
 	}
 
 	return ret;
@@ -2317,11 +2453,11 @@ int mt7996_mcu_add_rx_ba(struct mt7996_dev *dev,
 {
 	struct ieee80211_sta *sta = params->sta;
 	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
-	struct ieee80211_link_sta *link_sta;
 	unsigned int link_id;
 	int ret = 0;
+	unsigned long valid_links = sta->valid_links ?: BIT(0);
 
-	for_each_sta_active_link(vif, sta, link_sta, link_id) {
+	for_each_set_bit(link_id, &valid_links, IEEE80211_MLD_MAX_NUM_LINKS) {
 		struct mt7996_sta_link *msta_link;
 		struct mt7996_vif_link *link;
 

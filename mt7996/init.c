@@ -1028,6 +1028,7 @@ static void mt7996_init_work(struct work_struct *work)
 	mt7996_low_power_config(dev);
 	mt7996_set_pcie_l1ss(dev,
 		is_mt7990(&dev->mt76) && (lp_ctrl & BIT(LOW_POWER_PCIE_L1SS)));
+	mt7996_mcu_ba_trigger_enable(dev, true);
 }
 
 void mt7996_wfsys_reset(struct mt7996_dev *dev)
