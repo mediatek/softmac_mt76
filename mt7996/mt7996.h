@@ -443,6 +443,8 @@ struct mt7996_sta {
 	u8 seclink_id;
 
 	struct mt7996_vif *vif;
+
+	bool stop_rx_ba_in_progress;
 };
 
 struct mt7996_vif_link {
@@ -530,6 +532,7 @@ struct mt7996_wed_rro_addr {
 struct mt7996_wed_rro_session_id {
 	struct list_head list;
 	u16 id;
+	u16 wcid;
 };
 
 struct mt7996_msdu_page {
@@ -581,6 +584,15 @@ struct mt7996_wmm_params {
 	int aifsn;
 	int txop_limit;
 	int acm;
+};
+
+#define MT7996_MAX_RRO_RRS_RING 4
+
+struct mt7996_rro_cidx_didx_emi {
+	struct {
+		u16 idx;
+		u16 rsv;
+	} ring[MT7996_MAX_RRO_RRS_RING];
 };
 
 #ifdef CONFIG_MTK_VENDOR
