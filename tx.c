@@ -74,6 +74,11 @@ mt76_tx_status_unlock(struct mt76_dev *dev, struct sk_buff_head *list)
 			} else {
 				status.n_rates = 0;
 			}
+
+			if (status.info && wcid->link_valid) {
+				status.info->status.link_id = wcid->link_id;
+				status.info->status.link_valid = true;
+			}
 		}
 
 		hw = mt76_tx_status_get_hw(dev, skb);
