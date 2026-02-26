@@ -885,8 +885,7 @@ mt76_dma_rx_cleanup(struct mt76_dev *dev, struct mt76_queue *q)
 		    mt76_queue_is_wed_rro(q))
 			continue;
 
-		if (!mt76_queue_is_wed_rro_rxdmad_c(q) &&
-		    !mt76_queue_is_wed_rro_ind(q))
+		if (!mt76_queue_is_wed_rro(q))
 			mt76_put_page_pool_buf(buf, false);
 	} while (1);
 
