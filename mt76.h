@@ -1122,6 +1122,7 @@ struct mt76_phy {
 	u8 macaddr[ETH_ALEN];
 
 	int txpower_cur;
+	u8 sku_idx;
 	u8 antenna_mask;
 	u16 chainmask;
 
@@ -1262,6 +1263,10 @@ struct mt76_dev {
 		bool beacon_wait;
 		bool beacon_received;
 	} scan;
+
+	bool lpi_psd;
+	bool lpi_bcn_enhance;
+	bool mgmt_pwr_enhance;
 
 #ifdef CONFIG_NL80211_TESTMODE
 	const struct mt76_testmode_ops *test_ops;
@@ -2223,7 +2228,7 @@ mt76_mcu_skb_send_msg(struct mt76_dev *dev, struct sk_buff *skb, int cmd,
 void mt76_set_irq_mask(struct mt76_dev *dev, u32 addr, u32 clear, u32 set);
 
 struct device_node *
-mt76_find_power_limits_node(struct mt76_dev *dev);
+mt76_find_power_limits_node(struct mt76_phy *phy);
 struct device_node *
 mt76_find_channel_node(struct device_node *np, struct ieee80211_channel *chan);
 
