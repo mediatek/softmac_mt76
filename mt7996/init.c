@@ -142,26 +142,38 @@ static ssize_t mt7996_thermal_temp_store(struct device *dev,
 	if (ret < 0)
 		return ret;
 
-	mutex_lock(&phy->dev->mt76.mutex);
-	val = DIV_ROUND_CLOSEST(clamp_val(val, 40 * 1000, 130 * 1000), 1000);
+	switch (i) {
+	case 1:
+	case 2:
+		mutex_lock(&phy->dev->mt76.mutex);
+		val = DIV_ROUND_CLOSEST(clamp_val(val, 40 * 1000, 130 * 1000), 1000);
 
-	/* add a safety margin ~10 */
-	if ((i - 1 == MT7996_CRIT_TEMP_IDX &&
-	     val > phy->throttle_temp[MT7996_MAX_TEMP_IDX] - 10) ||
-	    (i - 1 == MT7996_MAX_TEMP_IDX &&
-	     val - 10 < phy->throttle_temp[MT7996_CRIT_TEMP_IDX])) {
-		dev_err(phy->dev->mt76.dev,
-			"temp1_max shall be 10 degrees higher than temp1_crit.");
+		/* add a safety margin ~10 */
+		if ((i - 1 == MT7996_CRIT_TEMP_IDX &&
+		     val > phy->throttle_temp[MT7996_MAX_TEMP_IDX] - 10) ||
+		    (i - 1 == MT7996_MAX_TEMP_IDX &&
+		     val - 10 < phy->throttle_temp[MT7996_CRIT_TEMP_IDX])) {
+			dev_err(phy->dev->mt76.dev,
+				"temp1_max shall be 10 degrees higher than temp1_crit.");
+			mutex_unlock(&phy->dev->mt76.mutex);
+			return -EINVAL;
+		}
+
+		phy->throttle_temp[i - 1] = val;
 		mutex_unlock(&phy->dev->mt76.mutex);
+
+		ret = mt7996_mcu_set_thermal_protect(phy, true);
+		if (ret)
+			return ret;
+		break;
+	case 3:
+		ret = mt7996_mcu_set_thermal_info_query(phy);
+		if (ret)
+			return ret;
+		break;
+	default:
 		return -EINVAL;
 	}
-
-	phy->throttle_temp[i - 1] = val;
-	mutex_unlock(&phy->dev->mt76.mutex);
-
-	ret = mt7996_mcu_set_thermal_protect(phy, true);
-	if (ret)
-		return ret;
 
 	return count;
 }
@@ -169,7 +181,7 @@ static ssize_t mt7996_thermal_temp_store(struct device *dev,
 static SENSOR_DEVICE_ATTR_RO(temp1_input, mt7996_thermal_temp, 0);
 static SENSOR_DEVICE_ATTR_RW(temp1_crit, mt7996_thermal_temp, 1);
 static SENSOR_DEVICE_ATTR_RW(temp1_max, mt7996_thermal_temp, 2);
-static SENSOR_DEVICE_ATTR_RO(throttle1, mt7996_thermal_temp, 3);
+static SENSOR_DEVICE_ATTR_RW(throttle1, mt7996_thermal_temp, 3);
 
 static struct attribute *mt7996_hwmon_attrs[] = {
 	&sensor_dev_attr_temp1_input.dev_attr.attr,
