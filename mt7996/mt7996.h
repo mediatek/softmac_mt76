@@ -303,6 +303,13 @@ enum {
 	MT7996_RRO_ALL_BYPASS,
 };
 
+enum mt7996_sta_chsw_state {
+	MT7996_STA_CHSW_IDLE,
+	MT7996_STA_CHSW_PAUSE_TX,
+	MT7996_STA_CHSW_RESUME_TX,
+	MT7996_STA_CHSW_TIMEOUT,
+};
+
 struct mt7996_twt_flow {
 	struct list_head list;
 	u64 start_tsf;
@@ -486,6 +493,12 @@ struct mt7996_vif_link {
 	u8 mbssid_idx;
 
 	s64 tsf_offset[IEEE80211_MLD_MAX_NUM_LINKS];
+
+	/* sta channel switch */
+	struct delayed_work sta_chsw_work;
+	enum mt7996_sta_chsw_state state;
+	enum mt7996_sta_chsw_state next_state;
+	u32 pause_timeout;
 };
 
 struct mt7996_vif_link_info {
@@ -1463,6 +1476,7 @@ int mt7996_mac_del_btwt(struct ieee80211_hw *hw,
 			struct ieee80211_vif *vif,
 			u8 id);
 int mt7996_mac_sta_poll(struct mt76_dev *dev);
+void mt7996_sta_chsw_state_reset(struct mt7996_vif_link *mconf);
 int mt7996_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
 			  enum mt76_txq_id qid, struct mt76_wcid *wcid,
 			  struct ieee80211_sta *sta,
@@ -1477,6 +1491,7 @@ void mt7996_rro_rx_process(struct mt76_dev *mdev, void *data);
 bool mt7996_rx_check(struct mt76_dev *mdev, void *data, int len);
 void mt7996_stats_work(struct work_struct *work);
 void mt7996_beacon_mon_work(struct work_struct *work);
+void mt7996_sta_chsw_work(struct work_struct *work);
 int mt76_dfs_start_rdd(struct mt7996_dev *dev, bool force);
 int mt7996_dfs_init_radar_detector(struct mt7996_phy *phy);
 void mt7996_set_stream_he_eht_caps(struct mt7996_phy *phy);

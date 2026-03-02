@@ -445,6 +445,7 @@ int mt7996_vif_link_add(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 
 	link->bpcc = 0;
 	memset(link->tsf_offset, 0, sizeof(link->tsf_offset));
+	INIT_DELAYED_WORK(&link->sta_chsw_work, mt7996_sta_chsw_work);
 
 	mt76_bss_dbg(vif, "band=%u, bss_idx=%u, link_id=%u, wcid=%u",
 		     phy->mt76->band_idx, mlink->idx, link_conf->link_id,
@@ -468,6 +469,8 @@ void mt7996_vif_link_remove(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 		.link_id = link_id,
 	};
 	int idx = msta_link->wcid.idx;
+
+	cancel_delayed_work(&link->sta_chsw_work);
 
 	if (dev->testmode_enable) {
 		if (!mt76_testmode_enabled(mphy))
@@ -3178,6 +3181,50 @@ mt7996_set_qos_map(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	return ret;
 }
 
+static void
+mt7996_sta_channel_switch(struct ieee80211_hw *hw,
+			  struct ieee80211_vif *vif,
+			  struct ieee80211_channel_switch *ch_switch)
+{
+#define TX_PAUSED_GRACE_PERIOD		2000
+	struct mt7996_dev *dev = mt7996_hw_dev(hw);
+	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
+	struct ieee80211_bss_conf *conf;
+	struct mt7996_vif_link *mconf;
+	unsigned int link_id = ch_switch->link_id;
+	int csa_time;
+
+	if (vif->type != NL80211_IFTYPE_STATION)
+		return;
+
+	mutex_lock(&dev->mt76.mutex);
+
+	conf = link_conf_dereference_protected(vif, link_id);
+	mconf = mt7996_vif_link(dev, vif, link_id);
+	if (!conf || !mconf) {
+		mutex_unlock(&dev->mt76.mutex);
+		return;
+	}
+
+	/* a new csa occurred while the original one was still in progress */
+	if (mconf->state != MT7996_STA_CHSW_IDLE)
+		mt7996_sta_chsw_state_reset(mconf);
+
+	csa_time = (max_t(u8, ch_switch->count, 1) - 1) * conf->beacon_int;
+	mconf->pause_timeout = TX_PAUSED_GRACE_PERIOD +
+			       MT7996_MAX_BEACON_LOSS * conf->beacon_int +
+			       cfg80211_chandef_dfs_cac_time(hw->wiphy,
+							     &ch_switch->chandef);
+	mconf->next_state = MT7996_STA_CHSW_PAUSE_TX;
+	mvif->cs_links[0] = link_id;
+	mutex_unlock(&dev->mt76.mutex);
+
+	cancel_delayed_work(&mconf->sta_chsw_work);
+	ieee80211_queue_delayed_work(hw, &mconf->sta_chsw_work,
+				     msecs_to_jiffies(csa_time));
+}
+
+
 const struct ieee80211_ops mt7996_ops = {
 	.add_chanctx = mt76_add_chanctx,
 	.remove_chanctx = mt76_remove_chanctx,
@@ -3255,4 +3302,5 @@ const struct ieee80211_ops mt7996_ops = {
 	.set_sta_ttlm = mt7996_set_sta_ttlm,
 	.can_neg_ttlm = mt7996_can_neg_ttlm,
 	.set_ttlm = mt7996_set_ttlm,
+	.channel_switch = mt7996_sta_channel_switch,
 };
