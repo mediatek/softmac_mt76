@@ -823,6 +823,22 @@ struct bf_sounding_on {
 	__le32 snd_period;
 } __packed;
 
+enum sounding_mode {
+	SU_SOUNDING,
+	MU_SOUNDING,
+	SU_PERIODIC_SOUNDING,
+	MU_PERIODIC_SOUNDING,
+	BF_PROCESSING,
+	TXCMD_NONTB_SU_SOUNDING,
+	TXCMD_VHT_MU_SOUNDING,
+	TXCMD_TB_PER_BRP_SOUNDING,
+	TXCMD_TB_SOUNDING,
+
+	/* keep last */
+	NUM_SOUNDING_MODE,
+	SOUNDING_MODE_MAX = NUM_SOUNDING_MODE - 1,
+};
+
 struct bf_hw_en_status_update {
 	__le16 tag;
 	__le16 len;
@@ -846,6 +862,25 @@ union bf_tag_tlv {
 	struct bf_sounding_on bf_snd;
 	struct bf_hw_en_status_update bf_hw_en;
 	struct bf_mod_en_ctrl bf_mod_en;
+};
+
+enum {
+	BF_SOUNDING_OFF = 0,
+	BF_SOUNDING_ON = 1,
+	BF_DATA_PACKET_APPLY = 2,
+	BF_PFMU_TAG_READ = 5,
+	BF_PFMU_TAG_WRITE = 6,
+	BF_STA_REC_READ = 11,
+	BF_PHASE_CALIBRATION = 12,
+	BF_IBF_PHASE_COMP = 13,
+	BF_PROFILE_WRITE_20M_ALL = 15,
+	BF_HW_EN_UPDATE = 17,
+	BF_MOD_EN_CTRL = 20,
+	BF_FBRPT_DBG_INFO_READ = 23,
+	BF_TXSND_INFO = 24,
+	BF_CMD_TXCMD = 27,
+	BF_CFG_PHY = 28,
+	BF_PROFILE_WRITE_20M_ALL_5X5 = 30,
 };
 
 struct ra_rate {
@@ -893,12 +928,6 @@ enum {
 	RATE_PARAM_FIXED_MCS,
 	RATE_PARAM_FIXED_GI = 11,
 	RATE_PARAM_AUTO = 20,
-};
-
-enum {
-	BF_SOUNDING_ON = 1,
-	BF_HW_EN_UPDATE = 17,
-	BF_MOD_EN_CTRL = 20,
 };
 
 enum {
@@ -1041,8 +1070,33 @@ enum {
 	UNI_CMD_THERMAL_PROTECT_INFO,
 };
 
+struct tx_power_ctrl {
+	u8 _rsv[4];
+
+	__le16 tag;
+	__le16 len;
+
+	u8 power_ctrl_id;
+	union {
+		bool sku_enable;
+		bool ate_mode_enable;
+		bool percentage_ctrl_enable;
+		bool bf_backoff_enable;
+		u8 show_info_category;
+		u8 power_drop_level;
+	};
+	u8 band_idx;
+	u8 rsv[1];
+} __packed;
+
 enum {
+	UNI_TXPOWER_SKU_POWER_LIMIT_CTRL = 0,
+	UNI_TXPOWER_PERCENTAGE_CTRL = 1,
+	UNI_TXPOWER_PERCENTAGE_DROP_CTRL = 2,
+	UNI_TXPOWER_BACKOFF_POWER_LIMIT_CTRL = 3,
 	UNI_TXPOWER_POWER_LIMIT_TABLE_CTRL = 4,
+	UNI_TXPOWER_ATE_MODE_CTRL = 6,
+	UNI_TXPOWER_SHOW_INFO = 7,
 };
 
 enum {

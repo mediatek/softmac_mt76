@@ -1103,6 +1103,16 @@ mt7996_mcu_uni_rx_unsolicited_event(struct mt7996_dev *dev, struct sk_buff *skb)
 	case MCU_UNI_EVENT_THERMAL:
 		mt7996_mcu_rx_thermal_info_query(dev, skb);
 		break;
+#ifdef CONFIG_NL80211_TESTMODE
+	case MCU_UNI_EVENT_TESTMODE_CTRL:
+		mt7996_tm_rf_test_event(dev, skb);
+		break;
+#endif
+#if defined CONFIG_NL80211_TESTMODE || defined CONFIG_MTK_DEBUG
+	case MCU_UNI_EVENT_BF:
+		mt7996_mcu_rx_bf_event(dev, skb);
+		break;
+#endif
 	default:
 		break;
 	}
@@ -1425,6 +1435,10 @@ mt7996_mcu_bss_basic_tlv(struct sk_buff *skb,
 
 	if (vif->type == NL80211_IFTYPE_MONITOR) {
 		memcpy(bss->bssid, phy->macaddr, ETH_ALEN);
+#ifdef CONFIG_NL80211_TESTMODE
+		if (mt76_testmode_bf_enabled(phy))
+			memcpy(bss->bssid, phy->test.addr[2], ETH_ALEN);
+#endif
 		return 0;
 	}
 
@@ -4276,9 +4290,7 @@ int mt7996_mcu_set_chan_info(struct mt7996_phy *phy, u16 tag)
 		.channel_band = ch_band[chandef->chan->band],
 	};
 
-	if (phy->mt76->hw->conf.flags & IEEE80211_CONF_MONITOR)
-		req.switch_reason = CH_SWITCH_NORMAL;
-	else if (phy->mt76->offchannel || !phy->mt76->chanctx)
+	if (phy->mt76->offchannel || !phy->mt76->chanctx)
 		req.switch_reason = CH_SWITCH_SCAN_BYPASS_DPD;
 	else if (!cfg80211_reg_can_beacon(phy->mt76->hw->wiphy, chandef,
 					  NL80211_IFTYPE_AP))
@@ -4563,6 +4575,56 @@ int mt7996_mcu_get_eeprom(struct mt7996_dev *dev, u32 offset, u8 *buf, u32 buf_l
 	return ret;
 }
 
+int
+mt7996_mcu_write_ext_eeprom(struct mt7996_dev *dev, u32 offset,
+			    u32 data_len, u8 *write_buf)
+{
+	struct mt7996_mcu_eeprom_access req = {
+		.info.tag = cpu_to_le16(UNI_EXT_EEPROM_ACCESS),
+		.info.len = cpu_to_le16(sizeof(req) - 4 +
+					MT7996_EXT_EEPROM_BLOCK_SIZE),
+	};
+	u32 block_num, block_size = MT7996_EXT_EEPROM_BLOCK_SIZE;
+	u8 *buf = write_buf;
+	int i, ret = -EINVAL;
+	int msg_len = sizeof(req) + block_size;
+
+	if (!mt7996_has_ext_eeprom(dev))
+		return ret;
+
+	if (!buf)
+		buf = (u8 *)dev->mt76.eeprom.data + offset;
+
+	block_num = DIV_ROUND_UP(data_len, block_size);
+	for (i = 0; i < block_num; i++) {
+		struct sk_buff *skb;
+		u32 buf_len = block_size;
+		u32 block_offs = i * block_size;
+
+		if (block_offs + block_size > data_len)
+			buf_len = data_len % block_size;
+
+		req.info.addr = cpu_to_le32(offset + block_offs);
+		req.eeprom.ext_eeprom.data_len = cpu_to_le32(buf_len);
+
+		skb = mt76_mcu_msg_alloc(&dev->mt76, NULL, msg_len);
+		if (!skb)
+			return -ENOMEM;
+
+		skb_put_data(skb, &req, sizeof(req));
+		skb_put_data(skb, buf, buf_len);
+
+		ret = mt76_mcu_skb_send_msg(&dev->mt76, skb,
+					    MCU_WM_UNI_CMD(EXT_EEPROM_CTRL), false);
+		if (ret)
+			return ret;
+
+		buf += buf_len;
+	}
+
+	return 0;
+}
+
 int mt7996_mcu_get_efuse_free_block(struct mt7996_dev *dev, u8 *block_num)
 {
 	struct {
@@ -4591,6 +4653,192 @@ int mt7996_mcu_get_efuse_free_block(struct mt7996_dev *dev, u8 *block_num)
 	dev_kfree_skb(skb);
 
 	return 0;
+}
+
+static int mt7996_mcu_set_pre_cal(struct mt7996_dev *dev, u32 idx,
+				  u8 *cal, u32 len, u32 cal_id)
+{
+#define PRECAL_CMD_PRE_CAL_RESULT	0x0
+	struct {
+		/* fixed field */
+		u8 action;
+		u8 dest;
+		u8 attribute;
+		u8 tag_num;
+
+		__le16 tag;
+		__le16 len;
+
+		__le32 cal_id;
+		s8 precal;
+		u8 band;
+		u8 rsv[2];
+		__le32 idx;
+		__le32 cal_len;
+	} req = {
+		.tag = cpu_to_le16(PRECAL_CMD_PRE_CAL_RESULT),
+		.len = cpu_to_le16(sizeof(req) - 4 + len),
+		.cal_id = cpu_to_le32(cal_id),
+		.idx = cpu_to_le32(idx),
+		.cal_len = cpu_to_le32(len),
+	};
+	struct sk_buff *skb;
+
+	if (!len)
+		return 0;
+
+	skb = mt76_mcu_msg_alloc(&dev->mt76, NULL, sizeof(req) + len);
+	if (!skb)
+		return -ENOMEM;
+
+	skb_put_data(skb, &req, sizeof(req));
+	skb_put_data(skb, cal, len);
+
+	return mt76_mcu_skb_send_msg(&dev->mt76, skb, MCU_WM_UNI_CMD(PRECAL_RESULT), false);
+}
+
+int mt7996_mcu_apply_group_cal(struct mt7996_dev *dev)
+{
+	u8 *cal = dev->cal.data, *eeprom = dev->mt76.eeprom.data;
+	u32 idx = 0, total_idx = MT_EE_CAL_GROUP_SIZE / MT_EE_CAL_UNIT;
+	u32 offs = MT_EE_DO_PRE_CAL;
+	int ret = 0;
+
+	if (!(eeprom[offs] & MT_EE_WIFI_CAL_GROUP))
+		return 0;
+
+	for (idx = 0; idx < total_idx; idx++, cal += MT_EE_CAL_UNIT) {
+		ret = mt7996_mcu_set_pre_cal(dev, idx, cal, MT_EE_CAL_UNIT, RF_PRE_CAL);
+		if (ret)
+			goto out;
+	}
+
+	ret = mt7996_mcu_set_pre_cal(dev, total_idx, cal,
+				     MT_EE_CAL_GROUP_SIZE % MT_EE_CAL_UNIT, RF_PRE_CAL);
+
+out:
+	return ret;
+}
+
+int mt7996_mcu_apply_tx_dpd(struct mt7996_phy *phy)
+{
+	struct mt7996_dev *dev = phy->dev;
+	struct mt76_phy *mphy = phy->mt76;
+	struct cfg80211_chan_def *chandef = &phy->mt76->chandef;
+	enum nl80211_band band = chandef->chan->band;
+	enum nl80211_chan_width bw = chandef->width;
+	const struct ieee80211_channel *chan_list;
+	u32 cal_id, chan_list_size, base_offset = 0, offs = MT_EE_DO_PRE_CAL;
+	u32 per_chan_size = DPD_PER_CH_BW20_SIZE;
+	u16 channel = ieee80211_frequency_to_channel(chandef->center_freq1);
+	u8 dpd_mask, *cal = dev->cal.data, *eeprom = dev->mt76.eeprom.data;
+	int idx, i, ret;
+	bool has_skip_ch = (band == NL80211_BAND_5GHZ);
+
+	switch (band) {
+	case NL80211_BAND_2GHZ:
+		dpd_mask = MT_EE_WIFI_CAL_DPD_2G;
+		/* channel 14 don't need DPD cal */
+		if (channel >= 1 && channel <= 4)
+			channel = 3;
+		else if (channel >= 5 && channel <= 9)
+			channel = 7;
+		else if (channel >= 10 && channel <= 13)
+			channel = 11;
+		else
+			return 0;
+		cal_id = RF_DPD_FLAT_CAL;
+		chan_list = dpd_2g_ch_list_bw20;
+		chan_list_size = DPD_CH_NUM(BW20_2G);
+		break;
+	case NL80211_BAND_5GHZ:
+		dpd_mask = MT_EE_WIFI_CAL_DPD_5G;
+		cal_id = RF_DPD_FLAT_5G_CAL;
+		chan_list = mphy->sband_5g.sband.channels;
+		chan_list_size = mphy->sband_5g.sband.n_channels;
+		base_offset += MT_EE_CAL_DPD_SIZE_2G;
+		if (bw == NL80211_CHAN_WIDTH_160) {
+			base_offset += DPD_CH_NUM(BW20_5G) * DPD_PER_CH_BW20_SIZE +
+				       DPD_CH_NUM(BW80_5G) * DPD_PER_CH_GT_BW20_SIZE;
+			per_chan_size = DPD_PER_CH_GT_BW20_SIZE;
+			cal_id = RF_DPD_FLAT_5G_MEM_CAL;
+			chan_list = dpd_5g_ch_list_bw160;
+			chan_list_size = DPD_CH_NUM(BW160_5G);
+			has_skip_ch = false;
+		} else if (is_mt7992(&dev->mt76) && bw == NL80211_CHAN_WIDTH_80) {
+			base_offset += DPD_CH_NUM(BW20_5G) * DPD_PER_CH_BW20_SIZE;
+			per_chan_size = DPD_PER_CH_GT_BW20_SIZE;
+			cal_id = RF_DPD_FLAT_5G_MEM_CAL;
+			chan_list = dpd_5g_ch_list_bw80;
+			chan_list_size = DPD_CH_NUM(BW80_5G);
+			has_skip_ch = false;
+		} else if (bw > NL80211_CHAN_WIDTH_20) {
+			/* apply (center channel - 2)'s dpd cal data for bw 40/80 channels */
+			channel -= 2;
+		}
+		if (channel >= dpd_5g_skip_ch_list[0].hw_value &&
+		    channel <= dpd_5g_skip_ch_list[DPD_CH_NUM(BW20_5G_SKIP) - 1].hw_value)
+			return 0;
+		break;
+	case NL80211_BAND_6GHZ:
+		dpd_mask = MT_EE_WIFI_CAL_DPD_6G;
+		cal_id = RF_DPD_FLAT_6G_CAL;
+		chan_list = mphy->sband_6g.sband.channels;
+		chan_list_size = mphy->sband_6g.sband.n_channels;
+		base_offset += MT_EE_CAL_DPD_SIZE_2G + MT_EE_CAL_DPD_SIZE_5G;
+		if (bw == NL80211_CHAN_WIDTH_160) {
+			base_offset += mphy->sband_6g.sband.n_channels * DPD_PER_CH_BW20_SIZE;
+			per_chan_size = DPD_PER_CH_GT_BW20_SIZE;
+			cal_id = RF_DPD_FLAT_6G_MEM_CAL;
+			chan_list = dpd_6g_ch_list_bw160;
+			chan_list_size = DPD_CH_NUM(BW160_6G);
+		} else if (is_mt7996(&dev->mt76) && bw == NL80211_CHAN_WIDTH_320) {
+			base_offset += mphy->sband_6g.sband.n_channels * DPD_PER_CH_BW20_SIZE +
+				       DPD_CH_NUM(BW80_6G) * DPD_PER_CH_GT_BW20_SIZE +
+				       DPD_CH_NUM(BW160_6G) * DPD_PER_CH_GT_BW20_SIZE;
+			per_chan_size = DPD_PER_CH_GT_BW20_SIZE;
+			cal_id = RF_DPD_FLAT_6G_MEM_CAL;
+			chan_list = dpd_6g_ch_list_bw320;
+			chan_list_size = DPD_CH_NUM(BW320_6G);
+		} else if (is_mt7992(&dev->mt76) && bw == NL80211_CHAN_WIDTH_80) {
+			base_offset += mphy->sband_6g.sband.n_channels * DPD_PER_CH_BW20_SIZE;
+			per_chan_size = DPD_PER_CH_GT_BW20_SIZE;
+			cal_id = RF_DPD_FLAT_6G_MEM_CAL;
+			chan_list = dpd_6g_ch_list_bw80;
+			chan_list_size = DPD_CH_NUM(BW80_6G);
+		} else if (bw > NL80211_CHAN_WIDTH_20) {
+			/* apply (center channel - 2)'s dpd cal data for bw 40/80 channels */
+			channel -= 2;
+		}
+		break;
+	default:
+		dpd_mask = 0;
+		break;
+	}
+
+	if (!(eeprom[offs] & dpd_mask))
+		return 0;
+
+	for (idx = 0; idx < chan_list_size; idx++)
+		if (channel == chan_list[idx].hw_value)
+			break;
+	if (idx == chan_list_size)
+		return -EINVAL;
+
+	if (has_skip_ch && channel > dpd_5g_skip_ch_list[DPD_CH_NUM(BW20_5G_SKIP) - 1].hw_value)
+		idx -= DPD_CH_NUM(BW20_5G_SKIP);
+
+	cal += MT_EE_CAL_GROUP_SIZE + base_offset + idx * per_chan_size;
+
+	for (i = 0; i < per_chan_size / MT_EE_CAL_UNIT; i++) {
+		ret = mt7996_mcu_set_pre_cal(dev, i, cal, MT_EE_CAL_UNIT, cal_id);
+		if (ret)
+			return ret;
+
+		cal += MT_EE_CAL_UNIT;
+	}
+
+	return ret;
 }
 
 int mt7996_mcu_get_chip_config(struct mt7996_dev *dev, u32 *cap)
@@ -6019,5 +6267,38 @@ int mt7996_mcu_set_pp_sta_dscb(struct mt7996_phy *phy,
 	phy->punct_bitmap = cpu_to_le16(chandef->punctured);
 
 	return mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(PP),
+				 &req, sizeof(req), false);
+
+int mt7996_mcu_set_tx_power_ctrl(struct mt7996_phy *phy, u8 power_ctrl_id, u8 data)
+{
+	struct mt7996_dev *dev = phy->dev;
+	struct tx_power_ctrl req = {
+		.tag = cpu_to_le16(power_ctrl_id),
+		.len = cpu_to_le16(sizeof(req) - 4),
+		.power_ctrl_id = power_ctrl_id,
+		.band_idx = phy->mt76->band_idx,
+	};
+
+	switch (power_ctrl_id) {
+	case UNI_TXPOWER_SKU_POWER_LIMIT_CTRL:
+		req.sku_enable = !!data;
+		break;
+	case UNI_TXPOWER_PERCENTAGE_CTRL:
+		req.percentage_ctrl_enable = !!data;
+		break;
+	case UNI_TXPOWER_PERCENTAGE_DROP_CTRL:
+		req.power_drop_level = data;
+		break;
+	case UNI_TXPOWER_BACKOFF_POWER_LIMIT_CTRL:
+		req.bf_backoff_enable = !!data;
+		break;
+	case UNI_TXPOWER_ATE_MODE_CTRL:
+		req.ate_mode_enable = !!data;
+		break;
+	default:
+		req.sku_enable = !!data;
+	}
+
+	return mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(TXPOWER),
 				 &req, sizeof(req), false);
 }

@@ -6,27 +6,6 @@
 #include <linux/of.h>
 #include "mt76.h"
 
-#define CHAN2G(_idx, _freq) {			\
-	.band = NL80211_BAND_2GHZ,		\
-	.center_freq = (_freq),			\
-	.hw_value = (_idx),			\
-	.max_power = 30,			\
-}
-
-#define CHAN5G(_idx, _freq) {			\
-	.band = NL80211_BAND_5GHZ,		\
-	.center_freq = (_freq),			\
-	.hw_value = (_idx),			\
-	.max_power = 30,			\
-}
-
-#define CHAN6G(_idx, _freq) {			\
-	.band = NL80211_BAND_6GHZ,		\
-	.center_freq = (_freq),			\
-	.hw_value = (_idx),			\
-	.max_power = 30,			\
-}
-
 static const struct ieee80211_channel mt76_channels_2ghz[] = {
 	CHAN2G(1, 2412),
 	CHAN2G(2, 2417),
@@ -54,6 +33,15 @@ static const struct ieee80211_channel mt76_channels_5ghz[] = {
 	CHAN5G(56, 5280),
 	CHAN5G(60, 5300),
 	CHAN5G(64, 5320),
+
+	CHAN5G(68, 5340),
+	CHAN5G(72, 5360),
+	CHAN5G(76, 5380),
+	CHAN5G(80, 5400),
+	CHAN5G(84, 5420),
+	CHAN5G(88, 5440),
+	CHAN5G(92, 5460),
+	CHAN5G(96, 5480),
 
 	CHAN5G(100, 5500),
 	CHAN5G(104, 5520),
@@ -949,10 +937,11 @@ void mt76_rx(struct mt76_dev *dev, enum mt76_rxq_id q, struct sk_buff *skb)
 	}
 
 #ifdef CONFIG_NL80211_TESTMODE
-	if (phy->test.state == MT76_TM_STATE_RX_FRAMES) {
-		phy->test.rx_stats.packets[q]++;
+	if (!(phy->test.flag & MT_TM_FW_RX_COUNT) &&
+	    phy->test.state == MT76_TM_STATE_RX_FRAMES) {
+		phy->test.rx_stats[q].packets++;
 		if (status->flag & RX_FLAG_FAILED_FCS_CRC)
-			phy->test.rx_stats.fcs_error[q]++;
+			phy->test.rx_stats[q].fcs_error++;
 	}
 #endif
 
@@ -2082,7 +2071,7 @@ enum mt76_dfs_state mt76_phy_dfs_state(struct mt76_phy *phy)
 		return MT_DFS_STATE_DISABLED;
 
 	if (!phy->radar_enabled) {
-		if ((hw->conf.flags & IEEE80211_CONF_MONITOR) &&
+		if (((hw->conf.flags & IEEE80211_CONF_MONITOR) || phy->monitor_vif) &&
 		    (phy->chandef.chan->flags & IEEE80211_CHAN_RADAR))
 			return MT_DFS_STATE_ACTIVE;
 

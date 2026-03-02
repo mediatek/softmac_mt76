@@ -486,6 +486,7 @@ mt7996_init_wiphy_band(struct ieee80211_hw *hw, struct mt7996_phy *phy)
 	}
 
 	dev->radio_phy[n_radios] = phy;
+	dev->mt76.radio_phy[n_radios] = phy->mt76;
 	radio->freq_range = freq;
 	radio->n_freq_range = 1;
 	radio->iface_combinations = &if_comb;
@@ -1309,6 +1310,10 @@ static int mt7996_init_hardware(struct mt7996_dev *dev)
 
 	set_bit(MT76_STATE_INITIALIZED, &dev->mphy.state);
 
+	ret = mt7996_eeprom_check_fw_mode(dev);
+	if (ret < 0)
+		return ret;
+
 	ret = mt7996_mcu_init(dev);
 	if (ret)
 		return ret;
@@ -1324,6 +1329,12 @@ static int mt7996_init_hardware(struct mt7996_dev *dev)
 	ret = mt7996_eeprom_init(dev);
 	if (ret < 0)
 		return ret;
+
+	if (dev->cal.data) {
+		ret = mt7996_mcu_apply_group_cal(dev);
+		if (ret)
+			return ret;
+	}
 
 	/* Beacon and mgmt frames should occupy wcid 0 */
 	idx = mt76_wcid_alloc(dev->mt76.wcid_mask, MT7996_WTBL_STA);
@@ -1783,6 +1794,10 @@ int mt7996_register_device(struct mt7996_dev *dev)
 		return ret;
 
 	mt7996_init_wiphy(hw, &dev->mt76.mmio.wed);
+
+#ifdef CONFIG_NL80211_TESTMODE
+	dev->mt76.test_ops = &mt7996_testmode_ops;
+#endif
 
 	ret = mt7996_register_phy(dev, MT_BAND1);
 	if (ret)

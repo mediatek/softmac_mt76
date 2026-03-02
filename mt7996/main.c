@@ -52,6 +52,9 @@ static int mt7996_start(struct ieee80211_hw *hw)
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
 	int ret;
 
+	if (dev->testmode_enable)
+		return 0;
+
 	flush_work(&dev->init_work);
 
 	mutex_lock(&dev->mt76.mutex);
@@ -68,12 +71,11 @@ static int mt7996_start(struct ieee80211_hw *hw)
 
 static void mt7996_stop_phy(struct mt7996_phy *phy)
 {
-	struct mt7996_dev *dev;
+	struct mt7996_dev *dev = phy->dev;
 
-	if (!phy || !test_bit(MT76_STATE_RUNNING, &phy->mt76->state))
+	if (dev->testmode_enable ||
+	    !test_bit(MT76_STATE_RUNNING, &phy->mt76->state))
 		return;
-
-	dev = phy->dev;
 
 	cancel_delayed_work_sync(&phy->mt76->mac_work);
 
@@ -302,13 +304,23 @@ int mt7996_vif_link_add(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 	};
 	int mld_idx, idx, ret;
 
-	mlink->idx = __ffs64(~dev->mt76.vif_mask);
-	if (mlink->idx >= mt7996_max_interface_num(dev))
-		return -ENOSPC;
+	if (!dev->testmode_enable) {
+		mlink->idx = __ffs64(~dev->mt76.vif_mask);
+		if (mlink->idx >= mt7996_max_interface_num(dev))
+			return -ENOSPC;
 
-	idx = get_omac_idx(vif->type, phy->omac_mask);
-	if (idx < 0)
-		return -ENOSPC;
+		idx = get_omac_idx(vif->type, phy->omac_mask);
+		if (idx < 0)
+			return -ENOSPC;
+	} else {
+		/* bss idx & omac idx should be set to band idx for ibf cal */
+		if (dev->mt76.vif_mask & BIT_ULL(band_idx) ||
+		    phy->omac_mask & BIT_ULL(band_idx))
+			return -ENOSPC;
+
+		mlink->idx = band_idx;
+		idx = band_idx;
+	}
 
 	mld_idx = get_own_mld_idx(dev->mld_idx_mask, false);
 	if (mld_idx < 0)
@@ -393,6 +405,12 @@ void mt7996_vif_link_remove(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 		.link_id = link_conf->link_id,
 	};
 	int idx = msta_link->wcid.idx;
+
+	if (dev->testmode_enable) {
+		if (!mt76_testmode_enabled(mphy))
+			goto cleanup;
+		return;
+	}
 
 	if (!mlink->wcid->offchannel)
 		ieee80211_iter_keys(mphy->hw, vif, mt7996_key_iter, &it);
@@ -492,6 +510,61 @@ static void mt7996_set_monitor(struct mt7996_phy *phy, bool enabled)
 	mt7996_mcu_set_sniffer_mode(phy, enabled);
 }
 
+static int mt7996_testmode_init(struct mt7996_dev *dev, struct ieee80211_vif *vif)
+{
+	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
+	struct wireless_dev *wdev = ieee80211_vif_to_wdev(vif);
+	struct mt7996_phy *phy;
+	int i, err = 0;
+
+	mutex_lock(&dev->mt76.mutex);
+
+	for (i = 0; i < MT7996_MAX_RADIOS; i++) {
+		phy = dev->radio_phy[i];
+		if (!phy)
+			continue;
+
+		if (wdev->radio_mask & BIT(i)) {
+			phy->mt76->monitor_vif = vif;
+			mvif->deflink.phy = phy;
+		}
+
+		if (test_bit(MT76_STATE_RUNNING, &phy->mt76->state))
+			continue;
+
+		err = mt7996_mcu_set_radio_en(phy, true);
+		if (err)
+			goto out;
+
+		err = mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_RX_PATH, false);
+		if (err)
+			goto out;
+
+		/* set a parking channel */
+		err = mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_SWITCH, false);
+		if (err)
+			goto out;
+
+		set_bit(MT76_STATE_RUNNING, &phy->mt76->state);
+	}
+
+	mt76_vif_init(vif, &mvif->mt76);
+	mvif->mt76.deflink_id = IEEE80211_LINK_UNSPECIFIED;
+
+out:
+	if (err) {
+		dev_err(dev->mt76.dev,
+			"testmode setup fail for band %d err=%d\n",
+			phy->mt76->band_idx, err);
+		phy->mt76->monitor_vif = NULL;
+		mvif->deflink.phy = NULL;
+	}
+
+	mutex_unlock(&dev->mt76.mutex);
+
+	return err;
+}
+
 static int mt7996_add_interface(struct ieee80211_hw *hw,
 				struct ieee80211_vif *vif)
 {
@@ -499,6 +572,15 @@ static int mt7996_add_interface(struct ieee80211_hw *hw,
 	struct wireless_dev *wdev = ieee80211_vif_to_wdev(vif);
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
 	int i, err = 0;
+
+	if (dev->testmode_enable) {
+		if (vif->type != NL80211_IFTYPE_MONITOR) {
+			dev_err(dev->mt76.dev, "Only monitor interface is allowed in testmode\n");
+			return -EINVAL;
+		}
+
+		return mt7996_testmode_init(dev, vif);
+	}
 
 	mutex_lock(&dev->mt76.mutex);
 
@@ -513,8 +595,10 @@ static int mt7996_add_interface(struct ieee80211_hw *hw,
 		if (err)
 			goto out;
 
-		if (vif->type == NL80211_IFTYPE_MONITOR)
+		if (vif->type == NL80211_IFTYPE_MONITOR) {
 			mt7996_set_monitor(phy, true);
+			phy->mt76->monitor_vif = vif;
+		}
 	}
 
 	mt76_vif_init(vif, &mvif->mt76);
@@ -562,10 +646,21 @@ static void mt7996_remove_interface(struct ieee80211_hw *hw,
 
 		if (!phy)
 			continue;
-		if (!(rdata.monitor_mask & BIT(i)))
+		if (vif->type == NL80211_IFTYPE_MONITOR &&
+		    !(rdata.monitor_mask & BIT(i)))
 			mt7996_set_monitor(phy, false);
 		if (!(rdata.active_mask & BIT(i)))
 			mt7996_stop_phy(phy);
+
+		if (vif == phy->mt76->monitor_vif) {
+			mutex_lock(&dev->mt76.mutex);
+			phy->mt76->monitor_vif = NULL;
+#ifdef CONFIG_NL80211_TESTMODE
+			if (dev->testmode_enable)
+				kfree(phy->mt76->lists);
+#endif
+			mutex_unlock(&dev->mt76.mutex);
+		}
 	}
 }
 
@@ -576,6 +671,17 @@ int mt7996_set_channel(struct mt76_phy *mphy)
 
 	if (mphy->offchannel)
 		mt7996_mac_update_beacons(phy);
+
+	if (phy->dev->cal.data) {
+		ret = mt7996_mcu_apply_tx_dpd(phy);
+		if (ret)
+			goto out;
+	}
+
+	if (mt76_testmode_enabled(mphy) || mt76_testmode_bf_enabled(mphy)) {
+		mt7996_tm_update_channel(phy);
+		goto out;
+	}
 
 	ret = mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_SWITCH);
 	if (ret)
@@ -2360,7 +2466,6 @@ mt7996_net_fill_forward_path(struct ieee80211_hw *hw,
 			     struct net_device_path *path)
 {
 #ifdef CONFIG_NET_MEDIATEK_SOC_WED
-	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
 	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
 	struct mtk_wed_device *wed = &dev->mt76.mmio.wed;
@@ -2559,5 +2664,7 @@ const struct ieee80211_ops mt7996_ops = {
 	.change_sta_links = mt7996_mac_sta_change_links,
 	.reconfig_complete = mt7996_reconfig_complete,
 	.set_eml_op_mode = mt7996_set_eml_op_mode,
+	CFG80211_TESTMODE_CMD(mt76_testmode_cmd)
+	CFG80211_TESTMODE_DUMP(mt76_testmode_dump)
 	.set_qos_map = mt7996_set_qos_map,
 };

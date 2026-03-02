@@ -165,6 +165,7 @@ enum mt7996_ram_type {
 enum mt7996_var_type {
 	MT7996_VAR_TYPE_444,
 	MT7996_VAR_TYPE_233,
+	MT7996_VAR_TYPE_404,
 };
 
 enum mt7992_var_type {
@@ -188,12 +189,30 @@ enum mt7996_eeprom_mode {
 	EEPROM_MODE_EFUSE,
 	EEPROM_MODE_FLASH,
 	EEPROM_MODE_EXT,
+	EEPROM_MODE_BIN,
 };
 
+#define MT7996_EFUSE_BASE_OFFS_DDIE	0x0
 #define MT7996_EFUSE_BASE_OFFS_ADIE0	0x400
-#define MT7996_EFUSE_BASE_OFFS_ADIE1	0x1e00
 #define MT7996_EFUSE_BASE_OFFS_ADIE2	0x1200
 #define MT7992_EFUSE_BASE_OFFS_ADIE1	0x1200
+#define MT7996_EFUSE_BASE_OFFS_ADIE1	0x1e00
+
+enum mt7996_ddie_type {
+	DDIE_7996,
+	DDIE_7992,
+	DDIE_7990,
+	DDIE_TYPE_NUM,
+};
+
+enum mt7996_adie_type {
+	ADIE_7975,
+	ADIE_7976,
+	ADIE_7977,
+	ADIE_7978,
+	ADIE_7979,
+	ADIE_TYPE_NUM,
+};
 
 enum mt7996_coredump_state {
 	MT7996_COREDUMP_IDLE = 0,
@@ -255,6 +274,19 @@ struct mt7996_twt_flow {
 };
 
 DECLARE_EWMA(avg_signal, 10, 8)
+
+enum mt7996_dpd_ch_num {
+	DPD_CH_NUM_BW20_2G,
+	DPD_CH_NUM_BW20_5G,
+	DPD_CH_NUM_BW20_5G_SKIP,
+	DPD_CH_NUM_BW80_5G,
+	DPD_CH_NUM_BW160_5G,
+	DPD_CH_NUM_BW20_6G,
+	DPD_CH_NUM_BW80_6G,
+	DPD_CH_NUM_BW160_6G,
+	DPD_CH_NUM_BW320_6G,
+	DPD_CH_NUM_TYPE_MAX,
+};
 
 struct mt7996_sta_link {
 	struct mt76_wcid wcid; /* must be first */
@@ -426,6 +458,7 @@ struct mt7996_phy {
 
 	struct mt76_mib_stats mib;
 	struct mt76_channel_state state_ts;
+	struct delayed_work ipi_work;
 
 	u16 orig_chainmask;
 	u16 orig_antenna_mask;
@@ -534,6 +567,8 @@ struct mt7996_dev {
 
 	dma_addr_t npu_txd_addr[2 * MT7996_NPU_TXD_SIZE];
 
+	bool testmode_enable;
+
 	bool ibf;
 	u8 fw_debug_wm;
 	u8 fw_debug_wa;
@@ -542,6 +577,13 @@ struct mt7996_dev {
 
 	struct dentry *debugfs_dir;
 	struct rchan *relay_fwlog;
+
+	struct debugfs_blob_wrapper cal;
+	u32 cur_prek_offset;
+	struct {
+		const u32 *rev;
+		u8 dpd_ch_num[DPD_CH_NUM_TYPE_MAX];
+	} prek;
 
 	struct {
 		u16 table_mask;
@@ -555,6 +597,15 @@ struct mt7996_dev {
 		u8 type:4;
 		u8 fem:4;
 	} var;
+
+#if defined CONFIG_NL80211_TESTMODE || defined CONFIG_MTK_DEBUG
+	struct {
+		void *txbf_phase_cal;
+		void *txbf_pfmu_data;
+		void *txbf_pfmu_tag;
+	} test;
+	u8 rf_mode;
+#endif
 };
 
 enum {
@@ -704,6 +755,7 @@ mt7996_sta_link_protected(struct mt7996_dev *dev, struct mt7996_sta *msta,
 extern const struct ieee80211_ops mt7996_ops;
 extern struct pci_driver mt7996_pci_driver;
 extern struct pci_driver mt7996_hif_driver;
+extern const struct mt76_testmode_ops mt7996_testmode_ops;
 
 struct mt7996_dev *mt7996_mmio_probe(struct device *pdev,
 				     void __iomem *mem_base, u32 device_id);
@@ -719,7 +771,9 @@ int mt7996_vif_link_add(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 void mt7996_vif_link_remove(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 			    struct ieee80211_bss_conf *link_conf,
 			    struct mt76_vif_link *mlink);
+const char *mt7996_eeprom_name(struct mt7996_dev *dev);
 int mt7996_eeprom_init(struct mt7996_dev *dev);
+int mt7996_eeprom_check_fw_mode(struct mt7996_dev *dev);
 int mt7996_eeprom_parse_hw_cap(struct mt7996_dev *dev, struct mt7996_phy *phy);
 int mt7996_eeprom_get_target_power(struct mt7996_dev *dev,
 				   struct ieee80211_channel *chan);
@@ -794,6 +848,8 @@ int mt7996_mcu_set_eeprom(struct mt7996_dev *dev);
 int mt7996_mcu_get_eeprom(struct mt7996_dev *dev, u32 offset, u8 *buf, u32 buf_len,
 			  enum mt7996_eeprom_mode mode);
 int mt7996_mcu_get_efuse_free_block(struct mt7996_dev *dev, u8 *block_num);
+int mt7996_mcu_write_ext_eeprom(struct mt7996_dev *dev, u32 offset,
+				u32 data_len, u8 *write_buf);
 int mt7996_mcu_get_chip_config(struct mt7996_dev *dev, u32 *cap);
 int mt7996_mcu_set_ser(struct mt7996_dev *dev, u8 action, u8 set, u8 band);
 int mt7996_mcu_set_txbf(struct mt7996_dev *dev, u8 action);
@@ -836,6 +892,12 @@ int mt7996_mcu_get_all_sta_info(struct mt76_dev *dev, u16 tag);
 int mt7996_mcu_wed_rro_reset_sessions(struct mt7996_dev *dev, u16 id);
 int mt7996_mcu_set_sniffer_mode(struct mt7996_phy *phy, bool enabled);
 int mt7996_mcu_set_dup_wtbl(struct mt7996_dev *dev);
+int mt7996_mcu_set_tx_power_ctrl(struct mt7996_phy *phy, u8 power_ctrl_id, u8 data);
+int mt7996_mcu_apply_group_cal(struct mt7996_dev *dev);
+int mt7996_mcu_apply_tx_dpd(struct mt7996_phy *phy);
+#ifdef CONFIG_NL80211_TESTMODE
+void mt7996_tm_rf_test_event(struct mt7996_dev *dev, struct sk_buff *skb);
+#endif
 
 static inline bool mt7996_has_hwrro(struct mt7996_dev *dev)
 {
@@ -1012,5 +1074,9 @@ static inline int mt7996_npu_rx_queues_init(struct mt7996_dev *dev)
 	return 0;
 }
 #endif /* CONFIG_MT7996_NPU */
+
+int mt7996_mcu_set_txbf_internal(struct mt7996_phy *phy, u8 action, int idx, bool bfer);
+void mt7996_mcu_rx_bf_event(struct mt7996_dev *dev, struct sk_buff *skb);
+void mt7996_tm_update_channel(struct mt7996_phy *phy);
 
 #endif
