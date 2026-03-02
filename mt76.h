@@ -301,6 +301,7 @@ struct mt76_queue {
 	dma_addr_t desc_dma;
 	struct sk_buff *rx_head;
 	struct page_pool *page_pool;
+	u32 rx_drop[MT_RX_DEBUG_STATS_PER_Q_MAX];
 };
 
 struct mt76_mcu_ops {
@@ -411,6 +412,8 @@ enum mt76_wcid_flags {
 	MT_WCID_FLAG_4ADDR,
 	MT_WCID_FLAG_HDR_TRANS,
 	MT_WCID_FLAG_TDLS_PEER,
+
+	NUM_MT76_WCID_FLAGS,
 };
 
 #define MT76_N_WCIDS 1088
@@ -470,6 +473,11 @@ struct mt76_wcid {
 	struct list_head poll_list;
 
 	struct mt76_wcid *def_wcid;
+
+	unsigned long last_seen;
+	u16 used_token;
+	spinlock_t token_lock;
+	u16 token_flush_count;
 };
 
 struct mt76_txq {
@@ -503,6 +511,9 @@ struct mt76_txwi_cache {
 
 	u8 qid;
 	u8 phy_idx;
+
+	unsigned long jiffies;
+	u16 wcid;
 };
 
 struct mt76_rx_tid {
@@ -519,6 +530,7 @@ struct mt76_rx_tid {
 	u16 nframes;
 
 	u8 num;
+	u16 session_id;
 
 	u8 started:1, stopped:1, timer_pending:1;
 
@@ -1124,7 +1136,7 @@ struct mt76_phy {
 #endif
 
 	struct delayed_work mac_work;
-	u8 mac_work_count;
+	u16 mac_work_count;
 
 	struct {
 		struct sk_buff *head;
@@ -1140,12 +1152,18 @@ struct mt76_phy {
 		bool al;
 		u8 pin;
 	} leds;
+
+#ifdef CONFIG_MTK_DEBUG
+	struct mt76_tx_debug tx_dbg_stats;
+	struct mt76_rx_debug rx_dbg_stats;
+#endif
 };
 
 struct mt76_dev {
 	struct mt76_phy phy; /* must be first */
 	struct mt76_phy *phys[__MT_MAX_BAND];
 	struct mt76_phy *band_phys[NUM_NL80211_BANDS];
+	/* This is temporarily used for testmode */
 	struct mt76_phy *radio_phy[__MT_MAX_BAND];
 
 	struct ieee80211_hw *hw;
@@ -1269,6 +1287,8 @@ struct mt76_dev {
 	};
 
 	atomic_t bus_hung;
+
+	/* MTK internal */
 
 	const char *bin_file_name;
 
@@ -1518,7 +1538,6 @@ static inline int mt76_wed_dma_setup(struct mt76_dev *dev, struct mt76_queue *q,
 #define mt76_for_each_q_rx(dev, i)	\
 	for (i = 0; i < ARRAY_SIZE((dev)->q_rx); i++)	\
 		if ((dev)->q_rx[i].ndesc)
-
 
 #define mt76_dereference(p, dev) \
 	rcu_dereference_protected(p, lockdep_is_held(&(dev)->mutex))

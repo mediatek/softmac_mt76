@@ -2296,12 +2296,11 @@ mt76_connac_mcu_rate_txpower_band(struct mt76_phy *phy,
 			};
 			s8 max_power;
 
-			max_power = mt76_connac_get_rate_power_limit(phy, &chan,
-								     limits);
-			if (phy->chandef.chan &&
-			    phy->chandef.chan->hw_value == ch_list[idx] &&
-			    phy->chandef.chan->band == band)
-				mt76_connac_set_txpower_cur(phy, max_power);
+			reg_power = mt76_connac_get_ch_power(phy, &chan,
+							     tx_power);
+			sar_power = mt76_get_sar_power(phy, &chan, reg_power);
+
+			mt76_get_rate_power_limits(phy, &chan, limits, &sar_power);
 
 			tx_power_tlv.last_msg = ch_list[idx] == last_ch;
 			sku_tlbv.channel = ch_list[idx];

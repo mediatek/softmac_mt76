@@ -41,6 +41,8 @@ int mt76_add_chanctx(struct ieee80211_hw *hw,
 	if (WARN_ON_ONCE(!phy))
 		return ret;
 
+	mt76_phy_dbg(phy, "add %u", conf->def.chan->hw_value);
+
 	if (dev->scan.phy == phy)
 		mt76_abort_scan(dev);
 
@@ -66,6 +68,8 @@ void mt76_remove_chanctx(struct ieee80211_hw *hw,
 	if (WARN_ON_ONCE(!phy))
 		return;
 
+	mt76_phy_dbg(phy, "remove %u", conf->def.chan->hw_value);
+
 	if (dev->scan.phy == phy)
 		mt76_abort_scan(dev);
 
@@ -87,6 +91,8 @@ void mt76_change_chanctx(struct ieee80211_hw *hw,
 	if (!(changed & (IEEE80211_CHANCTX_CHANGE_WIDTH |
 			 IEEE80211_CHANCTX_CHANGE_RADAR)))
 		return;
+
+	mt76_phy_dbg(phy, "change to %u, 0x%x", conf->def.chan->hw_value, changed);
 
 	if (phy->roc_vif)
 		mt76_abort_roc(phy);
@@ -113,6 +119,9 @@ int mt76_assign_vif_chanctx(struct ieee80211_hw *hw,
 	struct mt76_dev *dev = phy->dev;
 	bool mlink_alloc = false;
 	int ret = 0;
+
+	mt76_bss_dbg(vif, "assign link_id %u to %d MHz on band %u",
+		     link_id, conf->def.chan->center_freq, phy->band_idx);
 
 	if (dev->scan.vif == vif)
 		mt76_abort_scan(dev);
@@ -141,6 +150,7 @@ int mt76_assign_vif_chanctx(struct ieee80211_hw *hw,
 			kfree(mlink);
 		goto out;
 	}
+	mvif->band_to_link[phy->band_idx] = link_id;
 
 	if (link_conf != &vif->bss_conf)
 		rcu_assign_pointer(mvif->link[link_id], mlink);
@@ -161,6 +171,9 @@ void mt76_unassign_vif_chanctx(struct ieee80211_hw *hw,
 	struct mt76_vif_link *mlink = (struct mt76_vif_link *)vif->drv_priv;
 	struct mt76_phy *phy = ctx->phy;
 	struct mt76_dev *dev = phy->dev;
+
+	mt76_bss_dbg(vif, "remove link %u from %d MHz on band %u",
+		     link_id, conf->def.chan->center_freq, phy->band_idx);
 
 	if (dev->scan.vif == vif)
 		mt76_abort_scan(dev);
@@ -256,6 +269,12 @@ int mt76_switch_vif_chanctx(struct ieee80211_hw *hw,
 		}
 
 		mlink->ctx = v->new_ctx;
+		mt76_bss_dbg(v->vif,
+			     "chan=%d->%d, width=%d->%d, punct_bitmap=0x%04x->0x%04x, link=%u",
+			     v->old_ctx->def.chan->hw_value, v->new_ctx->def.chan->hw_value,
+			     v->old_ctx->def.width, v->new_ctx->def.width,
+			     v->old_ctx->def.punctured, v->new_ctx->def.punctured,
+			     v->link_conf->link_id);
 	}
 
 out:

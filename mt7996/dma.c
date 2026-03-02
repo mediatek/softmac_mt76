@@ -11,7 +11,7 @@ int mt7996_init_tx_queues(struct mt7996_phy *phy, int idx, int n_desc,
 			  int ring_base, struct mtk_wed_device *wed)
 {
 	struct mt7996_dev *dev = phy->dev;
-	u32 flags = 0;
+	u32 flags = MT_QFLAG_CHECK_DDONE;
 
 	if (mtk_wed_device_active(wed)) {
 		ring_base += MT_TXQ_ID(0) * MT_RING_SIZE;
@@ -147,6 +147,14 @@ static void mt7996_dma_config(struct mt7996_dev *dev)
 					   MT7996_TXQ_BAND2);
 				TXQ_CONFIG(1, WFDMA0, MT_INT_TX_DONE_BAND0,
 					   MT7996_TXQ_BAND0);
+				TXQ_CONFIG(2, WFDMA0, MT_INT_TX_DONE_BAND1,
+					   MT7996_TXQ_BAND1);
+			} else if (dev->option_type == 2) {
+				/*  bn1:ring21 bn2:ring19 */
+				TXQ_CONFIG(0, WFDMA0, MT_INT_TX_DONE_BAND0,
+					   MT7996_TXQ_BAND0);
+				TXQ_CONFIG(1, WFDMA0, MT_INT_TX_DONE_BAND2,
+					   MT7996_TXQ_BAND2);
 				TXQ_CONFIG(2, WFDMA0, MT_INT_TX_DONE_BAND1,
 					   MT7996_TXQ_BAND1);
 			} else {
@@ -461,16 +469,30 @@ static void mt7996_dma_enable(struct mt7996_dev *dev, bool reset)
 			   MT_WFDMA_HOST_CONFIG_BAND1_PCIE1 |
 			   MT_WFDMA_HOST_CONFIG_BAND2_PCIE1);
 
-		if (is_mt7996(&dev->mt76)) {
-			if (mt76_npu_device_active(&dev->mt76))
+		switch (dev->option_type) {
+		case 2:
+			/* eagle + 7988d */
+			if (is_mt7996(&dev->mt76))
 				mt76_set(dev, MT_WFDMA_HOST_CONFIG,
-					 MT_WFDMA_HOST_CONFIG_BAND0_PCIE1);
+					 MT_WFDMA_HOST_CONFIG_BAND0_PCIE1 |
+					 MT_WFDMA_HOST_CONFIG_BAND1_PCIE1);
 			else
 				mt76_set(dev, MT_WFDMA_HOST_CONFIG,
-					 MT_WFDMA_HOST_CONFIG_BAND2_PCIE1);
-		} else {
+					 MT_WFDMA_HOST_CONFIG_BAND1_PCIE1);
+			break;
+		case 3:
 			mt76_set(dev, MT_WFDMA_HOST_CONFIG,
-				 MT_WFDMA_HOST_CONFIG_BAND1_PCIE1);
+				 MT_WFDMA_HOST_CONFIG_BAND0_PCIE1);
+
+			break;
+		default:
+			if (is_mt7996(&dev->mt76))
+				mt76_set(dev, MT_WFDMA_HOST_CONFIG,
+					 MT_WFDMA_HOST_CONFIG_BAND2_PCIE1);
+			else
+				mt76_set(dev, MT_WFDMA_HOST_CONFIG,
+					 MT_WFDMA_HOST_CONFIG_BAND1_PCIE1);
+			break;
 		}
 
 		/* AXI read outstanding number */
@@ -835,6 +857,10 @@ int mt7996_dma_init(struct mt7996_dev *dev)
 	if (mt7996_band_valid(dev, MT_BAND2)) {
 		/* rx data queue for mt7996 band2 */
 		rx_base = MT_RXQ_RING_BASE(MT_RXQ_BAND2) + hif1_ofs;
+		if (mtk_wed_device_active(wed_hif2) && mtk_wed_get_rx_capa(wed_hif2)) {
+			dev->mt76.q_rx[MT_RXQ_BAND2].flags = MT_WED_Q_RX(0);
+			dev->mt76.q_rx[MT_RXQ_BAND2].wed = wed_hif2;
+		}
 		ret = mt76_queue_alloc(dev, &dev->mt76.q_rx[MT_RXQ_BAND2],
 				       MT_RXQ_ID(MT_RXQ_BAND2),
 				       MT7996_RX_RING_SIZE,
@@ -1022,8 +1048,16 @@ void mt7996_dma_reset(struct mt7996_dev *dev, bool force)
 	for (i = 0; i < __MT_MCUQ_MAX; i++)
 		mt76_queue_tx_cleanup(dev, dev->mt76.q_mcu[i], true);
 
+	if (!force)
+		dev_info(dev->mt76.dev,"%s L1 SER tx queue clean up done.",
+			 wiphy_name(dev->mt76.hw->wiphy));
+
 	mt76_for_each_q_rx(&dev->mt76, i)
 		mt76_queue_rx_cleanup(dev, &dev->mt76.q_rx[i]);
+
+	if (!force)
+		dev_info(dev->mt76.dev,"%s L1 SER rx queue clean up done.",
+			 wiphy_name(dev->mt76.hw->wiphy));
 
 	mt76_tx_status_check(&dev->mt76, true);
 
@@ -1042,7 +1076,16 @@ void mt7996_dma_reset(struct mt7996_dev *dev, bool force)
 		mtk_wed_device_dma_reset(&dev->mt76.mmio.wed);
 
 	mt76_npu_disable_irqs(&dev->mt76);
+
+	if (!force)
+		dev_info(dev->mt76.dev,"%s L1 SER wed dma reset done.",
+			 wiphy_name(dev->mt76.hw->wiphy));
+
 	mt7996_dma_disable(dev, force);
+
+	if (!force)
+		dev_info(dev->mt76.dev,"%s L1 SER dma disable done.",
+			 wiphy_name(dev->mt76.hw->wiphy));
 	mt76_wed_dma_reset(&dev->mt76);
 
 	/* reset hw queues */
@@ -1054,9 +1097,16 @@ void mt7996_dma_reset(struct mt7996_dev *dev, bool force)
 			mt76_dma_reset_tx_queue(&dev->mt76, phy3->q_tx[i]);
 	}
 
+	if (!force)
+		dev_info(dev->mt76.dev,"%s L1 SER dma tx queue reset done.",
+			 wiphy_name(dev->mt76.hw->wiphy));
+
 	for (i = 0; i < __MT_MCUQ_MAX; i++)
 		mt76_queue_reset(dev, dev->mt76.q_mcu[i], true);
 
+	if (!force)
+		dev_info(dev->mt76.dev,"%s L1 SER mcu queue reset done.",
+			 wiphy_name(dev->mt76.hw->wiphy));
 	mt76_for_each_q_rx(&dev->mt76, i) {
 		struct mt76_queue *q = &dev->mt76.q_rx[i];
 
@@ -1071,6 +1121,10 @@ void mt7996_dma_reset(struct mt7996_dev *dev, bool force)
 		mt76_queue_reset(dev, q, true);
 	}
 
+	if (!force)
+		dev_info(dev->mt76.dev,"%s L1 SER rx queue reset done.",
+			 wiphy_name(dev->mt76.hw->wiphy));
+
 	mt76_tx_status_check(&dev->mt76, true);
 
 	mt76_for_each_q_rx(&dev->mt76, i) {
@@ -1084,6 +1138,10 @@ void mt7996_dma_reset(struct mt7996_dev *dev, bool force)
 	}
 
 	mt7996_dma_enable(dev, !force);
+
+	if (!force)
+		dev_info(dev->mt76.dev,"%s L1 SER dma enable done.",
+			 wiphy_name(dev->mt76.hw->wiphy));
 }
 
 void mt7996_dma_cleanup(struct mt7996_dev *dev)
