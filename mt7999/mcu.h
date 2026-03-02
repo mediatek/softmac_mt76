@@ -945,6 +945,44 @@ struct sta_rec_eht_mld {
 	u8 __rsv2[4];
 } __packed;
 
+#define LWTBL_MESH	BIT(0)
+enum {
+	LWTBL_MESH_DISABLE,
+	LWTBL_MESH_ENABLE,
+};
+
+struct sta_rec_link_mesh {
+	__le16 tag;
+	__le16 len;
+	__le32 config_bitmap;
+	__le32 update_mask;
+} __packed;
+
+#define UWTBL_MESH_RX_HW_DE_AMSDU		BIT(0)
+#define UWTBL_MESH_AMSDU_SUBFRM_LEN_TYPE	BIT(1)
+#define UWTBL_MESH_AMSDU_SUBFRM_LEN_ENDIAN	BIT(2)
+enum {
+	UWTBL_MESH_RX_HW_DE_AMSDU_DISABLE,
+	UWTBL_MESH_RX_HW_DE_AMSDU_ENABLE,
+};
+
+enum {
+	UWTBL_MESH_AMSDU_SUBFRM_LEN_EXCL_MESH_CTRL,
+	UWTBL_MESH_AMSDU_SUBFRM_LEN_INCL_MESH_CTRL,
+};
+
+enum {
+	UWTBL_MESH_AMSDU_SUBFRM_LEN_BIG_ENDIAN,
+	UWTBL_MESH_AMSDU_SUBFRM_LEN_LITTLE_ENDIAN,
+};
+
+struct sta_rec_peer_mesh {
+	__le16 tag;
+	__le16 len;
+	__le32 config_bitmap;
+	__le32 update_mask;
+} __packed;
+
 struct mld_setup_link {
 	__le16 wcid;
 	u8 bss_idx;
@@ -1252,6 +1290,8 @@ enum {
 					 sizeof(struct sta_rec_mld_setup) +	\
 					 sizeof(struct mld_setup_link) * 3 +	\
 					 sizeof(struct sta_rec_eht_mld) +	\
+					 sizeof(struct sta_rec_link_mesh) +	\
+					 sizeof(struct sta_rec_peer_mesh) +	\
 					 sizeof(struct tlv))
 
 #define MT7999_BEACON_UPDATE_SIZE	(sizeof(struct bss_req_hdr) +		\

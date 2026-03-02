@@ -3563,6 +3563,43 @@ mt7999_mcu_sta_eht_mld_tlv(struct mt7999_dev *dev, struct sk_buff *skb,
 	eht_mld->eml_cap = cpu_to_le16(sta->eml_cap);
 }
 
+static void
+mt7999_mcu_sta_mesh_tlv(struct mt7999_dev *dev, struct sk_buff *skb,
+			struct ieee80211_vif *vif)
+{
+	struct sta_rec_link_mesh *link_mesh;
+	struct sta_rec_peer_mesh *peer_mesh;
+	struct tlv *tlv;
+	u32 config_bitmap = 0;
+
+	if (vif->type != NL80211_IFTYPE_MESH_POINT)
+		return;
+
+	/* FIXME Do not support 11s + MLD */
+	if (ieee80211_vif_is_mld(vif))
+		return;
+
+	/* Set UWTBL first */
+	tlv = mt76_connac_mcu_add_tlv(skb, STA_REC_SET_PEER_MESH, sizeof(*peer_mesh));
+	peer_mesh = (struct sta_rec_peer_mesh *)tlv;
+	config_bitmap |= u32_encode_bits(UWTBL_MESH_RX_HW_DE_AMSDU_ENABLE,
+					 UWTBL_MESH_RX_HW_DE_AMSDU) |
+			 u32_encode_bits(UWTBL_MESH_AMSDU_SUBFRM_LEN_INCL_MESH_CTRL,
+					 UWTBL_MESH_AMSDU_SUBFRM_LEN_TYPE) |
+			 u32_encode_bits(UWTBL_MESH_AMSDU_SUBFRM_LEN_LITTLE_ENDIAN,
+					 UWTBL_MESH_AMSDU_SUBFRM_LEN_ENDIAN);
+	peer_mesh->config_bitmap = cpu_to_le32(config_bitmap);
+	peer_mesh->update_mask = cpu_to_le32(UWTBL_MESH_RX_HW_DE_AMSDU |
+					     UWTBL_MESH_AMSDU_SUBFRM_LEN_TYPE |
+					     UWTBL_MESH_AMSDU_SUBFRM_LEN_ENDIAN);
+
+	tlv = mt76_connac_mcu_add_tlv(skb, STA_REC_SET_LINK_MESH, sizeof(*link_mesh));
+	link_mesh = (struct sta_rec_link_mesh *)tlv;
+	config_bitmap = u32_encode_bits(LWTBL_MESH_ENABLE, LWTBL_MESH);
+	link_mesh->config_bitmap = cpu_to_le32(config_bitmap);
+	link_mesh->update_mask = cpu_to_le32(LWTBL_MESH);
+}
+
 int mt7999_mcu_add_sta(struct mt7999_dev *dev, struct ieee80211_vif *vif,
 		       struct ieee80211_bss_conf *link_conf,
 		       struct ieee80211_link_sta *link_sta,
@@ -3633,6 +3670,9 @@ int mt7999_mcu_add_sta(struct mt7999_dev *dev, struct ieee80211_vif *vif,
 
 		/* starec uhr */
 		mt7999_mcu_sta_uhr_tlv(skb, link_sta);
+
+		/* starec mesh */
+		mt7999_mcu_sta_mesh_tlv(dev, skb, link_conf->vif);
 	}
 
 #if 0
