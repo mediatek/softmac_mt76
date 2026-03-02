@@ -28,6 +28,7 @@
 #endif
 #include "util.h"
 #include "testmode.h"
+#include "debug.h"
 
 #define MT_MCU_RING_SIZE	32
 #define MT_RX_BUF_SIZE		2048
