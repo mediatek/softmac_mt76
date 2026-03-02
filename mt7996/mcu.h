@@ -329,7 +329,7 @@ enum {
 	UNI_PS_MULTI_CLIENT_INFO_BITMAP = 2,
 };
 
-struct mt7996_mcu_thermal_notify {
+struct mt7996_mcu_thermal_query_info {
 	struct mt7996_mcu_rxd rxd;
 
 	u8 __rsv1[4];
@@ -339,10 +339,9 @@ struct mt7996_mcu_thermal_notify {
 
 	u8 event_id;
 	u8 band_idx;
-	u8 level_idx;
-	u8 duty_percent;
-	__le32 restore_temp;
-	u8 __rsv2[4];
+	u8 __rsv2[43];
+	u8 state;
+	u8 __rsv3[6];
 } __packed;
 
 enum mt7996_chan_mib_offs {
@@ -1039,6 +1038,7 @@ enum {
 	UNI_CMD_THERMAL_PROTECT_ENABLE = 0x6,
 	UNI_CMD_THERMAL_PROTECT_DISABLE,
 	UNI_CMD_THERMAL_PROTECT_DUTY_CONFIG,
+	UNI_CMD_THERMAL_PROTECT_INFO,
 };
 
 enum {
