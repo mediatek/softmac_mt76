@@ -34,6 +34,9 @@ int mt7996_run(struct mt7996_phy *phy)
 	if (ret)
 		return ret;
 
+	memset(phy->user_edcca_threshold, MT7996_EDCCA_DEFAULT_THRESHOLD,
+	       EDCCA_MAX_BW_NUM);
+
 	set_bit(MT76_STATE_RUNNING, &phy->mt76->state);
 
 	ieee80211_queue_delayed_work(dev->mphy.hw, &phy->mt76->mac_work,
@@ -776,6 +779,13 @@ int mt7996_set_channel(struct mt76_phy *mphy)
 	mt7996_mac_cca_stats_reset(phy);
 
 	mt7996_mac_reset_counters(phy);
+#ifdef CONFIG_MTK_VENDOR
+	if (phy->user_edcca_threshold[EDCCA_BW_20] != MT7996_EDCCA_DEFAULT_THRESHOLD ||
+	    phy->user_edcca_threshold[EDCCA_BW_40] != MT7996_EDCCA_DEFAULT_THRESHOLD ||
+	    phy->user_edcca_threshold[EDCCA_BW_80] != MT7996_EDCCA_DEFAULT_THRESHOLD ||
+	    phy->user_edcca_threshold[EDCCA_BW_160] != MT7996_EDCCA_DEFAULT_THRESHOLD)
+		mt7996_mcu_edcca_threshold_ctrl(phy, phy->user_edcca_threshold, true);
+#endif
 	phy->noise = 0;
 	if (!mphy->offchannel)
 		mt7996_mac_update_beacons(phy);
@@ -1275,6 +1285,10 @@ mt7996_mac_sta_init_link(struct mt7996_dev *dev,
 	rcu_assign_pointer(dev->mt76.wcid[idx], &msta_link->wcid);
 	mt76_wcid_init(&msta_link->wcid, phy->mt76->band_idx);
 
+#ifdef CONFIG_MTK_VENDOR
+	mt7996_vendor_amnt_sta_remove(link->phy, link_sta);
+#endif
+
 	return 0;
 }
 
@@ -1504,6 +1518,12 @@ mt7996_mac_sta_event(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 					return err;
 			}
 
+#ifdef CONFIG_MTK_VENDOR
+			if (hweight16(msta->valid_links) == 1 && link->phy &&
+			    link->phy->muru_onoff & MUMIMO_DL_CERT)
+				mt7996_mcu_set_mimo(link->phy);
+#endif
+
 			msta_link->wcid.tx_info |= MT_WCID_TX_INFO_SET;
 			break;
 		case MT76_STA_EVENT_AUTHORIZE:
@@ -1546,6 +1566,9 @@ mt7996_mac_sta_remove(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 	int i;
 
 	mutex_lock(&dev->mt76.mutex);
+#ifdef CONFIG_MTK_VENDOR
+	mt7996_mcu_set_csi(&dev->phy, 2, 8, 1, 0, sta->addr);
+#endif
 	for (i = 0; i < ARRAY_SIZE(msta->link); i++)
 		mt7996_mac_sta_remove_link(dev, sta, i, true);
 	mutex_unlock(&dev->mt76.mutex);

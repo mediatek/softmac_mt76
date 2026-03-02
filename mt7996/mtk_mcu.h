@@ -10,6 +10,38 @@
 
 #ifdef CONFIG_MTK_DEBUG
 
+enum {
+	EDCCA_CTRL_SET_EN = 0,
+	EDCCA_CTRL_SET_THRES,
+	EDCCA_CTRL_GET_EN,
+	EDCCA_CTRL_GET_THRES,
+	EDCCA_CTRL_NUM,
+};
+
+enum {
+	EDCCA_DEFAULT = 0,
+	EDCCA_FCC = 1,
+	EDCCA_ETSI = 2,
+	EDCCA_JAPAN = 3,
+	EDCCA_ETSI_2023 = 4,
+};
+
+enum {
+	UNI_CMD_MURU_BSRP_CTRL = 0x01,
+	UNI_CMD_MURU_SUTX_CTRL = 0x10,
+	UNI_CMD_MURU_FIXED_RATE_CTRL = 0x11,
+	UNI_CMD_MURU_FIXED_GROUP_RATE_CTRL = 0x12,
+	UNI_CMD_MURU_SET_FORCE_MU = 0x33,
+	UNI_CMD_MURU_MUNUAL_CONFIG = 0x64,
+	UNI_CMD_MURU_SET_MUDL_ACK_POLICY = 0xC8,
+	UNI_CMD_MURU_SET_TRIG_TYPE = 0xC9,
+	UNI_CMD_MURU_SET_20M_DYN_ALGO = 0xCA,
+	UNI_CMD_MURU_PROT_FRAME_THR = 0xCC,
+	UNI_CMD_MURU_SET_CERT_MU_EDCA_OVERRIDE,
+	UNI_CMD_MURU_SET_TRIG_VARIANT = 0xD5,
+	UNI_CMD_MURU_SET_QOS_CFG = 0xFE,
+};
+
 struct bf_pfmu_tag {
 	__le16 tag;
 	__le16 len;
@@ -719,6 +751,60 @@ enum {
 	UNI_EVENT_BF_MAX_NUM
 };
 
+struct uni_muru_mum_set_group_tbl_entry {
+	__le16 wlan_idx0;
+	__le16 wlan_idx1;
+	__le16 wlan_idx2;
+	__le16 wlan_idx3;
+
+	u8 dl_mcs_user0:4;
+	u8 dl_mcs_user1:4;
+	u8 dl_mcs_user2:4;
+	u8 dl_mcs_user3:4;
+	u8 ul_mcs_user0:4;
+	u8 ul_mcs_user1:4;
+	u8 ul_mcs_user2:4;
+	u8 ul_mcs_user3:4;
+
+	u8 num_user:2;
+	u8 rsv:6;
+	u8 nss0:2;
+	u8 nss1:2;
+	u8 nss2:2;
+	u8 nss3:2;
+	u8 ru_alloc;
+	u8 ru_alloc_ext;
+
+	u8 capa;
+	u8 gi;
+	u8 dl_ul;
+	u8 _rsv2;
+};
+
+enum UNI_CMD_MURU_VER_T {
+	UNI_CMD_MURU_VER_LEG = 0,
+	UNI_CMD_MURU_VER_HE,
+	UNI_CMD_MURU_VER_EHT,
+	UNI_CMD_MURU_VER_MAX
+};
+
+#define UNI_MAX_MCS_SUPPORT_HE 11
+#define UNI_MAX_MCS_SUPPORT_EHT 13
+
+enum {
+	RUALLOC_BW20 = 122,
+	RUALLOC_BW40 = 130,
+	RUALLOC_BW80 = 134,
+	RUALLOC_BW160 = 137,
+	RUALLOC_BW320 = 395,
+};
+
+enum {
+	MAX_MODBF_VHT = 0,
+	MAX_MODBF_HE = 2,
+	MAX_MODBF_EHT = 4,
+};
+
 enum {
 	BF_SND_READ_INFO = 0,
 	BF_SND_CFG_OPT,
@@ -730,6 +816,185 @@ enum {
 	BF_SND_CFG_TXOP_SND
 };
 
+struct mt7996_muru_comm {
+	u8 pda_pol;
+	u8 band;
+	u8 spe_idx;
+	u8 proc_type;
+
+	__le16 mlo_ctrl;
+	u8 sch_type;
+	u8 ppdu_format;
+	u8 ac;
+	u8 _rsv[3];
+};
+
+struct mt7996_muru_dl {
+	u8 user_num;
+	u8 tx_mode;
+	u8 bw;
+	u8 gi;
+
+	u8 ltf;
+	u8 mcs;
+	u8 dcm;
+	u8 cmprs;
+
+	__le16 ru[16];
+
+	u8 c26[2];
+	u8 ack_policy;
+	u8 tx_power;
+
+	__le16 mu_ppdu_duration;
+	u8 agc_disp_order;
+	u8 _rsv1;
+
+	u8 agc_disp_pol;
+	u8 agc_disp_ratio;
+	__le16 agc_disp_linkMFG;
+
+	__le16 prmbl_punc_bmp;
+	u8 _rsv2[2];
+
+	struct {
+		__le16 wlan_idx;
+		u8 ru_alloc_seg;
+		u8 ru_idx;
+		u8 ldpc;
+		u8 nss;
+		u8 mcs;
+		u8 mu_group_idx;
+		u8 vht_groud_id;
+		u8 vht_up;
+		u8 he_start_stream;
+		u8 he_mu_spatial;
+		__le16 tx_power_alpha;
+		u8 ack_policy;
+		u8 ru_allo_ps160;
+	} usr[16];
+};
+
+struct mt7996_muru_ul {
+	u8 user_num;
+	u8 tx_mode;
+
+	u8 ba_type;
+	u8 _rsv;
+
+	u8 bw;
+	u8 gi_ltf;
+	__le16 ul_len;
+
+	__le16 trig_cnt;
+	u8 pad;
+	u8 trig_type;
+
+	__le16 trig_intv;
+	u8 trig_ta[ETH_ALEN];
+	__le16 ul_ru[16];
+
+	u8 c26[2];
+	__le16 agc_disp_linkMFG;
+
+	u8 agc_disp_mu_len;
+	u8 agc_disp_pol;
+	u8 agc_disp_ratio;
+	u8 agc_disp_pu_idx;
+
+	struct {
+		__le16 wlan_idx;
+		u8 ru_alloc_seg;
+		u8 ru_idx;
+		u8 ldpc;
+		u8 nss;
+		u8 mcs;
+		u8 target_rssi;
+		__le32 trig_pkt_size;
+		u8 ru_allo_ps160;
+		u8 _rsv2[3];
+	} usr[16];
+};
+
+struct mt7996_muru_dbg {
+	/* HE TB RX Debug */
+	__le32 rx_hetb_nonsf_en_bitmap;
+	__le32 rx_hetb_cfg[2];
+};
+
+struct mt7996_muru {
+	__le32 cfg_comm;
+	__le32 cfg_dl;
+	__le32 cfg_ul;
+	__le32 cfg_dbg;
+
+	struct mt7996_muru_comm comm;
+	struct mt7996_muru_dl dl;
+	struct mt7996_muru_ul ul;
+	struct mt7996_muru_dbg dbg;
+};
+
+
+#define MURU_PPDU_HE_TRIG	BIT(2)
+#define MURU_PPDU_HE_MU		BIT(3)
+
+#define MURU_OFDMA_SCH_TYPE_DL	BIT(0)
+#define MURU_OFDMA_SCH_TYPE_UL	BIT(1)
+
+/* Common Config */
+#define MURU_COMM_PPDU_FMT	BIT(0)
+#define MURU_COMM_SCH_TYPE	BIT(1)
+#define MURU_COMM_BAND		BIT(2)
+#define MURU_COMM_WMM		BIT(3)
+#define MURU_COMM_SPE_IDX	BIT(4)
+#define MURU_COMM_PROC_TYPE	BIT(5)
+#define MURU_COMM_SET		(MURU_COMM_PPDU_FMT | MURU_COMM_SCH_TYPE)
+#define MURU_COMM_SET_TM	(MURU_COMM_PPDU_FMT | MURU_COMM_BAND | \
+				 MURU_COMM_WMM | MURU_COMM_SPE_IDX)
+
+/* DL Common config */
+#define MURU_FIXED_DL_TOTAL_USER_CNT	BIT(4)
+
+/* UL Common Config */
+#define MURU_FIXED_UL_TOTAL_USER_CNT	BIT(4)
+
+enum {
+	CAPI_SU,
+	CAPI_MU,
+	CAPI_ER_SU,
+	CAPI_TB,
+	CAPI_LEGACY
+};
+
+enum {
+	CAPI_BASIC,
+	CAPI_BRP,
+	CAPI_MU_BAR,
+	CAPI_MU_RTS,
+	CAPI_BSRP,
+	CAPI_GCR_MU_BAR,
+	CAPI_BQRP,
+	CAPI_NDP_FRP,
+};
+
+enum {
+	MU_DL_ACK_POLICY_MU_BAR = 3,
+	MU_DL_ACK_POLICY_TF_FOR_ACK = 4,
+	MU_DL_ACK_POLICY_SU_BAR = 5,
+};
+
+enum muru_vendor_ctrl {
+	MU_CTRL_UPDATE,
+	MU_CTRL_DL_USER_CNT,
+	MU_CTRL_UL_USER_CNT,
+};
+
 #endif
+
+enum {
+	SCS_REQ_TYPE_ADD,
+	SCS_REQ_TYPE_REMOVE,
+	SCS_REQ_TYPE_CHANGE,
+};
 
 #endif
