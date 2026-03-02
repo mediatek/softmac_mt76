@@ -132,6 +132,7 @@ mt76_eeprom_init_file(void)
 int mt76_eeprom_init(int phy)
 {
 	struct nl_msg *msg;
+	int len;
 
 	msg = unl_genl_msg(&unl, NL80211_CMD_TESTMODE, true);
 	nla_put_u32(msg, NL80211_ATTR_WIPHY, phy);
@@ -142,8 +143,9 @@ int mt76_eeprom_init(int phy)
 		return -1;
 	}
 
-	eeprom_file = malloc(sizeof(EEPROM_FILE_PATH_FMT) + strlen(mtd_part));
-	sprintf(eeprom_file, EEPROM_FILE_PATH_FMT, mtd_part);
+	len = sizeof(EEPROM_FILE_PATH_FMT) + strlen(mtd_part);
+	eeprom_file = malloc(len);
+	snprintf(eeprom_file, len, EEPROM_FILE_PATH_FMT, mtd_part);
 
 	eeprom_fd = mt76_eeprom_init_file();
 	if (eeprom_fd < 0)
