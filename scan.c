@@ -193,6 +193,8 @@ int mt76_hw_scan(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 			return -EINVAL;
 	}
 
+	mt76_phy_dbg(phy, "scan start");
+
 	mutex_lock(&dev->mutex);
 
 	if (dev->scan.req || phy->roc_vif ||

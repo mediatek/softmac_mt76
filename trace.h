@@ -101,6 +101,64 @@ DEFINE_EVENT(dev_txid_evt, mac_txdone,
 	TP_ARGS(dev, wcid, pktid)
 );
 
+TRACE_EVENT(mt76_rx_complete,
+	TP_PROTO(struct mt76_dev *dev, struct mt76_rx_status *status, bool sub),
+	TP_ARGS(dev, status, sub),
+
+	TP_STRUCT__entry(
+		DEV_ENTRY
+		__field(u16, seqno)
+		__field(u16, wcid)
+		__field(u8, first_amsdu)
+		__field(bool, sub)
+	),
+
+	TP_fast_assign(
+		strscpy(__entry->wiphy_name,
+			wiphy_name(mt76_dev_phy(dev, status->phy_idx)->hw->wiphy),
+			MAXNAME);
+		__entry->seqno = status->seqno;
+		__entry->wcid = status->wcid ? status->wcid->idx : 0;
+		__entry->first_amsdu = status->first_amsdu;
+		__entry->sub = sub;
+	),
+
+	TP_printk(
+		DEV_PR_FMT " seqno: %u, wcid: %u, first_amsdu: %x, sub: %d",
+		DEV_PR_ARG, __entry->seqno, __entry->wcid, __entry->first_amsdu,
+		__entry->sub
+	)
+);
+
+TRACE_EVENT(mt76_rx_aggr_reorder,
+	TP_PROTO(struct mt76_dev *dev, struct mt76_wcid *wcid, u16 _head, u16 seqno, bool sn_less),
+	TP_ARGS(dev, wcid, _head, seqno, sn_less),
+
+	TP_STRUCT__entry(
+		DEV_ENTRY
+		__field(u16, wcid)
+		__field(u16, _head)
+		__field(u16, seqno)
+		__field(bool, sn_less)
+	),
+
+	TP_fast_assign(
+		strscpy(__entry->wiphy_name,
+			wiphy_name(dev->phys[wcid->phy_idx]->hw->wiphy),
+			MAXNAME);
+		__entry->wcid = wcid->idx;
+		__entry->_head = _head;
+		__entry->seqno = seqno;
+		__entry->sn_less = sn_less;
+	),
+
+	TP_printk(
+		DEV_PR_FMT " wcid: %u, head: %u, seqno: %u, sn_less: %d",
+		DEV_PR_ARG, __entry->wcid, __entry->_head, __entry->seqno,
+		__entry->sn_less
+	)
+);
+
 #endif
 
 #undef TRACE_INCLUDE_PATH

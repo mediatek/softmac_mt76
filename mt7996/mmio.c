@@ -14,7 +14,7 @@
 #include "../trace.h"
 #include "../dma.h"
 
-static bool wed_enable;
+static bool wed_enable = true;
 module_param(wed_enable, bool, 0644);
 
 #define INVALID_REG_ADDR	0xffffffff
@@ -475,8 +475,10 @@ int mt7996_mmio_wed_init(struct mt7996_dev *dev, void *pdev_ptr,
 	u16 tx_token_size, rx_token_size;
 	int wed_hw_ver;
 
-	if (!wed_enable)
+	if (!wed_enable) {
+		dev->mt76.rx_token_size = mt7996_has_hwrro(dev) ? 32768 : 0;
 		return 0;
+	}
 
 	if (hif2)
 		wed = &dev->mt76.mmio.wed_hif2;
@@ -644,7 +646,7 @@ int mt7996_mmio_wed_init(struct mt7996_dev *dev, void *pdev_ptr,
 		} else if (is_mt7992(&dev->mt76)) {
 			wed->wlan.txfree_tbit = ffs(MT_INT_RX_DONE_WA_MAIN) - 1;
 			wed->wlan.wpdma_txfree = wed->wlan.phy_base + MT_RXQ_RING_BASE(0) +
-						  MT7996_RXQ_MCU_WA_MAIN * MT_RING_SIZE;
+						 MT7996_RXQ_MCU_WA_MAIN * MT_RING_SIZE;
 			if (dev->hif2)
 				wed->wlan.id = MT7992_DEVICE_ID;
 		} else {
@@ -661,7 +663,7 @@ int mt7996_mmio_wed_init(struct mt7996_dev *dev, void *pdev_ptr,
 	}
 
 	wed->wlan.nbuf = tx_token_size;
-	wed->wlan.token_start = MT7996_TOKEN_SIZE - wed->wlan.nbuf;
+	wed->wlan.token_start = 0;
 	wed->wlan.hif2 = hif2;
 
 	wed->wlan.amsdu_max_subframes = 8;
@@ -682,6 +684,8 @@ int mt7996_mmio_wed_init(struct mt7996_dev *dev, void *pdev_ptr,
 		wed_enable = false;
 		return 0;
 	}
+
+	dev->mt76.token_start = wed->wlan.nbuf;
 
 	*irq = wed->irq;
 	dev->mt76.dma_dev = wed->dev;
@@ -759,10 +763,9 @@ void mt7996_dual_hif_set_irq_mask(struct mt7996_dev *dev, bool write_reg,
 		if (mtk_wed_device_active(&mdev->mmio.wed)) {
 			mtk_wed_device_irq_set_mask(&mdev->mmio.wed,
 						    mdev->mmio.irqmask);
-			if (mtk_wed_device_active(&mdev->mmio.wed_hif2)) {
+			if (mtk_wed_device_active(&mdev->mmio.wed_hif2))
 				mtk_wed_device_irq_set_mask(&mdev->mmio.wed_hif2,
 							    mdev->mmio.irqmask);
-			}
 		} else {
 			mt76_wr(dev, MT_INT_MASK_CSR, mdev->mmio.irqmask);
 			mt76_wr(dev, MT_INT1_MASK_CSR, mdev->mmio.irqmask);
@@ -894,7 +897,7 @@ struct mt7996_dev *mt7996_mmio_probe(struct device *pdev,
 		.survey_flags = SURVEY_INFO_TIME_TX |
 				SURVEY_INFO_TIME_RX |
 				SURVEY_INFO_TIME_BSS_RX,
-		.token_size = MT7996_TOKEN_SIZE,
+		.token_size = MT7996_SW_TOKEN_SIZE,
 		.tx_prepare_skb = mt7996_tx_prepare_skb,
 		.tx_complete_skb = mt76_connac_tx_complete_skb,
 		.rx_skb = mt7996_queue_rx_skb,

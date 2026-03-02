@@ -348,8 +348,10 @@ mt76_tx(struct mt76_phy *phy, struct ieee80211_sta *sta,
 	struct ieee80211_hdr *hdr = (void *)skb->data;
 	struct sk_buff_head *head;
 
+	mt76_dbg_record_tx_stats(phy, MT_TX_FROM_MAC80211);
 	if (mt76_testmode_enabled(phy)) {
 		ieee80211_free_txskb(phy->hw, skb);
+		mt76_dbg_record_tx_stats(phy, MT_TX_DROP_IN_TESTMODE);
 		return;
 	}
 
@@ -366,8 +368,17 @@ mt76_tx(struct mt76_phy *phy, struct ieee80211_sta *sta,
 	    ((info->control.flags & IEEE80211_TX_CTRL_DONT_USE_RATE_MASK) &&
 	     ieee80211_is_probe_req(hdr->frame_control)))
 		head = &wcid->tx_offchannel;
-	else
+	else {
+		if (!wcid->tx_pending.prev || !wcid->tx_pending.next) {
+			dev_warn(phy->dev->dev, "Un-initialized STA %pM wcid %d in mt76_tx\n",
+				 sta->addr, wcid->idx);
+
+			mt76_dbg_record_tx_stats(phy, MT_TX_DROP_WCID_NOT_INIT);
+			ieee80211_free_txskb(phy->hw, skb);
+			return;
+		}
 		head = &wcid->tx_pending;
+	}
 
 	spin_lock_bh(&head->lock);
 	__skb_queue_tail(head, skb);
@@ -395,6 +406,8 @@ mt76_txq_dequeue(struct mt76_phy *phy, struct mt76_txq *mtxq)
 
 	info = IEEE80211_SKB_CB(skb);
 	info->hw_queue |= FIELD_PREP(MT_TX_HW_QUEUE_PHY, phy->band_idx);
+
+	mt76_dbg_record_tx_stats(phy, MT_TX_FROM_MAC80211);
 
 	return skb;
 }
@@ -503,7 +516,7 @@ mt76_txq_send_burst(struct mt76_phy *phy, struct mt76_queue *q,
 
 	do {
 		if (test_bit(MT76_RESET, &phy->state) || phy->offchannel)
-			break;
+			return -EBUSY;
 
 		if (stop || mt76_txq_stopped(q))
 			break;
@@ -536,15 +549,23 @@ mt76_txq_send_burst(struct mt76_phy *phy, struct mt76_queue *q,
 static int
 mt76_txq_schedule_list(struct mt76_phy *phy, enum mt76_txq_id qid)
 {
+	struct mt76_queue *q = phy->q_tx[qid];
 	struct mt76_dev *dev = phy->dev;
 	struct ieee80211_txq *txq;
 	struct mt76_txq *mtxq;
 	struct mt76_wcid *wcid;
-	struct mt76_queue *q;
 	int ret = 0;
 
 	while (1) {
 		int n_frames = 0;
+
+		if (test_bit(MT76_RESET, &phy->state) || phy->offchannel)
+			return -EBUSY;
+
+		if (dev->queue_ops->tx_cleanup &&
+		    q->queued + 2 * MT_TXQ_FREE_THR >= q->ndesc) {
+			dev->queue_ops->tx_cleanup(dev, q, false);
+		}
 
 		txq = ieee80211_next_txq(phy->hw, qid);
 		if (!txq)
@@ -597,7 +618,7 @@ void mt76_txq_schedule(struct mt76_phy *phy, enum mt76_txq_id qid)
 {
 	int len;
 
-	if (qid >= 4)
+	if (qid >= 4 || phy->offchannel)
 		return;
 
 	local_bh_disable();
@@ -641,6 +662,7 @@ mt76_txq_schedule_pending_wcid(struct mt76_phy *phy, struct mt76_wcid *wcid,
 		q = phy->q_tx[qid];
 		if (mt76_txq_stopped(q) || test_bit(MT76_RESET, &phy->state)) {
 			ret = -1;
+			mt76_dbg_record_tx_stats(phy, MT_TX_DROP_STOPPED_QUEUE);
 			break;
 		}
 

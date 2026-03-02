@@ -6,6 +6,13 @@
 #include "mt7996.h"
 #include "mcu.h"
 #include "mac.h"
+#ifdef CONFIG_MTK_DEBUG
+#include "mtk_mcu.h"
+#endif
+
+static bool bkg_max80;
+module_param(bkg_max80, bool, 0644);
+MODULE_PARM_DESC(bkg_max80, "Restrict the max bandwidth of background radar to 80MHz");
 
 int mt7996_run(struct mt7996_phy *phy)
 {
@@ -26,11 +33,38 @@ int mt7996_run(struct mt7996_phy *phy)
 	if (ret)
 		return ret;
 
+	/* set a parking channel */
+	ret = mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_SWITCH);
+	if (ret)
+		return ret;
+
 	ret = mt7996_mcu_set_thermal_throttling(phy, MT7996_THERMAL_THROTTLE_MAX);
 	if (ret)
 		return ret;
 
 	ret = mt7996_mcu_set_thermal_protect(phy, true);
+	if (ret)
+		return ret;
+
+	ret = mt7996_mcu_set_scs(phy, SCS_ENABLE);
+	if (ret)
+		return ret;
+
+#ifdef CONFIG_MTK_DEBUG
+	phy->sr_enable = true;
+	phy->enhanced_sr_enable = true;
+	phy->thermal_protection_enable = true;
+	ret = mt7996_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_SKU_POWER_LIMIT_CTRL,
+					   dev->dbg.sku_disable ? 0 : phy->sku_limit_en);
+
+	ret = mt7996_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_BACKOFF_POWER_LIMIT_CTRL,
+					   dev->dbg.sku_disable ? 0 : phy->sku_path_en);
+#else
+	ret = mt7996_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_SKU_POWER_LIMIT_CTRL,
+					   phy->sku_limit_en);
+	ret = mt7996_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_BACKOFF_POWER_LIMIT_CTRL,
+					   phy->sku_path_en);
+#endif
 	if (ret)
 		return ret;
 
@@ -66,8 +100,14 @@ static int mt7996_start(struct ieee80211_hw *hw)
 		u8 queue = mt76_connac_lmac_mapping(IEEE80211_AC_VI);
 
 		ret = mt7996_mcu_cp_support(dev, queue);
+#ifdef CONFIG_MTK_DEBUG
+		dev->sr_pp_enable = is_mt7990(&dev->mt76) ? dev->pwr_boost_cap : true;
+		dev->uba_enable = true;
+#endif
 	}
 	mutex_unlock(&dev->mt76.mutex);
+
+	ieee80211_queue_delayed_work(hw, &dev->scs_work, HZ);
 
 	return ret;
 }
@@ -94,6 +134,9 @@ static void mt7996_stop_phy(struct mt7996_phy *phy)
 
 static void mt7996_stop(struct ieee80211_hw *hw, bool suspend)
 {
+	struct mt7996_dev *dev = mt7996_hw_dev(hw);
+
+	cancel_delayed_work_sync(&dev->scs_work);
 }
 
 static inline int get_free_idx(u64 mask, u8 start, u8 end)
@@ -391,6 +434,10 @@ int mt7996_vif_link_add(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 		mtxq->wcid = idx;
 	}
 
+	mt76_bss_dbg(vif, "band=%u, bss_idx=%u, link_id=%u, wcid=%u",
+		     phy->mt76->band_idx, mlink->idx, link_conf->link_id,
+		     msta_link->wcid.idx);
+
 	return 0;
 }
 
@@ -612,6 +659,8 @@ static int mt7996_add_interface(struct ieee80211_hw *hw,
 	memset(mvif->cs_links, IEEE80211_LINK_UNSPECIFIED,
 	       sizeof(mvif->cs_links));
 
+	INIT_DELAYED_WORK(&mvif->beacon_mon_work, mt7996_beacon_mon_work);
+
 out:
 	mutex_unlock(&dev->mt76.mutex);
 
@@ -639,6 +688,9 @@ static void mt7996_remove_interface(struct ieee80211_hw *hw,
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
 	struct mt7996_radio_data rdata = {};
 	int i;
+	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
+
+	cancel_delayed_work(&mvif->beacon_mon_work);
 
 	ieee80211_iterate_active_interfaces_mtx(hw, 0, mt7996_remove_iter,
 						&rdata);
@@ -670,20 +722,19 @@ static void mt7996_remove_interface(struct ieee80211_hw *hw,
 int mt7996_set_channel(struct mt76_phy *mphy)
 {
 	struct mt7996_phy *phy = mphy->priv;
+	struct mt7996_dev *dev = phy->dev;
 	int ret;
 
-	if (mphy->offchannel)
-		mt7996_mac_update_beacons(phy);
-
-	if (phy->dev->cal.data) {
+	if (dev->cal.data) {
 		ret = mt7996_mcu_apply_tx_dpd(phy);
 		if (ret)
 			goto out;
 	}
 
-	if (mt76_testmode_enabled(mphy) || mt76_testmode_bf_enabled(mphy)) {
-		mt7996_tm_update_channel(phy);
-		goto out;
+	if (dev->testmode_enable) {
+		if (mt76_testmode_enabled(mphy) || mt76_testmode_bf_enabled(mphy))
+			mt7996_tm_update_channel(phy);
+		return 0;
 	}
 
 	ret = mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_SWITCH);
@@ -691,10 +742,6 @@ int mt7996_set_channel(struct mt76_phy *mphy)
 		goto out;
 
 	ret = mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_RX_PATH);
-	if (ret)
-		goto out;
-
-	ret = mt7996_mcu_set_txpower_sku(phy);
 	if (ret)
 		goto out;
 
@@ -710,8 +757,6 @@ int mt7996_set_channel(struct mt76_phy *mphy)
 		mt7996_mcu_edcca_threshold_ctrl(phy, phy->user_edcca_threshold, true);
 #endif
 	phy->noise = 0;
-	if (!mphy->offchannel)
-		mt7996_mac_update_beacons(phy);
 
 out:
 	ieee80211_queue_delayed_work(mphy->hw, &mphy->mac_work,
@@ -870,6 +915,11 @@ mt7996_get_rates_table(struct mt7996_phy *phy, struct ieee80211_bss_conf *conf,
 	rate = mt76_connac2_mac_tx_rate_val(phy->mt76, conf, beacon, mcast);
 
 	if (beacon) {
+		/* For WFA Cert TGax T/C 4.73.1 */
+		if (dev->cert_mode && phy->mt76->band_idx == MT_BAND2 &&
+		    conf->he_support && !conf->eht_support)
+			rate = 0x0200;
+
 		/* odd index for driver, even index for firmware */
 		idx = MT7996_BEACON_RATES_TBL + 2 * phy->mt76->band_idx;
 		if (phy->beacon_rate != rate)
@@ -1089,6 +1139,30 @@ out:
 }
 
 static int
+mt7996_pre_channel_switch(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+			  struct ieee80211_channel_switch *ch_switch)
+{
+	struct mt7996_dev *dev = mt7996_hw_dev(hw);
+	struct cfg80211_chan_def *c = &ch_switch->chandef, *rdd2_chandef;
+	struct mt7996_phy *phy = mt7996_band_phy(dev, c->chan->band);
+
+	mutex_lock(&dev->mt76.mutex);
+
+	if (phy != dev->rdd2_phy)
+		goto out;
+
+	rdd2_chandef = &dev->rdd2_chandef;
+	if (rdd2_chandef->width != c->width ||
+	    rdd2_chandef->center_freq1 != c->center_freq1)
+		dev->bg_nxt_freq = 0;
+
+out:
+	mutex_unlock(&dev->mt76.mutex);
+
+	return 0;
+}
+
+static int
 mt7996_post_channel_switch(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 			   struct ieee80211_bss_conf *link_conf)
 {
@@ -1204,6 +1278,10 @@ mt7996_mac_sta_init_link(struct mt7996_dev *dev,
 	mt7996_vendor_amnt_sta_remove(link->phy, link_sta);
 #endif
 
+	mt76_sta_dbg(link_conf->vif, "STA %pM, wcid=%u, link_id=%u (%pM), pri_link=%u, sec_link=%u",
+		     sta->addr, msta_link->wcid.idx, link_id,
+		     link_sta->addr, msta->deflink_id, msta->seclink_id);
+
 	return 0;
 }
 
@@ -1230,6 +1308,7 @@ mt7996_mac_sta_remove_links(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 	struct mt76_dev *mdev = &dev->mt76;
 	unsigned int link_id;
 
+	mt76_sta_dbg(vif, "removed_links=0x%lx", links);
 	for_each_set_bit(link_id, &links, IEEE80211_MLD_MAX_NUM_LINKS) {
 		struct mt7996_sta_link *msta_link = NULL;
 		struct mt7996_phy *phy;
@@ -1340,6 +1419,8 @@ mt7996_mac_sta_change_links(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	unsigned long rem = old_links & ~new_links;
 	int ret;
 
+	mt76_sta_dbg(vif, "STA %pM old=0x%x, new=0x%x", sta->addr, old_links, new_links);
+
 	mutex_lock(&dev->mt76.mutex);
 
 	mt7996_mac_sta_remove_links(dev, vif, sta, rem);
@@ -1371,6 +1452,16 @@ mt7996_mac_sta_add(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 	return err;
 }
 
+static void mt7996_check_mld_sta(void *data, struct ieee80211_sta *sta)
+{
+	bool *has_mld_sta = data;
+
+	if (*has_mld_sta)
+		return;
+	if (sta->mlo)
+		*has_mld_sta = true;
+}
+
 static int
 mt7996_mac_sta_event(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 		     struct ieee80211_sta *sta, enum mt76_sta_event ev)
@@ -1380,6 +1471,7 @@ mt7996_mac_sta_event(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 	struct ieee80211_link_sta *link_sta;
 	unsigned int link_id;
 	int err = 0;
+	bool has_mld_sta = false;
 
 	mutex_lock(&dev->mt76.mutex);
 
@@ -1420,6 +1512,8 @@ mt7996_mac_sta_event(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 				if (err)
 					return err;
 			}
+			if (sta->mlo)
+				mt7996_set_pse_drop(dev, 0);
 
 #ifdef CONFIG_MTK_VENDOR
 			if (hweight16(msta->valid_links) == 1 && link->phy &&
@@ -1437,6 +1531,13 @@ mt7996_mac_sta_event(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 				goto unlock;
 			break;
 		case MT76_STA_EVENT_DISASSOC:
+			if (links == sta->valid_links) {
+				ieee80211_iterate_stations_atomic(dev->mt76.hw, mt7996_check_mld_sta,
+								&has_mld_sta);
+				if (!has_mld_sta)
+					mt7996_set_pse_drop(dev, 1);
+			}
+
 			for (i = 0; i < ARRAY_SIZE(msta_link->twt.flow); i++)
 				mt7996_mac_twt_teardown_flow(dev, link,
 							     msta_link, i);
@@ -1465,6 +1566,9 @@ mt7996_mac_sta_remove(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 		      struct ieee80211_sta *sta)
 {
 	unsigned long links = sta->valid_links ? sta->valid_links : BIT(0);
+	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
+
+	cancel_delayed_work(&msta->vif->beacon_mon_work);
 
 	mutex_lock(&dev->mt76.mutex);
 #ifdef CONFIG_MTK_VENDOR
@@ -1749,12 +1853,22 @@ u64 __mt7996_get_tsf(struct ieee80211_hw *hw, struct mt7996_vif_link *link)
 static u64
 mt7996_get_tsf(struct ieee80211_hw *hw, struct ieee80211_vif *vif)
 {
-	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
-	u64 ret;
+	struct mt7996_vif_link *mconf;
+	u64 ret = -1ULL;
+	int i;
 
 	mutex_lock(&dev->mt76.mutex);
-	ret = __mt7996_get_tsf(hw, &mvif->deflink);
+	/* FIXME workaround for preventing kernel crash during ACS
+	 * (i.e., link 0 is doing ACS while link 1 queries tsf)
+	 */
+	for (i = 0; i < IEEE80211_MLD_MAX_NUM_LINKS; i++) {
+		mconf = mt7996_vif_link(dev, vif, i);
+		if (mconf)
+			break;
+	}
+	if (mconf)
+		ret = __mt7996_get_tsf(hw, mconf);
 	mutex_unlock(&dev->mt76.mutex);
 
 	return ret;
@@ -1882,7 +1996,6 @@ mt7996_set_antenna(struct ieee80211_hw *hw, int radio_idx,
 		mt76_set_stream_caps(phy->mt76, true);
 		mt7996_set_stream_vht_txbf_caps(phy);
 		mt7996_set_stream_he_eht_caps(phy);
-		mt7996_mcu_set_txpower_sku(phy);
 	}
 
 	mutex_unlock(&dev->mt76.mutex);
@@ -2064,11 +2177,11 @@ static void mt7996_sta_rate_ctrl_update(void *data, struct ieee80211_sta *sta)
 {
 	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
 	struct mt7996_sta_link *msta_link;
-	u32 *changed = data;
+	struct mt7996_sta_rc_work_data *wd = data;
 
-	msta_link = mt7996_sta_link(msta, msta->deflink_id);
+	msta_link = mt7996_sta_link(msta, wd->link_id);
 	if (msta_link)
-		mt7996_link_rate_ctrl_update(&changed, msta_link);
+		mt7996_link_rate_ctrl_update(&wd->changed, msta_link);
 }
 
 static int
@@ -2077,10 +2190,21 @@ mt7996_set_bitrate_mask(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 			unsigned int link_id)
 {
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
-	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
-	u32 changed = IEEE80211_RC_SUPP_RATES_CHANGED;
+	struct mt7996_vif_link *link;
+	struct mt7996_sta_rc_work_data data = {
+		.link_id = link_id,
+		.changed = IEEE80211_RC_SUPP_RATES_CHANGED,
+	};
 
-	mvif->deflink.bitrate_mask = *mask;
+	mutex_lock(&dev->mt76.mutex);
+	link = mt7996_vif_link(dev, vif, link_id);
+	if (!link) {
+		mutex_unlock(&dev->mt76.mutex);
+		return -EINVAL;
+	}
+
+	link->bitrate_mask = *mask;
+	mutex_unlock(&dev->mt76.mutex);
 
 	/* if multiple rates across different preambles are given we can
 	 * reconfigure this info with all peers using sta_rec command with
@@ -2091,7 +2215,7 @@ mt7996_set_bitrate_mask(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	 * then multiple MCS setting (MCS 4,5,6) is not supported.
 	 */
 	ieee80211_iterate_stations_atomic(hw, mt7996_sta_rate_ctrl_update,
-					  &changed);
+					  &data);
 	ieee80211_queue_work(hw, &dev->rc_work);
 
 	return 0;
@@ -2104,12 +2228,12 @@ static void mt7996_sta_set_4addr(struct ieee80211_hw *hw,
 {
 	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
-	struct ieee80211_link_sta *link_sta;
+	unsigned long valid_links = vif->valid_links ?: BIT(0);
 	unsigned int link_id;
 
 	mutex_lock(&dev->mt76.mutex);
 
-	for_each_sta_active_link(vif, sta, link_sta, link_id) {
+	for_each_set_bit(link_id, &valid_links, IEEE80211_MLD_MAX_NUM_LINKS) {
 		struct mt7996_sta_link *msta_link;
 		struct mt7996_vif_link *link;
 
@@ -2145,12 +2269,12 @@ static void mt7996_sta_set_decap_offload(struct ieee80211_hw *hw,
 {
 	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
-	struct ieee80211_link_sta *link_sta;
+	unsigned long valid_links = vif->valid_links ?: BIT(0);
 	unsigned int link_id;
 
 	mutex_lock(&dev->mt76.mutex);
 
-	for_each_sta_active_link(vif, sta, link_sta, link_id) {
+	for_each_set_bit(link_id, &valid_links, IEEE80211_MLD_MAX_NUM_LINKS) {
 		struct mt7996_sta_link *msta_link;
 		struct mt7996_vif_link *link;
 
@@ -2307,9 +2431,16 @@ static void mt7996_ethtool_worker(void *wi_data, struct ieee80211_sta *sta)
 {
 	struct mt76_ethtool_worker_info *wi = wi_data;
 	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
-	struct mt7996_sta_link *msta_link = &msta->deflink;
+	struct mt7996_vif *mvif = msta->vif;
+	struct mt7996_dev *dev = mvif->deflink.phy->dev;
+	struct mt7996_sta_link *msta_link;
+	struct mt7996_vif_link *mconf;
+	struct ieee80211_vif *vif = container_of((void *)mvif, struct ieee80211_vif, drv_priv);
 
-	if (msta->vif->deflink.mt76.idx != wi->idx)
+	msta_link = mt76_dereference(msta->link[msta->deflink_id], &dev->mt76);
+	mconf = mt7996_vif_link(dev, vif, msta->deflink_id);
+
+	if (mconf->mt76.idx != wi->idx)
 		return;
 
 	mt76_ethtool_worker(wi, &msta_link->wcid.stats, true);
@@ -2321,12 +2452,12 @@ void mt7996_get_et_stats(struct ieee80211_hw *hw,
 			 struct ethtool_stats *stats, u64 *data)
 {
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
+	struct mt7996_phy *phy = &dev->phy;
 	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
-	struct mt7996_phy *phy = mt7996_vif_link_phy(&mvif->deflink);
+	struct mt7996_vif_link *mconf;
 	struct mt76_mib_stats *mib = &phy->mib;
 	struct mt76_ethtool_worker_info wi = {
 		.data = data,
-		.idx = mvif->deflink.mt76.idx,
 	};
 	/* See mt7996_ampdu_stat_read_phy, etc */
 	int i, ei = 0;
@@ -2335,6 +2466,8 @@ void mt7996_get_et_stats(struct ieee80211_hw *hw,
 		return;
 
 	mutex_lock(&dev->mt76.mutex);
+	mconf = mt7996_vif_link(dev, vif, mvif->mt76.deflink_id);
+	wi.idx = mconf->mt76.idx,
 
 	mt7996_mac_update_stats(phy);
 
@@ -2416,13 +2549,98 @@ mt7996_twt_teardown_request(struct ieee80211_hw *hw,
 			    u8 flowid)
 {
 	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
-	struct mt7996_sta_link *msta_link = &msta->deflink;
-	struct mt7996_vif_link *link = &msta->vif->deflink;
+	struct mt7996_sta_link *msta_link;
+	struct mt7996_vif_link *link;
+	struct ieee80211_vif *vif;
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
 
+	vif = container_of((void *)msta->vif, struct ieee80211_vif, drv_priv);
+
 	mutex_lock(&dev->mt76.mutex);
+	msta_link = mt76_dereference(msta->link[0], &dev->mt76);
+	link = mt7996_vif_link(dev, vif, 0);
 	mt7996_mac_twt_teardown_flow(dev, link, msta_link, flowid);
 	mutex_unlock(&dev->mt76.mutex);
+}
+
+static void
+mt7996_background_radar_handle_7975_ifem(struct ieee80211_hw *hw,
+					 struct cfg80211_chan_def *user_chandef,
+					 struct cfg80211_chan_def *fw_chandef)
+{
+	struct mt7996_dev *dev = mt7996_hw_dev(hw);
+	struct cfg80211_chan_def *rdd2_chandef, *c = user_chandef;
+	struct ieee80211_channel *first_chan;
+	bool is_ifem_adie, expand = false;
+	enum subchan_state {
+		SUBCHAN_NOT_READY,
+		SUBCHAN_PRIMARY_READY,
+		SUBCHAN_SECONDARY_READY,
+	};
+	enum subchan_state state = SUBCHAN_NOT_READY;
+
+	switch (mt76_chip(&dev->mt76)) {
+	case MT7996_DEVICE_ID:
+		is_ifem_adie = dev->var.fem == MT7996_FEM_INT &&
+			       dev->var.type != MT7996_VAR_TYPE_233;
+		break;
+	case MT7992_DEVICE_ID:
+		is_ifem_adie = dev->var.type == MT7992_VAR_TYPE_44 &&
+			       dev->var.fem != MT7996_FEM_EXT;
+		break;
+	default:
+		return;
+	}
+
+	if (!user_chandef || (!is_ifem_adie && !bkg_max80))
+		goto out;
+
+	switch (user_chandef->width) {
+	case NL80211_CHAN_WIDTH_160:
+		first_chan = ieee80211_get_channel(hw->wiphy, user_chandef->center_freq1 - 70);
+		/* the primary sub-channel does not require CAC */
+		if (!(first_chan->flags & IEEE80211_CHAN_RADAR)) {
+			dev->bg_nxt_freq = 0;
+			c = fw_chandef;
+			break;
+		}
+
+		/* the primary or secondary sub-channel has completed the CAC */
+		rdd2_chandef = &dev->rdd2_chandef;
+		if (rdd2_chandef->width == NL80211_CHAN_WIDTH_80 &&
+		    (rdd2_chandef->center_freq1 == user_chandef->center_freq1 + 40 ||
+		     rdd2_chandef->center_freq1 == user_chandef->center_freq1 - 40) &&
+		    cfg80211_reg_can_beacon(hw->wiphy, rdd2_chandef, NL80211_IFTYPE_AP))
+			state = rdd2_chandef->center_freq1 < user_chandef->center_freq1 ?
+				SUBCHAN_PRIMARY_READY : SUBCHAN_SECONDARY_READY;
+
+		dev->bg_nxt_freq = first_chan->center_freq;
+		if (state == SUBCHAN_PRIMARY_READY)
+			dev->bg_nxt_freq += 80;
+		break;
+	case NL80211_CHAN_WIDTH_80:
+		if (!dev->bg_nxt_freq)
+			goto out;
+		break;
+	default:
+		goto out;
+	}
+
+	if (state || user_chandef->width == NL80211_CHAN_WIDTH_80) {
+		c->chan = ieee80211_get_channel(hw->wiphy, dev->bg_nxt_freq);
+		dev->bg_nxt_freq = 0;
+		expand = true;
+	} else {
+		c->chan = ieee80211_get_channel(hw->wiphy, first_chan->center_freq + 80);
+	}
+	c->width = NL80211_CHAN_WIDTH_80;
+	c->center_freq1 = c->chan->center_freq + 30;
+
+	if (c == user_chandef)
+		cfg80211_background_radar_update_channel(hw->wiphy, c, expand);
+	return;
+out:
+	dev->bg_nxt_freq = 0;
 }
 
 static int
@@ -2430,16 +2648,10 @@ mt7996_set_radar_background(struct ieee80211_hw *hw,
 			    struct cfg80211_chan_def *chandef)
 {
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
-	struct mt7996_phy *phy;
+	struct mt7996_phy *phy = mt7996_band_phy(dev, NL80211_BAND_5GHZ);
 	int ret = -EINVAL;
 	bool running;
-
-	if (chandef)
-		phy = mt7996_band_phy(dev, chandef->chan->band);
-	else
-		phy = dev->rdd2_phy;
-	if (!phy)
-	    return -EINVAL;
+	struct cfg80211_chan_def ifem_chandef = {};
 
 	mutex_lock(&dev->mt76.mutex);
 
@@ -2452,13 +2664,14 @@ mt7996_set_radar_background(struct ieee80211_hw *hw,
 		goto out;
 	}
 
+	mt7996_background_radar_handle_7975_ifem(hw, chandef, &ifem_chandef);
+
 	/* rdd2 already configured on a radar channel */
 	running = dev->rdd2_phy &&
 		  cfg80211_chandef_valid(&dev->rdd2_chandef) &&
 		  !!(dev->rdd2_chandef.chan->flags & IEEE80211_CHAN_RADAR);
 
-	if (!chandef || running ||
-	    !(chandef->chan->flags & IEEE80211_CHAN_RADAR)) {
+	if (!chandef || running) {
 		ret = mt7996_mcu_rdd_background_enable(phy, NULL);
 		if (ret)
 			goto out;
@@ -2467,7 +2680,9 @@ mt7996_set_radar_background(struct ieee80211_hw *hw,
 			goto update_phy;
 	}
 
-	ret = mt7996_mcu_rdd_background_enable(phy, chandef);
+	ret = mt7996_mcu_rdd_background_enable(phy,
+					       ifem_chandef.chan ?
+					       &ifem_chandef : chandef);
 	if (ret)
 		goto out;
 
@@ -2506,10 +2721,20 @@ mt7996_net_fill_forward_path(struct ieee80211_hw *hw,
 	if (!msta_link->wcid.sta || msta_link->wcid.idx > MT7996_WTBL_STA)
 		return -EIO;
 
-	if (dev->hif2 &&
-	    ((is_mt7996(&dev->mt76) && msta_link->wcid.phy_idx == MT_BAND2) ||
-	     (is_mt7992(&dev->mt76) && msta_link->wcid.phy_idx == MT_BAND1)))
-		wed = &dev->mt76.mmio.wed_hif2;
+	if (dev->hif2) {
+		switch (dev->option_type) {
+		case 2:
+			/* eagle + 7988d */
+			if (msta_link->wcid.phy_idx == MT_BAND1)
+				wed = &dev->mt76.mmio.wed_hif2;
+			break;
+		default:
+			if ((is_mt7996(&dev->mt76) && msta_link->wcid.phy_idx == MT_BAND2) ||
+			    (is_mt7992(&dev->mt76) && msta_link->wcid.phy_idx == MT_BAND1))
+				wed = &dev->mt76.mmio.wed_hif2;
+			break;
+		}
+	}
 
 	if (!mtk_wed_device_active(wed) &&
 	    !mt76_npu_device_active(&dev->mt76))
@@ -2552,6 +2777,9 @@ mt7996_change_vif_links(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
 	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
 	int ret = 0;
+
+	mt76_mlo_dbg(vif, "old=0x%x, new=0x%x, dormant=0x%x",
+		     old_links, new_links, vif->dormant_links);
 
 	mutex_lock(&dev->mt76.mutex);
 
@@ -2598,6 +2826,61 @@ mt7996_reconfig_complete(struct ieee80211_hw *hw,
 	mt7996_for_each_phy(dev, phy)
 		ieee80211_queue_delayed_work(hw, &phy->mt76->mac_work,
 					     MT7996_WATCHDOG_TIME);
+}
+
+static void
+mt7996_event_callback(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+		      const struct ieee80211_event *event)
+{
+	struct mt7996_dev *dev = mt7996_hw_dev(hw);
+	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
+	int i;
+
+	switch (event->type) {
+	case MLME_EVENT:
+		if (event->u.mlme.data == ASSOC_EVENT &&
+		    event->u.mlme.status == MLME_SUCCESS) {
+			struct ieee80211_bss_conf *conf;
+			struct mt7996_vif_link *mconf;
+			struct mt7996_phy *phy;
+			unsigned long cur, valid_links = vif->valid_links ?: BIT(0);
+			unsigned int link_id;
+			int next_time = INT_MAX;
+
+			mutex_lock(&dev->mt76.mutex);
+			cur = jiffies;
+			for_each_set_bit(link_id, &valid_links, IEEE80211_MLD_MAX_NUM_LINKS) {
+				conf = link_conf_dereference_protected(vif, link_id);
+				mconf = mt7996_vif_link(dev, vif, link_id);
+
+				if (!conf || !mconf)
+					continue;
+
+				phy = mconf->phy;
+				mvif->beacon_received_time[phy->mt76->band_idx] = cur;
+				next_time = min(next_time,
+						MT7996_MAX_BEACON_LOSS *
+						conf->beacon_int);
+			}
+
+			ieee80211_queue_delayed_work(hw, &mvif->beacon_mon_work,
+						     msecs_to_jiffies(next_time));
+			mutex_unlock(&dev->mt76.mutex);
+			break;
+		}
+
+		mutex_lock(&dev->mt76.mutex);
+		memset(mvif->probe_send_count, 0, sizeof(mvif->probe_send_count));
+		for (i = 0; i < __MT_MAX_BAND; i++)
+			mvif->probe[i] = NULL;
+		mvif->lost_links = 0;
+		mutex_unlock(&dev->mt76.mutex);
+
+		cancel_delayed_work(&mvif->beacon_mon_work);
+		break;
+	default:
+		break;
+	}
 }
 
 static int
@@ -2653,6 +2936,7 @@ const struct ieee80211_ops mt7996_ops = {
 	.release_buffered_frames = mt76_release_buffered_frames,
 	.get_txpower = mt76_get_txpower,
 	.channel_switch_beacon = mt7996_channel_switch_beacon,
+	.pre_channel_switch = mt7996_pre_channel_switch,
 	.post_channel_switch = mt7996_post_channel_switch,
 	.get_stats = mt7996_get_stats,
 	.get_et_sset_count = mt7996_get_et_sset_count,
@@ -2675,6 +2959,7 @@ const struct ieee80211_ops mt7996_ops = {
 #ifdef CONFIG_MAC80211_DEBUGFS
 	.sta_add_debugfs = mt7996_sta_add_debugfs,
 	.link_sta_add_debugfs = mt7996_link_sta_add_debugfs,
+	.vif_add_debugfs = mt7996_vif_add_debugfs,
 #endif
 	.set_radar_background = mt7996_set_radar_background,
 	.net_fill_forward_path = mt7996_net_fill_forward_path,
@@ -2683,6 +2968,7 @@ const struct ieee80211_ops mt7996_ops = {
 #elif defined(CONFIG_MT7996_NPU)
 	.net_setup_tc = mt76_npu_net_setup_tc,
 #endif
+	.event_callback = mt7996_event_callback,
 	.change_vif_links = mt7996_change_vif_links,
 	.change_sta_links = mt7996_mac_sta_change_links,
 	.reconfig_complete = mt7996_reconfig_complete,

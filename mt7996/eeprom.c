@@ -128,6 +128,8 @@ const char *mt7996_eeprom_name(struct mt7996_dev *dev)
 			if (dev->var.fem == MT7996_FEM_INT)
 				return MT7996_EEPROM_DEFAULT_233_INT;
 			return MT7996_EEPROM_DEFAULT_233;
+		case MT7996_VAR_TYPE_404:
+			return MT7996_EEPROM_DEFAULT_404;
 		case MT7996_VAR_TYPE_444:
 		default:
 			if (dev->var.fem == MT7996_FEM_INT)
@@ -316,14 +318,9 @@ static int mt7996_eeprom_load(struct mt7996_dev *dev)
 	bool use_default = false;
 	int ret, i;
 
-	ret = mt76_eeprom_init(&dev->mt76, MT7996_EEPROM_SIZE);
-	if (ret < 0)
-		return ret;
-
-	if (ret && !mt7996_check_eeprom(dev)) {
-		dev->eeprom_mode = EEPROM_MODE_FLASH;
+	/* flash or bin file mode eeprom is loaded before mcu init */
+	if (dev->eeprom_mode != EEPROM_MODE_DEFAULT_BIN)
 		goto out;
-	}
 
 	memset(dev->mt76.eeprom.data, 0, MT7996_EEPROM_SIZE);
 	if (mt7996_has_ext_eeprom(dev)) {
@@ -331,31 +328,15 @@ static int mt7996_eeprom_load(struct mt7996_dev *dev)
 		dev->eeprom_mode = EEPROM_MODE_EXT;
 		eeprom_blk_size = MT7996_EXT_EEPROM_BLOCK_SIZE;
 	} else {
-		u8 free_block_num;
-
 		/* efuse mode */
 		dev->eeprom_mode = EEPROM_MODE_EFUSE;
 		eeprom_blk_size = MT7996_EEPROM_BLOCK_SIZE;
-		ret = mt7996_mcu_get_efuse_free_block(dev, &free_block_num);
-		if (ret < 0)
-			return ret;
-
-			/* efuse info isn't enough */
-			if (free_block_num >= 59) {
-				use_default = true;
-				goto out;
-			}
-		} else {
-			/* external eeprom mode */
-			dev->eeprom_mode = EXT_EEPROM_MODE;
-			eeprom_blk_size = MT7996_EXT_EEPROM_BLOCK_SIZE;
-		}
 	}
 
 	/* check if eeprom data from fw is valid */
 	if (mt7996_mcu_get_eeprom(dev, 0, NULL, eeprom_blk_size,
 				  dev->eeprom_mode) ||
-	    mt7996_check_eeprom(dev)) {
+		mt7996_check_eeprom(dev)) {
 		use_default = true;
 		goto out;
 	}
@@ -393,6 +374,8 @@ static int mt7996_eeprom_parse_efuse_hw_cap(struct mt7996_phy *phy,
 	if (ret)
 		return ret;
 
+	/* for internal development */
+	dev->has_eht = true;
 	if (cap) {
 		u8 band_offs = phy->mt76->band_idx * 3;
 
@@ -673,3 +656,37 @@ bool mt7996_eeprom_has_background_radar(struct mt7996_dev *dev)
 
 	return true;
 }
+
+const u8 mt7996_sku_group_len[] = {
+	[SKU_CCK] = 4,
+	[SKU_OFDM] = 8,
+	[SKU_HT20] = 8,
+	[SKU_HT40] = 9,
+	[SKU_VHT20] = 12,
+	[SKU_VHT40] = 12,
+	[SKU_VHT80] = 12,
+	[SKU_VHT160] = 12,
+	[SKU_HE26] = 12,
+	[SKU_HE52] = 12,
+	[SKU_HE106] = 12,
+	[SKU_HE242] = 12,
+	[SKU_HE484] = 12,
+	[SKU_HE996] = 12,
+	[SKU_HE2x996] = 12,
+	[SKU_EHT26] = 16,
+	[SKU_EHT52] = 16,
+	[SKU_EHT106] = 16,
+	[SKU_EHT242] = 16,
+	[SKU_EHT484] = 16,
+	[SKU_EHT996] = 16,
+	[SKU_EHT2x996] = 16,
+	[SKU_EHT4x996] = 16,
+	[SKU_EHT26_52] = 16,
+	[SKU_EHT26_106] = 16,
+	[SKU_EHT484_242] = 16,
+	[SKU_EHT996_484] = 16,
+	[SKU_EHT996_484_242] = 16,
+	[SKU_EHT2x996_484] = 16,
+	[SKU_EHT3x996] = 16,
+	[SKU_EHT3x996_484] = 16,
+};

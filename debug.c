@@ -76,3 +76,44 @@ void __mt76_dbg(enum mt76_debug_mask mask, struct mt76_dev *dev, const char *fmt
 	va_end(args);
 }
 EXPORT_SYMBOL_GPL(__mt76_dbg);
+
+#ifdef CONFIG_MTK_DEBUG
+
+void mt76_dbg_record_tx_stats(struct mt76_phy *phy, enum mt76_tx_debug_stats reason)
+{
+	switch (reason) {
+	case MT_TX_FROM_MAC80211:
+	case MT_TX_TO_HW:
+		break;
+	/* use phy0 for per-dev stats */
+	case MT_TX_DROP_GET_TXWI_FAIL:
+	case MT_TX_DROP_DMA_FAIL:
+	case MT_TX_DROP_AGG_EXCEEDED:
+	case MT_TX_DROP_GET_TOKEN_FAIL:
+		phy = &phy->dev->phy;
+		break;
+	default:
+		break;
+	}
+
+	spin_lock_bh(&phy->tx_dbg_stats.lock);
+	phy->tx_dbg_stats.data[reason]++;
+	spin_unlock_bh(&phy->tx_dbg_stats.lock);
+}
+EXPORT_SYMBOL_GPL(mt76_dbg_record_tx_stats);
+
+void mt76_dbg_record_rx_stats(struct mt76_phy *phy, enum mt76_rx_debug_stats reason)
+{
+	spin_lock_bh(&phy->rx_dbg_stats.lock);
+	phy->rx_dbg_stats.data[reason]++;
+	spin_unlock_bh(&phy->rx_dbg_stats.lock);
+}
+EXPORT_SYMBOL_GPL(mt76_dbg_record_rx_stats);
+
+void mt76_dbg_record_rx_stats_q(struct mt76_queue *q, enum mt76_rx_debug_stats reason)
+{
+	q->rx_drop[reason]++;
+}
+EXPORT_SYMBOL_GPL(mt76_dbg_record_rx_stats_q);
+
+#endif

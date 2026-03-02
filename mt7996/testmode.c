@@ -1899,7 +1899,7 @@ mt7996_tm_txbf_set_tx(struct mt7996_phy *phy, u16 *val)
 	if (bf_on) {
 		mt7996_tm_set_rx_frames(phy, false);
 		mt7996_tm_set_tx_frames(phy, false);
-		mt7996_mcu_set_txbf_internal(phy, BF_PFMU_TAG_READ, 2, true);
+		mt7996_mcu_bf_pfmu_tag_read(phy, 2, true);
 		tag->t1.invalid_prof = false;
 		mt7996_tm_txbf_profile_tag_write(phy, 2, tag);
 		td->bf_ever_en = true;
@@ -1916,7 +1916,7 @@ mt7996_tm_txbf_set_tx(struct mt7996_phy *phy, u16 *val)
 		} else {
 			td->bf_ever_en = false;
 
-			mt7996_mcu_set_txbf_internal(phy, BF_PFMU_TAG_READ, 2, true);
+			mt7996_mcu_bf_pfmu_tag_read(phy, 2, true);
 			tag->t1.invalid_prof = true;
 			mt7996_tm_txbf_profile_tag_write(phy, 2, tag);
 		}
@@ -2039,14 +2039,14 @@ mt7996_tm_set_txbf(struct mt7996_phy *phy)
 		if (td->txbf_act == MT76_TM_TXBF_ACT_PROFILE_TAG_WRITE)
 			return mt7996_tm_txbf_profile_tag_write(phy, pfmu_idx, tag);
 		else if (td->txbf_act == MT76_TM_TXBF_ACT_PROFILE_TAG_READ)
-			return mt7996_mcu_set_txbf_internal(phy, BF_PFMU_TAG_READ, pfmu_idx, bfer);
+			return mt7996_mcu_bf_pfmu_tag_read(phy, pfmu_idx, bfer);
 
 		tag->t1.invalid_prof = !!val[0];
 
 		return 0;
 	}
 	case MT76_TM_TXBF_ACT_STA_REC_READ:
-		return mt7996_mcu_set_txbf_internal(phy, BF_STA_REC_READ, val[0], 0);
+		return mt7996_mcu_bf_starec_read(phy, val[0]);
 	case MT76_TM_TXBF_ACT_TXCMD:
 		return mt7996_tm_txbf_txcmd(phy, val);
 	default:

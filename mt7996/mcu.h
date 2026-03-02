@@ -206,6 +206,15 @@ struct mt7996_mcu_eeprom_access_event {
 	union eeprom_data eeprom;
 } __packed;
 
+#define MT_EFUSE_TOTAL_BANK	17
+
+struct efuse_bank_info {
+	u8 free_block;
+	u8 ver;
+	u8 total_block;
+	u8 efuse_id;
+};
+
 struct mt7996_mcu_phy_rx_info {
 	u8 category;
 	u8 rate;
@@ -369,7 +378,9 @@ struct mt7996_mcu_wed_rro_ba_delete_event {
 	__le16 len;
 
 	__le16 session_id;
-	u8 __rsv2[2];
+	__le16 mld_id;
+	u8 tid;
+	u8 __rsv[3];
 } __packed;
 
 enum  {
@@ -420,7 +431,8 @@ enum {
 	MCU_FW_LOG_WM,
 	MCU_FW_LOG_WA,
 	MCU_FW_LOG_TO_HOST,
-	MCU_FW_LOG_RELAY = 16
+	MCU_FW_LOG_RELAY = 16,
+	MCU_FW_LOG_RELAY_IDX = 40
 };
 
 enum {
@@ -438,11 +450,27 @@ enum {
 	MCU_WA_PARAM_CMD_DEBUG,
 };
 
+#define BSS_ACQ_PKT_CNT_BSS_NUM		24
+#define BSS_ACQ_PKT_CNT_BSS_BITMAP_ALL	0x00ffffff
+#define BSS_ACQ_PKT_CNT_READ_CLR	BIT(31)
+#define WMM_PKT_THRESHOLD		100
+
+struct mt7996_mcu_bss_acq_pkt_cnt_event {
+	struct mt7996_mcu_rxd rxd;
+
+	__le32 bss_bitmap;
+	struct {
+		__le32 cnt[IEEE80211_NUM_ACS];
+	} __packed bss[BSS_ACQ_PKT_CNT_BSS_NUM];
+} __packed;
+
 enum {
 	MCU_WA_PARAM_PDMA_RX = 0x04,
 	MCU_WA_PARAM_CPU_UTIL = 0x0b,
-	MCU_WA_PARAM_RED = 0x0e,
+	MCU_WA_PARAM_RED_EN = 0x0e,
+	MCU_WA_PARAM_BSS_ACQ_PKT_CNT = 0x12,
 	MCU_WA_PARAM_HW_PATH_HIF_VER = 0x2f,
+	MCU_WA_PARAM_RED_CONFIG = 0x40,
 };
 
 enum mcu_mmps_mode {
@@ -628,6 +656,13 @@ struct sta_rec_ba_uni {
 	__le16 winsize;
 	u8 ba_rdd_rro;
 	u8 __rsv[3];
+} __packed;
+
+struct sta_rec_tx_cap {
+	__le16 tag;
+	__le16 len;
+	u8 ampdu_limit_en;
+	u8 rsv[3];
 } __packed;
 
 struct sta_rec_eht {
@@ -1015,6 +1050,7 @@ enum {
 					 sizeof(struct sta_rec_mld_setup) +	\
 					 sizeof(struct mld_setup_link) * 3 +	\
 					 sizeof(struct sta_rec_eht_mld) +	\
+					 sizeof(struct sta_rec_tx_cap) +	\
 					 sizeof(struct tlv))
 
 #define MT7996_BEACON_UPDATE_SIZE	(sizeof(struct bss_req_hdr) +		\
@@ -1041,6 +1077,8 @@ enum {
 	UNI_WSYS_CONFIG_FW_LOG_CTRL,
 	UNI_WSYS_CONFIG_FW_DBG_CTRL,
 	UNI_CMD_CERT_CFG = 6,
+	UNI_WSYS_CONFIG_FW_TIME_SYNC, /* UNI_CMD_FW_TIME_SYNC in FW */
+	UNI_WSYS_CONFIG_PLE_FLUSH_PEER = 13,
 };
 
 enum {
@@ -1061,8 +1099,10 @@ enum {
 
 enum {
 	UNI_VOW_DRR_CTRL,
+	UNI_VOW_FEATURE_CTRL,
 	UNI_VOW_RX_AT_AIRTIME_EN = 0x0b,
 	UNI_VOW_RX_AT_AIRTIME_CLR_EN = 0x0e,
+	UNI_VOW_RED_ENABLE = 0x18,
 };
 
 enum {
@@ -1086,6 +1126,14 @@ enum {
 	UNI_RRO_SET_TXFREE_PATH,
 	UNI_RRO_DEL_BA_SESSION,
 	UNI_RRO_SET_FLUSH_TIMEOUT
+};
+
+enum {
+	UNI_MEC_READ_INFO = 0,
+	UNI_MEC_AMSDU_ALGO_EN_STA,
+	UNI_MEC_AMSDU_PARA_STA,
+	UNI_MEC_AMSDU_ALGO_THRESHOLD,
+	UNI_MEC_IFAC_SPEED,
 };
 
 enum{
@@ -1152,6 +1200,7 @@ enum {
 	UNI_CMD_SER_SET_RECOVER_L4_MDP,
 	UNI_CMD_SER_SET_RECOVER_FROM_ETH,
 	UNI_CMD_SER_SET_RECOVER_FULL = 8,
+	/* fw assert */
 	UNI_CMD_SER_SET_SYSTEM_ASSERT,
 	/* coredump */
 	UNI_CMD_SER_FW_COREDUMP_WA,
@@ -1260,6 +1309,17 @@ struct mt7996_mcu_pp_alg_ctrl_event {
 	u8 __rsv2;
 	__le16 punct_bitmap;
 } __packed;
+
+enum {
+	UNI_CMD_SCS_SEND_DATA,
+	UNI_CMD_SCS_SET_PD_THR_RANGE = 2,
+	UNI_CMD_SCS_ENABLE,
+};
+
+enum {
+	UNI_CMD_MLO_AGC_TX = 4,
+	UNI_CMD_MLO_AGC_TRIG = 5,
+};
 
 struct mt7996_mlo_agc_set {
 	u8 rsv[4];

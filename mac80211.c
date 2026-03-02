@@ -5,6 +5,7 @@
 #include <linux/sched.h>
 #include <linux/of.h>
 #include "mt76.h"
+#include "trace.h"
 
 static const struct ieee80211_channel mt76_channels_2ghz[] = {
 	CHAN2G(1, 2412),
@@ -420,6 +421,10 @@ mt76_phy_init(struct mt76_phy *phy, struct ieee80211_hw *hw)
 	INIT_LIST_HEAD(&phy->tx_list);
 	spin_lock_init(&phy->tx_lock);
 	INIT_DELAYED_WORK(&phy->roc_work, mt76_roc_complete_work);
+#ifdef CONFIG_MTK_DEBUG
+	spin_lock_init(&phy->tx_dbg_stats.lock);
+	spin_lock_init(&phy->rx_dbg_stats.lock);
+#endif
 
 	if ((void *)phy != hw->priv)
 		return 0;
@@ -891,6 +896,7 @@ static void mt76_rx_release_amsdu(struct mt76_phy *phy, enum mt76_rxq_id q)
 		}
 
 		if (ether_addr_equal(skb->data + offset, rfc1042_header)) {
+			mt76_dbg_record_rx_stats(phy, MT_RX_DROP_RFC_PKT);
 			dev_kfree_skb(skb);
 			return;
 		}
@@ -933,6 +939,7 @@ void mt76_rx(struct mt76_dev *dev, enum mt76_rxq_id q, struct sk_buff *skb)
 
 	if (!test_bit(MT76_STATE_RUNNING, &phy->state)) {
 		dev_kfree_skb(skb);
+		mt76_dbg_record_rx_stats(phy, MT_RX_DROP_STATE_ERR);
 		return;
 	}
 
@@ -1228,6 +1235,7 @@ mt76_rx_convert(struct mt76_dev *dev, struct sk_buff *skb,
 {
 	struct ieee80211_rx_status *status = IEEE80211_SKB_RXCB(skb);
 	struct ieee80211_hdr *hdr = mt76_skb_get_hdr(skb);
+	struct mt76_phy *phy;
 	struct mt76_rx_status mstat;
 	struct mt76_wcid *wcid;
 
@@ -1279,6 +1287,9 @@ mt76_rx_convert(struct mt76_dev *dev, struct sk_buff *skb,
 
 	*sta = wcid_to_sta(wcid);
 	*hw = mt76_phy_hw(dev, mstat.phy_idx);
+
+	phy = mt76_dev_phy(dev, mstat.phy_idx);
+	mt76_dbg_record_rx_stats(phy, MT_RX_TO_MAC80211);
 }
 
 static void
@@ -1520,6 +1531,7 @@ void mt76_rx_complete(struct mt76_dev *dev, struct sk_buff_head *frames,
 
 		mt76_check_ccmp_pn(dev, skb);
 		skb_shinfo(skb)->frag_list = NULL;
+		trace_mt76_rx_complete(dev, (struct mt76_rx_status *)skb->cb, 0);
 		mt76_rx_convert(dev, skb, &hw, &sta);
 		ieee80211_rx_list(hw, sta, skb, &list);
 
@@ -1529,6 +1541,7 @@ void mt76_rx_complete(struct mt76_dev *dev, struct sk_buff_head *frames,
 			nskb = nskb->next;
 			skb->next = NULL;
 
+			trace_mt76_rx_complete(dev, (struct mt76_rx_status *)skb->cb, 1);
 			mt76_rx_convert(dev, skb, &hw, &sta);
 			ieee80211_rx_list(hw, sta, skb, &list);
 		}
@@ -1693,6 +1706,7 @@ void mt76_wcid_init(struct mt76_wcid *wcid, u8 band_idx)
 {
 	wcid->hw_key_idx = -1;
 	wcid->phy_idx = band_idx;
+	spin_lock_init(&wcid->token_lock);
 
 	INIT_LIST_HEAD(&wcid->tx_list);
 	skb_queue_head_init(&wcid->tx_pending);

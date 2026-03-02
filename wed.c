@@ -83,7 +83,7 @@ int mt76_wed_offload_enable(struct mtk_wed_device *wed)
 	struct mt76_dev *dev = mt76_wed_to_dev(wed);
 
 	spin_lock_bh(&dev->token_lock);
-	dev->token_size = wed->wlan.token_start;
+	dev->token_size = dev->drv->token_size;
 	spin_unlock_bh(&dev->token_lock);
 
 	return !wait_event_timeout(dev->tx_wait, !dev->wed_token_count, HZ);
