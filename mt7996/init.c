@@ -783,6 +783,10 @@ static int mt7996_register_phy(struct mt7996_dev *dev, enum mt76_band_id band)
 			goto error;
 	}
 
+#ifdef CONFIG_MTK_VENDOR
+	mt7996_vendor_register(phy);
+#endif
+
 	ret = mt76_register_phy(mphy, true, mt76_rates,
 				ARRAY_SIZE(mt76_rates));
 	if (ret)
@@ -801,11 +805,35 @@ error:
 	return ret;
 }
 
+#ifdef CONFIG_MTK_VENDOR
+static int mt7996_unregister_csi(struct mt7996_phy *phy)
+{
+	struct csi_data *c, *tmp_c;
+
+	spin_lock_bh(&phy->csi.lock);
+	phy->csi.enable = 0;
+
+	list_for_each_entry_safe(c, tmp_c, &phy->csi.list, node) {
+		list_del(&c->node);
+		kfree(c);
+	}
+	spin_unlock_bh(&phy->csi.lock);
+
+	return 0;
+}
+#endif
+
 static void
 mt7996_unregister_phy(struct mt7996_phy *phy)
 {
-	if (phy)
-		mt7996_unregister_thermal(phy);
+	if (!phy)
+		return;
+
+#ifdef CONFIG_MTK_VENDOR
+	mt7996_unregister_csi(phy);
+#endif
+
+	mt7996_unregister_thermal(phy);
 }
 
 static void mt7996_init_work(struct work_struct *work)
@@ -1618,6 +1646,10 @@ mt7996_init_eht_caps(struct mt7996_phy *phy, enum nl80211_band band,
 		u8_encode_bits(IEEE80211_EHT_MAC_CAP0_MAX_MPDU_LEN_11454,
 			       IEEE80211_EHT_MAC_CAP0_MAX_MPDU_LEN_MASK);
 
+	if (iftype == NL80211_IFTYPE_AP)
+		eht_cap_elem->mac_cap_info[0] |=
+			IEEE80211_EHT_MAC_CAP0_SCS_TRAFFIC_DESC;
+
 	eht_cap_elem->mac_cap_info[1] |=
 		IEEE80211_EHT_MAC_CAP1_MAX_AMPDU_LEN_MASK;
 
@@ -1797,6 +1829,10 @@ int mt7996_register_device(struct mt7996_dev *dev)
 
 #ifdef CONFIG_NL80211_TESTMODE
 	dev->mt76.test_ops = &mt7996_testmode_ops;
+#endif
+
+#ifdef CONFIG_MTK_VENDOR
+	mt7996_vendor_register(&dev->phy);
 #endif
 
 	ret = mt7996_register_phy(dev, MT_BAND1);

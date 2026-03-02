@@ -2733,6 +2733,14 @@ void mt7996_mac_update_stats(struct mt7996_phy *phy)
 	}
 }
 
+void mt7996_set_wireless_amsdu(struct ieee80211_hw *hw, u8 en)
+{
+	if (en)
+		ieee80211_hw_set(hw, SUPPORTS_AMSDU_IN_AMPDU);
+	else
+		ieee80211_hw_clear(hw, SUPPORTS_AMSDU_IN_AMPDU);
+}
+
 void mt7996_mac_sta_rc_work(struct work_struct *work)
 {
 	struct mt7996_dev *dev = container_of(work, struct mt7996_dev, rc_work);
@@ -2775,6 +2783,17 @@ void mt7996_mac_sta_rc_work(struct work_struct *work)
 			mt7996_mcu_set_fixed_field(dev, msta_link->sta, NULL,
 						   msta_link->wcid.link_id,
 						   RATE_PARAM_MMPS_UPDATE);
+#ifdef CONFIG_MTK_VENDOR
+		if (changed & IEEE80211_RC_CODING_TYPE_CHANGED) {
+			struct sta_phy_uni phy = {
+				.ldpc = dev->coding_type,
+			};
+
+			mt7996_mcu_set_fixed_field(dev, msta_link->sta, &phy,
+						   msta_link->wcid.link_id,
+						   RATE_PARAM_FIXED_ENCODING);
+		}
+#endif
 
 		spin_lock_bh(&dev->mt76.sta_poll_lock);
 	}
