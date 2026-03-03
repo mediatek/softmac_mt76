@@ -7431,7 +7431,7 @@ int mt7996_mcu_get_per_sta_info(struct mt76_dev *dev, u16 tag,
 
 			wlan_idx = le16_to_cpu(rssi->wlan_idx);
 			wcid = __mt76_wcid_ptr(dev, wlan_idx);
-			if (!wcid)
+			if (!wcid || !wcid->sta)
 				continue;
 
 			msta_link = container_of(wcid, struct mt7996_sta_link, wcid);
@@ -7456,7 +7456,7 @@ int mt7996_mcu_get_per_sta_info(struct mt76_dev *dev, u16 tag,
 		for (i = 0; i < sta_num; ++i) {
 			wlan_idx = le16_to_cpu(res->snr[i].wlan_idx);
 			wcid = __mt76_wcid_ptr(dev, wlan_idx);
-			if (!wcid)
+			if (!wcid || !wcid->sta)
 				continue;
 
 			msta_link = container_of(wcid, struct mt7996_sta_link, wcid);
@@ -7468,7 +7468,7 @@ int mt7996_mcu_get_per_sta_info(struct mt76_dev *dev, u16 tag,
 		for (i = 0; i < sta_num; ++i) {
 			wlan_idx = le16_to_cpu(res->msdu_cnt[i].wlan_idx);
 			wcid = __mt76_wcid_ptr(dev, wlan_idx);
-			if (!wcid)
+			if (!wcid || !wcid->sta)
 				continue;
 
 			/* Retry counter is increased by 1 when an MSDU is
