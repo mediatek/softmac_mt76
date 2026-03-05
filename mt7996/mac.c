@@ -14,7 +14,6 @@
 #include "vendor.h"
 #include "mt7996_trace.h"
 
-static void mt7996_rx_beacon_hint(struct mt7996_phy *phy, struct mt7996_vif *mvif);
 static int mt7996_mac_btwt_add_member(struct mt7996_twt_flow *flow, u16 idx);
 static int mt7996_mac_btwt_del_member(struct mt7996_twt_flow *flow, u16 idx);
 
@@ -626,20 +625,6 @@ mt7996_mac_fill_rx(struct mt7996_dev *dev, enum mt76_rxq_id q,
 			 */
 			if (ieee80211_has_a4(fc) && is_mesh && status->amsdu)
 				*qos &= ~IEEE80211_QOS_CTL_A_MSDU_PRESENT;
-		} else if (ieee80211_is_beacon(fc)) {
-			struct ieee80211_hw *hw = phy->mt76->hw;
-			struct ieee80211_sta *sta;
-
-			sta = ieee80211_find_sta_by_link_addrs(hw, hdr->addr2, NULL, NULL);
-			if (!sta)
-				sta = ieee80211_find_sta_by_ifaddr(hw, hdr->addr2, NULL);
-
-			if (sta) {
-				msta = (struct mt7996_sta *)sta->drv_priv;
-
-				if (msta && msta->vif)
-					mt7996_rx_beacon_hint(phy, msta->vif);
-			}
 		}
 		skb_set_mac_header(skb, (unsigned char *)hdr - skb->data);
 
@@ -4200,41 +4185,6 @@ int mt7996_mac_del_btwt(struct ieee80211_hw *hw,
 unlock:
 	mutex_unlock(&dev->mt76.mutex);
 	return ret;
-}
-
-
-static void
-mt7996_rx_beacon_hint(struct mt7996_phy *phy, struct mt7996_vif *mvif)
-{
-	struct mt7996_vif_link *mconf;
-	int band_idx = phy->mt76->band_idx;
-	unsigned int link_id = mvif->mt76.band_to_link[band_idx];
-
-	mvif->beacon_received_time[band_idx] = jiffies;
-
-	if (link_id >= IEEE80211_LINK_UNSPECIFIED)
-		return;
-
-	if (mvif->lost_links & BIT(link_id)) {
-		mvif->lost_links &= ~BIT(link_id);
-		mt76_bss_dbg(container_of((void *)mvif, struct ieee80211_vif, drv_priv),
-			     "link %d: resume beacon monitoring", link_id);
-	}
-
-	mconf = (struct mt7996_vif_link *)rcu_dereference(mvif->mt76.link[link_id]);
-	if (!mconf) {
-		mvif->tx_paused_links &= ~BIT(link_id);
-		return;
-	}
-
-	/* resume TX */
-	if (delayed_work_pending(&mconf->sta_chsw_work) &&
-	    mconf->state == MT7996_STA_CHSW_PAUSE_TX &&
-	    mconf->next_state != MT7996_STA_CHSW_RESUME_TX) {
-		mconf->next_state = MT7996_STA_CHSW_RESUME_TX;
-		cancel_delayed_work(&mconf->sta_chsw_work);
-		ieee80211_queue_delayed_work(phy->mt76->hw, &mconf->sta_chsw_work, 0);
-	}
 }
 
 static int
