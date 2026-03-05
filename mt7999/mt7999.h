@@ -974,6 +974,12 @@ struct mt7999_dev {
 	const struct mt7999_dbg_reg_desc *dbg_reg;
 	bool sr_pp_enable:1;
 	bool red_enable:1;
+
+	struct {
+		u8 de_amsdu;
+		u8 subfrm_len_type;
+		u8 subfrm_len_endian;
+	} mesh_hw_amsdu_ctrl;
 #endif
 #ifdef CONFIG_MTK_VENDOR
 	u8 cert_mode;

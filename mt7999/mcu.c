@@ -3582,11 +3582,11 @@ mt7999_mcu_sta_mesh_tlv(struct mt7999_dev *dev, struct sk_buff *skb,
 	/* Set UWTBL first */
 	tlv = mt76_connac_mcu_add_tlv(skb, STA_REC_SET_PEER_MESH, sizeof(*peer_mesh));
 	peer_mesh = (struct sta_rec_peer_mesh *)tlv;
-	config_bitmap |= u32_encode_bits(UWTBL_MESH_RX_HW_DE_AMSDU_ENABLE,
+	config_bitmap |= u32_encode_bits(dev->mesh_hw_amsdu_ctrl.de_amsdu,
 					 UWTBL_MESH_RX_HW_DE_AMSDU) |
-			 u32_encode_bits(UWTBL_MESH_AMSDU_SUBFRM_LEN_INCL_MESH_CTRL,
+			 u32_encode_bits(dev->mesh_hw_amsdu_ctrl.subfrm_len_type,
 					 UWTBL_MESH_AMSDU_SUBFRM_LEN_TYPE) |
-			 u32_encode_bits(UWTBL_MESH_AMSDU_SUBFRM_LEN_LITTLE_ENDIAN,
+			 u32_encode_bits(dev->mesh_hw_amsdu_ctrl.subfrm_len_endian,
 					 UWTBL_MESH_AMSDU_SUBFRM_LEN_ENDIAN);
 	peer_mesh->config_bitmap = cpu_to_le32(config_bitmap);
 	peer_mesh->update_mask = cpu_to_le32(UWTBL_MESH_RX_HW_DE_AMSDU |

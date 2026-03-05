@@ -2025,6 +2025,12 @@ int mt7999_register_device(struct mt7999_dev *dev)
 			goto error;
 	}
 
+	dev->mesh_hw_amsdu_ctrl.de_amsdu = UWTBL_MESH_RX_HW_DE_AMSDU_ENABLE;
+	dev->mesh_hw_amsdu_ctrl.subfrm_len_type =
+				UWTBL_MESH_AMSDU_SUBFRM_LEN_EXCL_MESH_CTRL;
+	dev->mesh_hw_amsdu_ctrl.subfrm_len_endian =
+				UWTBL_MESH_AMSDU_SUBFRM_LEN_BIG_ENDIAN;
+
 	dev->mt76.token_threshold = MT7999_PER_BAND_TOKEN_SIZE;
 
 	dev->recovery.hw_init_done = true;

@@ -2517,6 +2517,78 @@ static const struct file_operations fops_amsdu_para = {
 	.llseek = default_llseek,
 };
 
+static ssize_t
+mt7999_mesh_hw_amsdu_write(struct file *file, const char __user *user_buf,
+			   size_t count, loff_t *ppos)
+{
+	struct mt7999_dev *dev = file->private_data;
+	char buf[32];
+	int de_amsdu, type, endian;
+
+	if (count >= sizeof(buf))
+		return -EINVAL;
+
+	if (copy_from_user(buf, user_buf, count))
+		return -EFAULT;
+
+	if (count && buf[count - 1] == '\n')
+		buf[count - 1] = '\0';
+	else
+		buf[count] = '\0';
+
+	if (sscanf(buf, "%d %d %d", &de_amsdu, &type, &endian) != 3)
+		return -EINVAL;
+
+	dev->mesh_hw_amsdu_ctrl.de_amsdu = de_amsdu == 0 ?
+				UWTBL_MESH_RX_HW_DE_AMSDU_DISABLE :
+				UWTBL_MESH_RX_HW_DE_AMSDU_ENABLE;
+	dev->mesh_hw_amsdu_ctrl.subfrm_len_type = type == 0 ?
+				UWTBL_MESH_AMSDU_SUBFRM_LEN_EXCL_MESH_CTRL :
+				UWTBL_MESH_AMSDU_SUBFRM_LEN_INCL_MESH_CTRL;
+	dev->mesh_hw_amsdu_ctrl.subfrm_len_endian = endian == 0 ?
+				UWTBL_MESH_AMSDU_SUBFRM_LEN_BIG_ENDIAN :
+				UWTBL_MESH_AMSDU_SUBFRM_LEN_LITTLE_ENDIAN;
+
+	return count;
+}
+
+
+static ssize_t
+mt7999_mesh_hw_amsdu_read(struct file *file, char __user *user_buf,
+			  size_t count, loff_t *ppos)
+{
+	struct mt7999_dev *dev = file->private_data;
+	static const size_t size = 1024;
+	int len = 0, ret;
+	char *buf;
+
+	buf = kzalloc(size, GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
+
+	len += scnprintf(buf + len, size - len, "Mesh RX HW De-AMSDU=%u\n",
+			 dev->mesh_hw_amsdu_ctrl.de_amsdu);
+	len += scnprintf(buf + len, size - len,
+			 "Mesh AMSDU Subframe length includes Mesh control=%u\n",
+			 dev->mesh_hw_amsdu_ctrl.subfrm_len_type);
+	len += scnprintf(buf + len, size - len,
+			"Mesh AMSDU Subframe length endianness=%u "
+			"(0: big endian, 1: little endian)\n",
+			 dev->mesh_hw_amsdu_ctrl.subfrm_len_endian);
+
+	ret = simple_read_from_buffer(user_buf, count, ppos, buf, len);
+
+	kfree(buf);
+	return ret;
+}
+
+static const struct file_operations fops_mesh_hw_amsdu_ctrl = {
+	.write = mt7999_mesh_hw_amsdu_write,
+	.read = mt7999_mesh_hw_amsdu_read,
+	.open = simple_open,
+	.llseek = default_llseek,
+};
+
 /* PSE INFO */
 static struct bmac_queue_info_t pse_queue_empty_info[] = {
 	{"CPU Q0", ENUM_UMAC_CPU_PORT_1, ENUM_UMAC_CTX_Q_0},
@@ -4938,6 +5010,9 @@ void mt7999_mtk_init_dev_debugfs(struct mt7999_dev *dev, struct dentry *dir)
 	/* amsdu */
 	debugfs_create_file("amsdu_algo", 0600, dir, dev, &fops_amsdu_algo);
 	debugfs_create_file("amsdu_para", 0600, dir, dev, &fops_amsdu_para);
+
+	/* mesh HW amsdu control */
+	debugfs_create_file("mesh_hw_amsdu_ctrl", 0600, dir, dev, &fops_mesh_hw_amsdu_ctrl);
 
 	/* Drop counters */
 	debugfs_create_file("tx_drop_stats", 0400, dir, dev, &mt7999_tx_drop_fops);
