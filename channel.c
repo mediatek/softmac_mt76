@@ -47,6 +47,8 @@ int mt76_add_chanctx(struct ieee80211_hw *hw,
 		mt76_abort_scan(dev);
 
 	mutex_lock(&dev->mutex);
+
+	ctx->state = MT76_CHANCTX_STATE_ADD;
 	if (!phy->chanctx)
 		ret = mt76_phy_update_channel(phy, conf);
 	else
@@ -75,8 +77,10 @@ void mt76_remove_chanctx(struct ieee80211_hw *hw,
 		mt76_abort_scan(dev);
 
 	mutex_lock(&dev->mutex);
-	if (phy->chanctx == ctx)
+	if (phy->chanctx == ctx) {
 		phy->chanctx = NULL;
+		phy->radar_enabled = false;
+	}
 	mutex_unlock(&dev->mutex);
 }
 EXPORT_SYMBOL_GPL(mt76_remove_chanctx);
@@ -101,6 +105,7 @@ void mt76_change_chanctx(struct ieee80211_hw *hw,
 	cancel_delayed_work_sync(&phy->mac_work);
 
 	mutex_lock(&dev->mutex);
+	ctx->state = MT76_CHANCTX_STATE_CHANGE;
 	mt76_phy_update_channel(phy, conf);
 	mutex_unlock(&dev->mutex);
 }
@@ -246,7 +251,13 @@ int mt76_switch_vif_chanctx(struct ieee80211_hw *hw,
 		    old_phy->chanctx == old_ctx && phy != old_phy)
 			old_phy->chanctx = NULL;
 
+		if (v->vif->type == NL80211_IFTYPE_AP)
+			new_ctx->has_ap = true;
+		else if (v->vif->type == NL80211_IFTYPE_STATION)
+			new_ctx->has_sta = true;
+
 		if (need_update[phy->band_idx]) {
+			new_ctx->state = MT76_CHANCTX_STATE_SWITCH;
 			ret = mt76_phy_update_channel(phy, v->new_ctx);
 			if (ret)
 				goto out;
