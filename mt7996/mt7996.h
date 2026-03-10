@@ -146,6 +146,8 @@
 #define MT7996_RRO_MSDU_PG_CR_CNT	8
 #define MT7996_RRO_MSDU_PG_SIZE_PER_CR	0x10000
 
+#define to_rssi(field, rcpi)	((FIELD_GET(field, rcpi) - 220) / 2)
+
 struct mt7996_vif;
 struct mt7996_sta;
 struct mt7996_dfs_pulse;
@@ -247,10 +249,19 @@ struct mt7996_sta_link {
 	struct mt7996_sta *sta;
 
 	struct list_head rc_list;
-	u32 airtime_ac[8];
 
+	s8 chain_signal[IEEE80211_MAX_CHAINS];
+	int signal;
+	struct ewma_avg_signal chain_signal_avg[IEEE80211_MAX_CHAINS];
+	struct ewma_avg_signal signal_avg;
+
+	s8 chain_ack_signal[IEEE80211_MAX_CHAINS];
 	int ack_signal;
 	struct ewma_avg_signal avg_ack_signal;
+
+	s8 chain_signal_wf4;
+
+	u8 chain_ack_snr[IEEE80211_MAX_CHAINS];
 
 	unsigned long changed;
 
@@ -801,7 +812,9 @@ int mt7996_mcu_fw_dbg_ctrl(struct mt7996_dev *dev, u32 module, u8 level);
 int mt7996_mcu_trigger_assert(struct mt7996_dev *dev);
 void mt7996_mcu_rx_event(struct mt7996_dev *dev, struct sk_buff *skb);
 void mt7996_mcu_exit(struct mt7996_dev *dev);
-int mt7996_mcu_get_all_sta_info(struct mt7996_phy *phy, u16 tag);
+int mt7996_mcu_get_per_sta_info(struct mt76_dev *dev, u16 tag,
+	                        u16 sta_num, u16 *sta_list);
+int mt7996_mcu_get_all_sta_info(struct mt76_dev *dev, u16 tag);
 int mt7996_mcu_wed_rro_reset_sessions(struct mt7996_dev *dev, u16 id);
 int mt7996_mcu_set_sniffer_mode(struct mt7996_phy *phy, bool enabled);
 int mt7996_mcu_set_dup_wtbl(struct mt7996_dev *dev);

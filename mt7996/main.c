@@ -1040,7 +1040,7 @@ mt7996_mac_sta_init_link(struct mt7996_dev *dev,
 	struct mt7996_sta *msta = (struct mt7996_sta *)sta->drv_priv;
 	struct mt7996_phy *phy = link->phy;
 	struct mt7996_sta_link *msta_link;
-	int idx;
+	int idx, i;
 
 	idx = mt76_wcid_alloc(dev->mt76.wcid_mask, MT7996_WTBL_STA);
 	if (idx < 0)
@@ -1073,6 +1073,9 @@ mt7996_mac_sta_init_link(struct mt7996_dev *dev,
 
 	ewma_avg_signal_init(&msta_link->avg_ack_signal);
 	ewma_signal_init(&msta_link->wcid.rssi);
+	for (i = 0; i < IEEE80211_MAX_CHAINS; ++i)
+		ewma_avg_signal_init(msta_link->chain_signal_avg + i);
+	ewma_avg_signal_init(&msta_link->signal_avg);
 
 	rcu_assign_pointer(msta->link[link_id], msta_link);
 
@@ -1807,6 +1810,82 @@ static void mt7996_sta_statistics(struct ieee80211_hw *hw,
 	}
 }
 
+static void mt7996_link_sta_statistics(struct ieee80211_hw *hw,
+				       struct ieee80211_vif *vif,
+				       struct ieee80211_link_sta *link_sta,
+				       struct link_station_info *link_sinfo)
+{
+	struct mt7996_dev *dev = mt7996_hw_dev(hw);
+	struct mt7996_sta *msta = (struct mt7996_sta *)link_sta->sta->drv_priv;
+	struct mt7996_sta_link *msta_link;
+	struct mt7996_vif_link *mconf;
+	struct mt76_sta_stats *stats;
+	u8 link_id = link_sta->link_id;
+	int i;
+
+	mutex_lock(&dev->mt76.mutex);
+	msta_link = mt76_dereference(msta->link[link_id], &dev->mt76);
+	if (!msta_link)
+		goto out;
+	stats = &msta_link->wcid.stats;
+
+	mconf = mt7996_vif_link(dev, vif, link_id);
+	if (!mconf)
+		goto out;
+
+	link_sinfo->signal = (s8)msta_link->signal;
+	link_sinfo->filled |= BIT_ULL(NL80211_STA_INFO_SIGNAL);
+
+	link_sinfo->chains = mt7996_rx_chainmask(mconf->phy);
+	memcpy(link_sinfo->chain_signal, msta_link->chain_signal, IEEE80211_MAX_CHAINS);
+	link_sinfo->filled |= BIT_ULL(NL80211_STA_INFO_CHAIN_SIGNAL);
+
+	link_sinfo->signal_avg = -(s8)ewma_avg_signal_read(&msta_link->signal_avg);
+	link_sinfo->filled |= BIT_ULL(NL80211_STA_INFO_SIGNAL_AVG);
+
+	for (i = 0; i < IEEE80211_MAX_CHAINS; ++i)
+		link_sinfo->chain_signal_avg[i] = -(s8)ewma_avg_signal_read(msta_link->chain_signal_avg + i);
+	link_sinfo->filled |= BIT_ULL(NL80211_STA_INFO_CHAIN_SIGNAL_AVG);
+
+	link_sinfo->ack_signal = (s8)msta_link->ack_signal;
+	link_sinfo->filled |= BIT_ULL(NL80211_STA_INFO_ACK_SIGNAL);
+
+	link_sinfo->avg_ack_signal = -(s8)ewma_avg_signal_read(&msta_link->avg_ack_signal);
+	link_sinfo->filled |= BIT_ULL(NL80211_STA_INFO_ACK_SIGNAL_AVG);
+
+	link_sinfo->txrate = msta_link->wcid.rate;
+	link_sinfo->filled |= BIT_ULL(NL80211_STA_INFO_TX_BITRATE);
+
+	link_sinfo->rxrate = msta_link->wcid.rx_rate;
+	link_sinfo->filled |= BIT_ULL(NL80211_STA_INFO_RX_BITRATE);
+
+	link_sinfo->tx_bytes = stats->tx_bytes;
+	link_sinfo->filled |= BIT_ULL(NL80211_STA_INFO_TX_BYTES64);
+
+	link_sinfo->rx_bytes = stats->rx_bytes;
+	link_sinfo->filled |= BIT_ULL(NL80211_STA_INFO_RX_BYTES64);
+
+	link_sinfo->tx_failed = stats->tx_failed;
+	link_sinfo->filled |= BIT_ULL(NL80211_STA_INFO_TX_FAILED);
+
+	link_sinfo->tx_retries = stats->tx_retries;
+	link_sinfo->filled |= BIT_ULL(NL80211_STA_INFO_TX_RETRIES);
+
+	link_sinfo->rx_mpdu_count = stats->rx_mpdus;
+	link_sinfo->filled |= BIT_ULL(NL80211_STA_INFO_RX_MPDUS);
+
+	link_sinfo->fcs_err_count = stats->rx_fcs_err;
+	link_sinfo->filled |= BIT_ULL(NL80211_STA_INFO_FCS_ERROR_COUNT);
+
+	link_sinfo->tx_duration = stats->tx_airtime;
+	link_sinfo->filled |= BIT_ULL(NL80211_STA_INFO_TX_DURATION);
+
+	link_sinfo->rx_duration = stats->rx_airtime;
+	link_sinfo->filled |= BIT_ULL(NL80211_STA_INFO_RX_DURATION);
+out:
+	mutex_unlock(&dev->mt76.mutex);
+}
+
 static void mt7996_link_rate_ctrl_update(void *data,
 					 struct mt7996_sta_link *msta_link)
 {
@@ -2453,6 +2532,7 @@ const struct ieee80211_ops mt7996_ops = {
 	.set_bitrate_mask = mt7996_set_bitrate_mask,
 	.set_coverage_class = mt7996_set_coverage_class,
 	.sta_statistics = mt7996_sta_statistics,
+	.link_sta_statistics = mt7996_link_sta_statistics,
 	.sta_set_4addr = mt7996_sta_set_4addr,
 	.sta_set_decap_offload = mt7996_sta_set_decap_offload,
 	.add_twt_setup = mt7996_mac_add_twt_setup,
