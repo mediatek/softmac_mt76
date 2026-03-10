@@ -5969,7 +5969,8 @@ int mt7996_mcu_set_chan_info(struct mt7996_phy *phy, u16 tag, bool sta)
 		.channel_band = ch_band[chandef->chan->band],
 	};
 
-	if (phy->mt76->offchannel || !phy->mt76->chanctx)
+	if (phy->mt76->offchannel ||
+	    !test_bit(MT76_STATE_RUNNING, &phy->mt76->state))
 		req.switch_reason = CH_SWITCH_SCAN_BYPASS_DPD;
 	else if (!cfg80211_reg_can_beacon(phy->mt76->hw->wiphy, chandef, iftype))
 		req.switch_reason = CH_SWITCH_DFS;

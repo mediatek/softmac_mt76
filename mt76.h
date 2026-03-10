@@ -1417,8 +1417,19 @@ struct mt76_ethtool_worker_info {
 	int sta_count;
 };
 
+enum mt76_chanctx_state {
+	MT76_CHANCTX_STATE_UNSPEC,
+	MT76_CHANCTX_STATE_ADD,
+	MT76_CHANCTX_STATE_CHANGE,
+	MT76_CHANCTX_STATE_SWITCH,
+};
+
 struct mt76_chanctx {
 	struct mt76_phy *phy;
+
+	enum mt76_chanctx_state state;
+	bool has_ap:1;
+	bool has_sta:1;
 };
 
 #define CCK_RATE(_idx, _rate) {					\

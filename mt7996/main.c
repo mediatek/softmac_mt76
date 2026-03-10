@@ -759,7 +759,7 @@ int mt7996_set_channel(struct mt76_phy *mphy)
 {
 	struct mt7996_phy *phy = mphy->priv;
 	struct mt7996_dev *dev = phy->dev;
-	int ret;
+	int ret = 0;
 
 	if (dev->cal.data) {
 		ret = mt7996_mcu_apply_tx_dpd(phy);
@@ -771,6 +771,38 @@ int mt7996_set_channel(struct mt76_phy *mphy)
 		if (mt76_testmode_enabled(mphy) || mt76_testmode_bf_enabled(mphy))
 			mt7996_tm_update_channel(phy);
 		return 0;
+	}
+
+	if (mphy->chanctx && mphy->chanctx->state == MT76_CHANCTX_STATE_ADD) {
+		ret = mt7996_mcu_edcca_enable(phy, true);
+		if (ret)
+			goto out;
+
+		ret = mt7996_mcu_set_pp_en(phy, PP_USR_MODE,
+					   mphy->chandef.punctured);
+		if (ret)
+			goto out;
+	} else if (mphy->chanctx && mphy->chanctx->state == MT76_CHANCTX_STATE_SWITCH) {
+		u8 delta;
+		int current_txpower;
+
+		if (mphy->chanctx->has_ap && phy->pp_mode == PP_USR_MODE) {
+			ret = mt7996_mcu_set_pp_en(phy, PP_USR_MODE,
+						   mphy->main_chandef.punctured);
+		} else if (mphy->chanctx->has_sta) {
+			u8 omac_idx = get_omac_idx(NL80211_IFTYPE_STATION,
+				      phy->omac_mask);
+			ret = mt7996_mcu_set_pp_sta_dscb(phy, &mphy->main_chandef,
+							 omac_idx);
+		}
+		if (ret)
+			goto out;
+
+		delta = mt76_tx_power_path_delta(hweight16(mphy->chainmask));
+		current_txpower = DIV_ROUND_UP(mphy->txpower_cur + delta, 2);
+		ret = mt7996_mcu_set_txpower_sku(phy, current_txpower);
+		if (ret)
+			goto out;
 	}
 
 	ret = mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_SWITCH, false);
