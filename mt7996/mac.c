@@ -59,6 +59,33 @@ static struct mt76_wcid *mt7996_rx_get_wcid(struct mt7996_dev *dev,
 	return &msta_link->wcid;
 }
 
+static struct mt76_wcid *mt7996_get_active_link_wcid(struct mt7996_dev *dev,
+						     struct mt76_wcid *old_wcid)
+{
+	struct mt7996_sta_link *old_msta_link = container_of(old_wcid, struct mt7996_sta_link, wcid);
+	struct mt7996_sta_link *msta_link = NULL;
+	struct mt7996_sta *msta = old_msta_link->sta;
+	int i;
+
+	if (old_wcid->link_id != msta->deflink_id)
+		msta_link = rcu_dereference(msta->link[msta->deflink_id]);
+	else if (old_wcid->link_id != msta->seclink_id)
+		msta_link = rcu_dereference(msta->link[msta->seclink_id]);
+
+	if (msta_link)
+		return &msta_link->wcid;
+
+	for (i = MT_BAND0; i <= MT_BAND2; i++) {
+		struct mt76_wcid *tmp =
+			mt7996_rx_get_wcid(dev, old_wcid->idx, i);
+
+		if (tmp && !tmp->sta_disabled)
+			return tmp;
+	}
+
+	return old_wcid;
+}
+
 bool mt7996_mac_wtbl_update(struct mt7996_dev *dev, int idx, u32 mask)
 {
 	mt76_rmw(dev, MT_WTBL_UPDATE, MT_WTBL_UPDATE_WLAN_IDX,
@@ -363,6 +390,10 @@ mt7996_mac_fill_rx(struct mt7996_dev *dev, enum mt76_rxq_id q,
 					 wcid);
 		msta = msta_link->sta;
 		mt76_wcid_add_poll(&dev->mt76, &msta_link->wcid);
+
+		if (status->wcid->sta_disabled)
+			status->wcid = mt7996_get_active_link_wcid(dev,
+								   status->wcid);
 	}
 
 	status->freq = mphy->chandef.chan->center_freq;
@@ -830,8 +861,12 @@ void mt7996_mac_write_txwi(struct mt7996_dev *dev, __le32 *txwi,
 				       IEEE80211_TX_CTRL_MLO_LINK);
 
 	mvif = vif ? (struct mt7996_vif *)vif->drv_priv : NULL;
-	if (mvif)
-		mlink = rcu_dereference(mvif->mt76.link[link_id]);
+	if (mvif) {
+		if (wcid->offchannel)
+			mlink = rcu_dereference(mvif->mt76.offchannel_link);
+		if (!mlink)
+			mlink = rcu_dereference(mvif->mt76.link[link_id]);
+	}
 
 	if (mlink) {
 		omac_idx = mlink->omac_idx;
@@ -1001,6 +1036,7 @@ int mt7996_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
 
 	t = (struct mt76_txwi_cache *)(txwi + mdev->drv->txwi_size);
 	t->skb = tx_info->skb;
+	t->wcid = wcid->idx;
 
 	id = mt76_token_consume(mdev, &t, wcid->phy_idx);
 	if (id == -EBUSY && sta && sta->mlo) {

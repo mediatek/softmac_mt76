@@ -463,6 +463,7 @@ struct mt7996_sta {
 	struct mt7996_sta_link __rcu *link[IEEE80211_MLD_MAX_NUM_LINKS];
 	u8 deflink_id;
 	u8 seclink_id;
+	u16 valid_links;
 
 	struct mt7996_vif *vif;
 
@@ -1108,9 +1109,9 @@ mt7996_vif_link(struct mt7996_dev *dev, struct ieee80211_vif *vif, int link_id)
 }
 
 static inline struct mt7996_phy *
-mt7996_vif_link_phy(struct mt7996_vif_link *link)
+mt7996_vif_link_phy(struct mt7996_dev *dev, struct mt7996_vif_link *link)
 {
-	struct mt76_phy *mphy = mt76_vif_link_phy(&link->mt76);
+	struct mt76_phy *mphy = mt76_vif_link_phy(&dev->mt76, &link->mt76);
 
 	if (!mphy)
 		return NULL;
@@ -1204,7 +1205,7 @@ int mt7996_mcu_add_bss_info(struct mt7996_phy *phy, struct ieee80211_vif *vif,
 			    struct mt7996_sta_link *msta_link, int enable);
 int mt7996_mcu_update_bss_rfch(struct mt7996_phy *phy,
 			       struct mt7996_vif_link *link);
-int mt7996_mcu_add_sta(struct mt7996_dev *dev,
+int mt7996_mcu_add_sta(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 		       struct ieee80211_bss_conf *link_conf,
 		       struct ieee80211_link_sta *link_sta,
 		       struct mt7996_vif_link *link,
@@ -1315,6 +1316,11 @@ int mt7996_mcu_set_vow_drr_ctrl(struct mt7996_phy *phy,
 int mt7996_mcu_set_vow_feature_ctrl(struct mt7996_phy *phy);
 void mt7996_mcu_wmm_pbc_work(struct work_struct *work);
 int mt7996_mcu_ba_trigger_enable(struct mt7996_dev *dev, u8 enable);
+int mt7996_mcu_mld_reconf_stop_link(struct mt7996_dev *dev,
+				    struct ieee80211_vif *vif, u16 removed_links);
+int mt7996_mcu_mld_link_oper(struct mt7996_phy *phy,
+			     struct ieee80211_bss_conf *conf,
+			     struct mt7996_vif_link *mconf, bool add);
 
 static inline bool mt7996_has_hwrro(struct mt7996_dev *dev)
 {

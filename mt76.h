@@ -2407,10 +2407,13 @@ void mt76_vif_cleanup(struct mt76_dev *dev, struct ieee80211_vif *vif);
 u16 mt76_select_links(struct ieee80211_vif *vif, int max_active_links);
 
 static inline struct mt76_vif_link *
-mt76_vif_link(struct mt76_dev *dev, struct ieee80211_vif *vif, int link_id)
+mt76_vif_link(struct mt76_dev *dev, struct ieee80211_vif *vif, unsigned int link_id)
 {
 	struct mt76_vif_link *mlink = (struct mt76_vif_link *)vif->drv_priv;
 	struct mt76_vif_data *mvif = mlink->mvif;
+
+	if (link_id >= IEEE80211_LINK_UNSPECIFIED)
+		return NULL;
 
 	if (!link_id)
 		return mlink;
@@ -2432,16 +2435,12 @@ mt76_vif_conf_link(struct mt76_dev *dev, struct ieee80211_vif *vif,
 }
 
 static inline struct mt76_phy *
-mt76_vif_link_phy(struct mt76_vif_link *mlink)
+mt76_vif_link_phy(struct mt76_dev *dev, struct mt76_vif_link *mlink)
 {
-	struct mt76_chanctx *ctx;
-
-	if (!mlink->ctx)
+	if (!mlink->wcid)
 		return NULL;
 
-	ctx = (struct mt76_chanctx *)mlink->ctx->drv_priv;
-
-	return ctx->phy;
+	return dev->phys[mlink->band_idx];
 }
 
 #endif

@@ -69,6 +69,7 @@ void mt76_remove_chanctx(struct ieee80211_hw *hw,
 		return;
 
 	mt76_phy_dbg(phy, "remove %u", conf->def.chan->hw_value);
+	cancel_delayed_work_sync(&phy->mac_work);
 
 	if (dev->scan.phy == phy)
 		mt76_abort_scan(dev);
@@ -140,7 +141,6 @@ int mt76_assign_vif_chanctx(struct ieee80211_hw *hw,
 	}
 
 	mlink->ctx = conf;
-	mvif->band_to_link[phy->band_idx] = link_id;
 	ret = dev->drv->vif_link_add(phy, vif, link_conf, mlink);
 	if (ret) {
 		if (mlink_alloc)
@@ -166,7 +166,6 @@ void mt76_unassign_vif_chanctx(struct ieee80211_hw *hw,
 {
 	struct mt76_chanctx *ctx = (struct mt76_chanctx *)conf->drv_priv;
 	struct mt76_vif_link *mlink = (struct mt76_vif_link *)vif->drv_priv;
-	struct mt76_vif_data *mvif = mlink->mvif;
 	int link_id = link_conf->link_id;
 	struct mt76_phy *phy = ctx->phy;
 	struct mt76_dev *dev = phy->dev;
@@ -187,15 +186,9 @@ void mt76_unassign_vif_chanctx(struct ieee80211_hw *hw,
 	if (!mlink)
 		goto out;
 
-	if (mlink != (struct mt76_vif_link *)vif->drv_priv)
-		rcu_assign_pointer(mvif->link[link_id], NULL);
-
 	dev->drv->vif_link_remove(phy, vif, link_conf, mlink);
 	mlink->ctx = NULL;
 	mlink->mvif->band_to_link[phy->band_idx] = IEEE80211_LINK_UNSPECIFIED;
-
-	if (mlink != (struct mt76_vif_link *)vif->drv_priv)
-		kfree_rcu(mlink, rcu_head);
 
 out:
 	mutex_unlock(&dev->mutex);
@@ -301,7 +294,7 @@ struct mt76_vif_link *mt76_get_vif_phy_link(struct mt76_phy *phy,
 		if (!mlink)
 			continue;
 
-		if (mt76_vif_link_phy(mlink) == phy)
+		if (mt76_vif_link_phy(dev, mlink) == phy)
 			return mlink;
 	}
 
@@ -313,6 +306,9 @@ struct mt76_vif_link *mt76_get_vif_phy_link(struct mt76_phy *phy,
 		return ERR_PTR(-ENOMEM);
 
 	mlink->offchannel = true;
+
+	vif->bss_conf.link_id = ffs(GENMASK(14, 0) & ~mvif->valid_links) - 1;
+
 	ret = dev->drv->vif_link_add(phy, vif, &vif->bss_conf, mlink);
 	if (ret) {
 		kfree(mlink);
@@ -337,6 +333,8 @@ void mt76_put_vif_phy_link(struct mt76_phy *phy, struct ieee80211_vif *vif,
 	rcu_assign_pointer(mvif->offchannel_link, NULL);
 	dev->drv->vif_link_remove(phy, vif, &vif->bss_conf, mlink);
 	kfree(mlink);
+
+	vif->bss_conf.link_id = 0;
 }
 
 void mt76_roc_complete(struct mt76_phy *phy)
