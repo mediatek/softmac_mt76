@@ -210,6 +210,39 @@ struct mt7996_mcu_mib {
 	__le64 data;
 } __packed;
 
+struct per_sta_rssi {
+	__le16 wlan_idx;
+	u8 rcpi_wf4;
+	u8 __rsv;
+	u8 rcpi[4];
+} __packed;
+
+struct per_sta_snr {
+	__le16 wlan_idx;
+	u8 __rsv[2];
+	u8 val[4];
+} __packed;
+
+struct per_sta_msdu_cnt {
+	__le16 wlan_idx;
+	u8 __rsv[2];
+	__le32 tx_drops;
+	__le32 tx_retries;
+} __packed;
+
+struct mt7996_mcu_per_sta_info_event {
+	u8 __rsv[4];
+
+	__le16 tag;
+	__le16 len;
+
+	union {
+		struct per_sta_rssi rssi[0];
+		struct per_sta_snr snr[0];
+		struct per_sta_msdu_cnt msdu_cnt[0];
+	};
+} __packed;
+
 struct all_sta_trx_rate {
 	__le16 wlan_idx;
 	u8 __rsv1[2];
@@ -231,6 +264,8 @@ struct all_sta_trx_rate {
 	u8 __rsv2;
 } __packed;
 
+#define UNI_EVENT_SIZE_ADM_STAT_V1	1452
+
 struct mt7996_mcu_all_sta_info_event {
 	u8 rsv[4];
 	__le16 tag;
@@ -247,7 +282,15 @@ struct mt7996_mcu_all_sta_info_event {
 			u8 rsv[2];
 			__le32 tx_bytes[IEEE80211_NUM_ACS];
 			__le32 rx_bytes[IEEE80211_NUM_ACS];
-		} __packed, adm_stat);
+		} __packed, adm_stat_v1);
+
+		DECLARE_FLEX_ARRAY(struct {
+			__le16 wlan_idx;
+			u8 rsv[2];
+			__le32 tx_bytes[IEEE80211_NUM_ACS];
+			__le32 rx_bytes[IEEE80211_NUM_ACS];
+			__le32 tx_bytes_failed[IEEE80211_NUM_ACS];
+		} __packed, adm_stat_v2);
 
 		DECLARE_FLEX_ARRAY(struct {
 			__le16 wlan_idx;
@@ -255,6 +298,34 @@ struct mt7996_mcu_all_sta_info_event {
 			__le32 tx_msdu_cnt;
 			__le32 rx_msdu_cnt;
 		} __packed, msdu_cnt);
+
+		DECLARE_FLEX_ARRAY(struct {
+			__le16 wlan_idx;
+			u8 rsv[2];
+			__le32 tx[IEEE80211_NUM_ACS];
+			__le32 rx[IEEE80211_NUM_ACS];
+		} __packed, airtime);
+
+		DECLARE_FLEX_ARRAY(struct {
+			__le16 wlan_idx;
+			u8 rsv[2];
+			__le32 total;
+			__le32 success;
+		} __packed, rx_mpdu_cnt);
+
+		DECLARE_FLEX_ARRAY(struct {
+			__le16 wlan_idx;
+			u8 rsv[2];
+			__le32 total;
+			__le32 fails;
+		} __packed, tx_mpdu_stat);
+
+		DECLARE_FLEX_ARRAY(struct {
+			__le16 wlan_idx;
+			u8 rsv1[2];
+			__le16 val;
+			u8 rsv2[2];
+		} __packed, tx_mpdu_retry_cnt);
 	} __packed;
 } __packed;
 
