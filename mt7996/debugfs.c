@@ -1907,6 +1907,8 @@ mt7996_link_sta_info_show(struct seq_file *file, void *data)
 	struct mt7996_sta_link *msta_link;
 	struct mt76_sta_stats *stats;
 	struct mt76_wcid *wcid;
+	struct mt7996_phy *phy;
+	unsigned long rx_mask;
 	char buf[100];
 	u8 ac;
 	enum mt76_wcid_flags flag;
@@ -1922,21 +1924,46 @@ mt7996_link_sta_info_show(struct seq_file *file, void *data)
 	}
 	wcid = &msta_link->wcid;
 	stats = &wcid->stats;
+	phy = __mt7996_phy(dev, wcid->phy_idx);
+	rx_mask = mt7996_rx_chainmask(phy);
 
 	seq_printf(file, "WCID: %hu\n", wcid->idx);
 	seq_printf(file, "Link ID: %hhu\n", link_sta->link_id);
 	seq_printf(file, "Link Address: %pM\n", link_sta->addr);
 	seq_printf(file, "Status:\n");
-	seq_printf(file, "\tRSSI: %d [%hhd, %hhd, %hhd, %hhd] dBm\n",
-		   msta_link->signal, msta_link->chain_signal[0], msta_link->chain_signal[1],
-		   msta_link->chain_signal[2], msta_link->chain_signal[3]);
-	seq_printf(file, "\tACK RSSI: %d [%hhd, %hhd, %hhd, %hhd] dBm\n",
-		   msta_link->ack_signal, msta_link->chain_ack_signal[0],
-		   msta_link->chain_ack_signal[1], msta_link->chain_ack_signal[2],
-		   msta_link->chain_ack_signal[3]);
-	seq_printf(file, "\tACK SNR: [%hhd, %hhd, %hhd, %hhd] dBm\n",
-		   msta_link->chain_ack_snr[0], msta_link->chain_ack_snr[1],
-		   msta_link->chain_ack_snr[2], msta_link->chain_ack_snr[3]);
+
+#define dump_chain_signal(type, buf, buflen, sta_link, rx_mask, signed)		\
+	do {									\
+		char *pos = (buf);						\
+		int chain;							\
+		size_t left = (buflen);						\
+		int n;								\
+		n = snprintf(pos, left, "[");					\
+		pos += n; left -= n;						\
+		for_each_set_bit(chain, &(rx_mask), IEEE80211_MAX_CHAINS) {	\
+			if (chain) {						\
+				n = snprintf(pos, left, ", ");			\
+				pos += n; left -= n;				\
+			}							\
+			n = snprintf(pos, left, signed ? "%hhd" : "%hhu",	\
+				(sta_link)->chain_##type[(chain)]);		\
+			pos += n; left -= n;					\
+		}								\
+		snprintf(pos, left, "] dBm\n");					\
+	} while (0)
+
+	dump_chain_signal(signal, buf, sizeof(buf), msta_link, rx_mask, true);
+	seq_printf(file, "\tRSSI: %d %s", msta_link->signal, buf);
+
+	dump_chain_signal(ack_signal, buf, sizeof(buf), msta_link, rx_mask, true);
+	seq_printf(file, "\tACK RSSI: %d %s", msta_link->ack_signal, buf);
+
+	/* SNR of 5th rx is not supported */
+	rx_mask &= ~BIT(4);
+	dump_chain_signal(ack_snr, buf, sizeof(buf), msta_link, rx_mask, false);
+	seq_printf(file, "\tACK SNR: %s", buf);
+#undef dump_chain_signal
+
 	seq_printf(file, "Rate:\n");
 
 	mt7996_parse_rate(&wcid->rate, buf, sizeof(buf));

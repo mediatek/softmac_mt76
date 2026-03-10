@@ -803,9 +803,11 @@ struct mt76_rx_status {
 	u32 ampdu_ref;
 	u32 timestamp;
 	u8 iv[6];
+
 	u16 freq:13, phy_idx:2, aggr:1;
 	u8 qos_ctl;
 	u16 seqno;
+
 	u32 flag;
 	u8 enc_flags;
 	u8 encoding:3, bw:4;
@@ -820,6 +822,7 @@ struct mt76_rx_status {
 			u8 gi:2;
 		} eht;
 	};
+
 	u16 amsdu:1, first_amsdu:1, last_amsdu:1;
 	u16 nss:3, band:3;
 	u16 rate_idx:7;
