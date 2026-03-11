@@ -99,6 +99,9 @@ __mt76_tx_status_skb_done(struct mt76_dev *dev, struct sk_buff *skb, u8 flags,
 	if ((flags & done) != done)
 		return;
 
+	memset(&info->status, 0, sizeof(info->status) -
+				 sizeof(*info->status.status_driver_data));
+
 	/* Tx status can be unreliable. if it fails, mark the frame as ACKed */
 	if (flags & MT_TX_CB_TXS_FAILED &&
 	    (dev->drv->drv_flags & MT_DRV_IGNORE_TXS_FAILED)) {
@@ -270,6 +273,10 @@ void __mt76_tx_complete_skb(struct mt76_dev *dev, u16 wcid_idx, struct sk_buff *
 
 	if (cb->pktid < MT_PACKET_ID_FIRST) {
 		struct ieee80211_rate_status rs = {};
+		struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
+
+		memset(&info->status, 0, sizeof(info->status) -
+					 sizeof(*info->status.status_driver_data));
 
 		hw = mt76_tx_status_get_hw(dev, skb);
 		status.sta = wcid_to_sta(wcid);
