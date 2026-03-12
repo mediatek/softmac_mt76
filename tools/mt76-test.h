@@ -108,7 +108,7 @@ extern struct unl unl;
 extern const struct tm_field msg_field;
 extern unsigned char *eeprom_data;
 
-extern const char * const cfg_type[];
+extern const char * const testmode_cfg_type[];
 
 void usage(void);
 int mt76_eeprom(int phy, int argc, char **argv);

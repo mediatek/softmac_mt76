@@ -60,24 +60,24 @@ static int mt7996_tm_txbf_apply_tx(struct mt7996_phy *phy, u16 wlan_idx,
 static u32 mt7996_tm_bw_mapping(enum nl80211_chan_width width, enum bw_mapping_method method)
 {
 	static const u32 width_to_bw[][NUM_BW_MAP] = {
-		[NL80211_CHAN_WIDTH_40] = {FW_CDBW_40MHZ, TM_CBW_40MHZ, BF_CDBW_40MHZ, 40,
+		[NL80211_CHAN_WIDTH_40] = {FW_CDBW_40MHZ, TM_CBW_40MHZ, BF_CDBW_40MHZ,
 					   FIRST_CONTROL_CHAN_BITMAP_BW40, ICAP_BW_40MHZ},
-		[NL80211_CHAN_WIDTH_80] = {FW_CDBW_80MHZ, TM_CBW_80MHZ, BF_CDBW_80MHZ, 80,
+		[NL80211_CHAN_WIDTH_80] = {FW_CDBW_80MHZ, TM_CBW_80MHZ, BF_CDBW_80MHZ,
 					   FIRST_CONTROL_CHAN_BITMAP_BW80, ICAP_BW_80MHZ},
 		[NL80211_CHAN_WIDTH_80P80] = {FW_CDBW_8080MHZ, TM_CBW_8080MHZ, BF_CDBW_8080MHZ,
-					      80, 0x0, ICAP_BW_8080MHZ},
-		[NL80211_CHAN_WIDTH_160] = {FW_CDBW_160MHZ, TM_CBW_160MHZ, BF_CDBW_160MHZ, 160,
+					      0x0, ICAP_BW_8080MHZ},
+		[NL80211_CHAN_WIDTH_160] = {FW_CDBW_160MHZ, TM_CBW_160MHZ, BF_CDBW_160MHZ,
 					    FIRST_CONTROL_CHAN_BITMAP_BW160, ICAP_BW_160MHZ},
-		[NL80211_CHAN_WIDTH_5] = {FW_CDBW_5MHZ, TM_CBW_5MHZ, BF_CDBW_5MHZ, 5,
+		[NL80211_CHAN_WIDTH_5] = {FW_CDBW_5MHZ, TM_CBW_5MHZ, BF_CDBW_5MHZ,
 					  0x0, ICAP_BW_20MHZ},
-		[NL80211_CHAN_WIDTH_10] = {FW_CDBW_10MHZ, TM_CBW_10MHZ, BF_CDBW_10MHZ, 10,
+		[NL80211_CHAN_WIDTH_10] = {FW_CDBW_10MHZ, TM_CBW_10MHZ, BF_CDBW_10MHZ,
 					   0x0, ICAP_BW_20MHZ},
-		[NL80211_CHAN_WIDTH_20] = {FW_CDBW_20MHZ, TM_CBW_20MHZ, BF_CDBW_20MHZ, 20,
+		[NL80211_CHAN_WIDTH_20] = {FW_CDBW_20MHZ, TM_CBW_20MHZ, BF_CDBW_20MHZ,
 					   0x0, ICAP_BW_20MHZ},
 		[NL80211_CHAN_WIDTH_20_NOHT] = {FW_CDBW_20MHZ, TM_CBW_20MHZ, BF_CDBW_20MHZ,
-						20, 0x0, ICAP_BW_20MHZ},
+						0x0, ICAP_BW_20MHZ},
 		[NL80211_CHAN_WIDTH_320] = {FW_CDBW_320MHZ, TM_CBW_320MHZ, BF_CDBW_320MHZ,
-					    320, 0x0, ICAP_BW_320MHZ},
+					    0x0, ICAP_BW_320MHZ},
 	};
 
 	if (width >= ARRAY_SIZE(width_to_bw))
@@ -217,7 +217,8 @@ mt7996_tm_set_antenna(struct mt7996_phy *phy, u32 func_idx)
 	struct mt76_testmode_data *td = &phy->mt76->test;
 	u32 antenna_mask;
 
-	if (!mt76_testmode_param_present(td, MT76_TM_ATTR_TX_ANTENNA))
+	if (!mt76_testmode_param_present(td, MT76_TM_ATTR_TX_ANTENNA) &&
+	    !mt76_testmode_param_present(td, MT76_TM_ATTR_TX_SPE_IDX))
 		return;
 
 	if (func_idx == SET_ID(TX_PATH))
@@ -229,6 +230,22 @@ mt7996_tm_set_antenna(struct mt7996_phy *phy, u32 func_idx)
 		return;
 
 	mt7996_tm_set(dev, func_idx, antenna_mask);
+}
+
+static void
+mt7996_tm_set_tx_length(struct mt7996_phy *phy)
+{
+	struct mt76_testmode_data *td = &phy->mt76->test;
+	struct mt7996_dev *dev = phy->dev;
+	u32 len = 0, time = 0;
+
+	if (td->tx_len_mode == MT76_TM_TX_LEN_MODE_TIME)
+		time = td->tx_time;
+	else
+		len = td->tx_mpdu_len;
+
+	mt7996_tm_set(dev, SET_ID(TX_LEN), len);
+	mt7996_tm_set(dev, SET_ID(TX_TIME), time);
 }
 
 static void
@@ -330,12 +347,12 @@ mt7996_tm_update_channel(struct mt7996_phy *phy)
 		mt7996_tm_set(dev, CHAN_FREQ_BW_80P80_TAG, chandef->center_freq2 * 1000);
 	}
 
-	width_mhz = mt7996_tm_bw_mapping(width, BW_MAP_NL_TO_MHZ);
+	width_mhz = nl80211_chan_width_to_mhz(width);
 
 	/* data (per-packet) bw */
 	dbw = width;
 	if (mt76_testmode_param_present(td, MT76_TM_ATTR_TX_PKT_BW)) {
-		int pkt_bw_mhz = mt7996_tm_bw_mapping(td->tx_pkt_bw, BW_MAP_NL_TO_MHZ);
+		int pkt_bw_mhz = nl80211_chan_width_to_mhz(td->tx_pkt_bw);
 
 		if (pkt_bw_mhz > width_mhz) {
 			mt76_tm_dbg(&dev->mt76, "per-packet bw cannot exceed system bw, use %d MHz instead",
@@ -418,16 +435,8 @@ mt7996_tm_set_tx_frames(struct mt7996_phy *phy, bool en)
 	if (mt76_testmode_param_present(td, MT76_TM_ATTR_TX_POWER))
 		mt7996_tm_set(dev, SET_ID(POWER), td->tx_power[0]);
 
-	if (mt76_testmode_param_present(td, MT76_TM_ATTR_TX_TIME)) {
-		mt7996_tm_set(dev, SET_ID(TX_LEN), 0);
-		mt7996_tm_set(dev, SET_ID(TX_TIME), td->tx_time);
-	} else {
-		mt7996_tm_set(dev, SET_ID(TX_LEN), td->tx_mpdu_len);
-		mt7996_tm_set(dev, SET_ID(TX_TIME), 0);
-	}
-
+	mt7996_tm_set_tx_length(phy);
 	mt7996_tm_set_antenna(phy, SET_ID(TX_PATH));
-	mt7996_tm_set_antenna(phy, SET_ID(RX_PATH));
 	mt7996_tm_set(dev, SET_ID(STBC), td->tx_rate_stbc);
 	mt7996_tm_set(dev, SET_ID(ENCODE_MODE), td->tx_rate_ldpc);
 	mt7996_tm_set(dev, SET_ID(IBF_ENABLE), td->ibf);
@@ -440,6 +449,9 @@ mt7996_tm_set_tx_frames(struct mt7996_phy *phy, bool en)
 
 	mt7996_tm_set(dev, SET_ID(MAX_PKT_EXT), td->max_pkt_ext);
 	mt7996_tm_set(dev, SET_ID(HW_TX_MODE), 0);
+
+	if (!td->bf_en && mt76_testmode_param_present(td, MT76_TM_ATTR_TX_ANTENNA))
+		mt7996_tm_update_channel(phy);
 
 	/* trigger firmware to start TX */
 	mt7996_tm_set(dev, SET_ID(COMMAND), RF_CMD(START_TX));
@@ -553,7 +565,7 @@ mt7996_tm_set_tx_tone(struct mt7996_phy *phy, bool en)
 	mt7996_tm_set(dev, SET_ID(ANT_MASK), antenna);
 	mt7996_tm_set(dev, SET_ID(BAND), mt7996_tm_band_mapping(chandef->chan->band));
 	mt7996_tm_set(dev, SET_ID(TX_TONE_TYPE), td->tone.type);
-	mt7996_tm_set(dev, SET_ID(TX_TONE_BW), td->tone.bw);
+	mt7996_tm_set(dev, SET_ID(TX_TONE_FREQ_OFFSET), td->tone.freq_offset);
 
 	dc_offset |= u32_encode_bits(td->tone.dc_offset[DATA_TYPE_Q], GENMASK(31, 16)) |
 		     u32_encode_bits(td->tone.dc_offset[DATA_TYPE_I], GENMASK(15, 0));
@@ -1102,7 +1114,7 @@ mt7996_tm_get_center_chan(struct mt7996_phy *phy, struct cfg80211_chan_def *chan
 	if (!bitmap)
 		return control_chan;
 
-	width_mhz = mt7996_tm_bw_mapping(chandef->width, BW_MAP_NL_TO_MHZ);
+	width_mhz = nl80211_chan_width_to_mhz(chandef->width);
 	offset = width_mhz / 10 - 2;
 
 	for (i = 0; i < size; i++) {
@@ -2188,12 +2200,12 @@ mt7996_tm_update_params(struct mt7996_phy *phy, u32 changed)
 		mt7996_mcu_set_txpower_sku(phy, phy->mt76->monitor_vif->bss_conf.txpower);
 	}
 	if (changed & BIT(TM_CHANGED_TX_LENGTH)) {
-		mt7996_tm_set(dev, SET_ID(TX_LEN), td->tx_mpdu_len);
-		mt7996_tm_set(dev, SET_ID(TX_TIME), 0);
+		td->tx_len_mode = MT76_TM_TX_LEN_MODE_LENGTH;
+		mt7996_tm_set_tx_length(phy);
 	}
 	if (changed & BIT(TM_CHANGED_TX_TIME)) {
-		mt7996_tm_set(dev, SET_ID(TX_LEN), 0);
-		mt7996_tm_set(dev, SET_ID(TX_TIME), td->tx_time);
+		td->tx_len_mode = MT76_TM_TX_LEN_MODE_TIME;
+		mt7996_tm_set_tx_length(phy);
 	}
 	if (changed & BIT(TM_CHANGED_CFG))
 		mt7996_tm_set_cfg(phy);
@@ -2712,8 +2724,8 @@ mt7996_tm_dump_seg_list(struct mt7996_phy *phy)
 		mt76_tm_dbg(&dev->mt76, "\trx antenna mask: %d", list->rx_antenna_mask);
 		mt76_tm_dbg(&dev->mt76, "\tcenter ch1: %d", list->center_ch1);
 		mt76_tm_dbg(&dev->mt76, "\tcenter ch2: %d", list->center_ch2);
-		cbw = mt7996_tm_bw_mapping(list->system_bw, BW_MAP_NL_TO_MHZ);
-		dbw = mt7996_tm_bw_mapping(list->data_bw, BW_MAP_NL_TO_MHZ);
+		cbw = nl80211_chan_width_to_mhz(list->system_bw);
+		dbw = nl80211_chan_width_to_mhz(list->data_bw);
 		mt76_tm_dbg(&dev->mt76, "\tsystem bw: %d MH", cbw);
 		mt76_tm_dbg(&dev->mt76, "\tdata bw: %d MHz", dbw);
 		mt76_tm_dbg(&dev->mt76, "\tprimary selection: %d", list->pri_sel);

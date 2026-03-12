@@ -1017,9 +1017,11 @@ struct mt76_testmode_data {
 
 	struct {
 		u8 type;
-		u8 bw;
+		u8 freq_offset;
 		u16 dc_offset[2];
 	} tone;
+
+	u8 tx_len_mode;
 };
 
 enum {

@@ -232,7 +232,7 @@ static int mt76_dump(struct phy_config *config, int argc, char **argv)
 			return 1;
 
 		for (i = 0; i < NUM_MT76_TM_CFG_TYPE; i++)
-			if (!strcmp(argv[1], cfg_type[i]))
+			if (!strcmp(argv[1], testmode_cfg_type[i]))
 				break;
 
 		if (i == NUM_MT76_TM_CFG_TYPE) {

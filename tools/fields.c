@@ -105,15 +105,15 @@ static const char * const testmode_tone_type[] = {
 	[MT76_TM_TX_TONE_TYPE_DUAL] = "dual",
 };
 
-static const char * const testmode_tone_bw[] = {
-	[MT76_TM_TX_TONE_BW_DC] = "dc",
-	[MT76_TM_TX_TONE_BW_5] = "5",
-	[MT76_TM_TX_TONE_BW_10] = "10",
-	[MT76_TM_TX_TONE_BW_20] = "20",
-	[MT76_TM_TX_TONE_BW_40] = "40",
+static const char * const testmode_tone_freq_offs[] = {
+	[MT76_TM_TX_TONE_FREQ_OFFS_DC] = "dc",
+	[MT76_TM_TX_TONE_FREQ_OFFS_5] = "5",
+	[MT76_TM_TX_TONE_FREQ_OFFS_10] = "10",
+	[MT76_TM_TX_TONE_FREQ_OFFS_20] = "20",
+	[MT76_TM_TX_TONE_FREQ_OFFS_40] = "40",
 };
 
-const char * const cfg_type[] = {
+const char * const testmode_cfg_type[] = {
 	[MT76_TM_CFG_TYPE_TSSI] = "tssi",
 	[MT76_TM_CFG_TYPE_DPD] = "dpd",
 	[MT76_TM_CFG_TYPE_RATE_POWER_OFFSET] = "rate_power_offset",
@@ -121,6 +121,11 @@ const char * const cfg_type[] = {
 	[MT76_TM_CFG_TYPE_BAND_POWER] = "band_power",
 	[MT76_TM_CFG_TYPE_TMAC] = "tmac",
 	[MT76_TM_CFG_TYPE_RMAC] = "rmac",
+};
+
+static const char * const testmode_tx_len_mode[] = {
+	[MT76_TM_TX_LEN_MODE_LENGTH] = "tx_length",
+	[MT76_TM_TX_LEN_MODE_TIME] = "tx_time",
 };
 
 static void print_enum(const struct tm_field *field, struct nlattr *attr)
@@ -561,7 +566,7 @@ static struct nla_policy icap_stats_policy[NUM_MT76_TM_ICAP_STATS_ATTRS] = {
 
 #define FIELD_NAME(_field) MT76_TM_CFG_ATTR_##_field
 static const struct tm_field cfg_fields[NUM_MT76_TM_CFG_ATTRS] = {
-	FIELD_ENUM(TYPE, "type", cfg_type),
+	FIELD_ENUM(TYPE, "type", testmode_cfg_type),
 	FIELD(u8, ENABLE, "enable"),
 };
 static struct nla_policy cfg_policy[NUM_MT76_TM_CFG_ATTRS] = {
@@ -642,10 +647,11 @@ static const struct tm_field testdata_fields[NUM_MT76_TM_ATTRS] = {
 	FIELD(u8, ICAP_PATH, "icap_path"),
 	FIELD_NESTED_RO(ICAP_STATS, icap_stats, ""),
 	FIELD_ENUM(TX_TONE_TYPE, "tone_type", testmode_tone_type),
-	FIELD_ENUM(TX_TONE_BW, "tone_bw", testmode_tone_bw),
+	FIELD_ENUM(TX_TONE_FREQ_OFFSET, "tone_freq_offs", testmode_tone_freq_offs),
 	FIELD_ARRAY(u16, TX_TONE_DC_OFFSET, "tone_dc_offs"),
 	FIELD(u16, MU_AID, "mu_aid"),
 	FIELD(u16, TX_PP_BITMAP, "tx_pp_bitmap", .hex_dump = true),
+	FIELD_ENUM(TX_LEN_MODE, "tx_len_mode", testmode_tx_len_mode),
 };
 #undef FIELD_NAME
 
@@ -717,9 +723,10 @@ static struct nla_policy testdata_policy[NUM_MT76_TM_ATTRS] = {
 	[MT76_TM_ATTR_ICAP_PATH] = { .type = NLA_U8 },
 	[MT76_TM_ATTR_ICAP_STATS] = { .type = NLA_NESTED },
 	[MT76_TM_ATTR_TX_TONE_TYPE] = { .type = NLA_U8 },
-	[MT76_TM_ATTR_TX_TONE_BW] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_TX_TONE_FREQ_OFFSET] = { .type = NLA_U8 },
 	[MT76_TM_ATTR_TX_TONE_DC_OFFSET] = { .type = NLA_NESTED },
 	[MT76_TM_ATTR_TX_PP_BITMAP] = { .type = NLA_U16 },
+	[MT76_TM_ATTR_TX_LEN_MODE] = { .type = NLA_U8 },
 };
 
 const struct tm_field msg_field = {
