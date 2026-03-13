@@ -19,6 +19,7 @@ static void mt76_scan_complete(struct mt76_dev *dev, bool abort)
 		if (dev->scan.mlink == (struct mt76_vif_link *)vif->drv_priv)
 			dev->drv->vif_link_remove(phy, vif, NULL, dev->scan.mlink);
 
+	vif->bss_conf.link_id = 0;
 	ieee80211_scan_completed(phy->hw, &info);
 	memset(&dev->scan, 0, sizeof(dev->scan));
 	clear_bit(MT76_SCANNING, &phy->state);
@@ -206,7 +207,7 @@ int mt76_hw_scan(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 				 * Here we use the default link to perform scan.
 				 */
 				mlink = (struct mt76_vif_link *)vif->drv_priv;
-				memcpy(&vif->bss_conf, link_conf, sizeof(struct ieee80211_bss_conf));
+				vif->bss_conf.link_id = ffs(GENMASK(14, 0) & ~mvif->valid_links) - 1;
 				ret = dev->drv->vif_link_add(phy, vif, &vif->bss_conf, NULL);
 				if (ret)
 					goto out;
