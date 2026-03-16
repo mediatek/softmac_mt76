@@ -215,6 +215,8 @@ mt76_tx_status_skb_get(struct mt76_dev *dev, struct mt76_wcid *wcid, int pktid,
 						    MT_TX_CB_TXS_DONE, list);
 	}
 
+	skb = NULL;
+
 out:
 	if (idr_is_empty(&wcid->pktid))
 		list_del_init(&wcid->list);
