@@ -525,6 +525,9 @@ mt7996_mac_fill_rx(struct mt7996_dev *dev, enum mt76_rxq_id q,
 		qos_ctl = FIELD_GET(MT_RXD10_QOS_CTL, v2);
 		seq_ctrl = FIELD_GET(MT_RXD10_SEQ_CTRL, v2);
 
+		if (ieee80211_is_beacon(fc))
+			mt76_scan_rx_beacon(&dev->mt76, mphy->chandef.chan);
+
 		rxd += 4;
 		if ((u8 *)rxd - skb->data >= skb->len)
 			return -EINVAL;
@@ -671,8 +674,6 @@ mt7996_mac_fill_rx(struct mt7996_dev *dev, enum mt76_rxq_id q,
 
 		hdr = mt76_skb_get_hdr(skb);
 		fc = hdr->frame_control;
-		if (ieee80211_is_beacon(fc))
-			mt76_rx_beacon(mphy, skb);
 		if (ieee80211_is_data_qos(fc)) {
 			u8 *qos = ieee80211_get_qos_ctl(hdr);
 
@@ -3001,7 +3002,6 @@ void mt7996_mac_work(struct work_struct *work)
 
 	mutex_unlock(&mphy->dev->mutex);
 
-	mt76_beacon_mon_check(mphy);
 	mt76_tx_status_check(mphy->dev, false);
 
 	ieee80211_queue_delayed_work(mphy->hw, &mphy->mac_work,
