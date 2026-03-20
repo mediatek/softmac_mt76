@@ -5288,7 +5288,7 @@ int mt7996_mcu_add_beacon(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 		return -ENOMEM;
 	}
 
-	mt7996_parse_mbssid_elems(link->phy, skb, offs.mbssid_off, mbssid_data);
+	mt7996_parse_mbssid_elems(mphy->priv, skb, offs.mbssid_off, mbssid_data);
 	mt7996_mcu_beacon_cont(dev, link_conf, link, rskb, skb, bcn, &offs);
 	if (link_conf->bssid_indicator)
 		mt7996_mcu_beacon_mbss(rskb, skb, bcn, &offs, mbssid_data);
