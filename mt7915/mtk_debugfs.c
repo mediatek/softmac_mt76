@@ -2568,6 +2568,39 @@ static int mt7915_token_txd_read(struct seq_file *s, void *data)
 	return 0;
 }
 
+static int mt7915_muru_onoff_get(void *data, u64 *val)
+{
+	struct mt7915_phy *phy = data;
+
+	*val = phy->muru_onoff;
+
+	printk("cert mumimo dl:%d, normal mumimo ul:%d, mumimo dl:%d, ofdma ul:%d, ofdma dl:%d\n",
+		    !!(phy->muru_onoff & MUMIMO_DL_CERT),
+		    !!(phy->muru_onoff & MUMIMO_UL),
+		    !!(phy->muru_onoff & MUMIMO_DL),
+		    !!(phy->muru_onoff & OFDMA_UL),
+		    !!(phy->muru_onoff & OFDMA_DL));
+
+	return 0;
+}
+
+static int mt7915_muru_onoff_set(void *data, u64 val)
+{
+	struct mt7915_phy *phy = data;
+
+	if (val > 31) {
+		printk("Wrong value! The value is between 0 ~ 31.\n");
+		goto exit;
+	}
+
+	phy->muru_onoff = val;
+exit:
+	return 0;
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(fops_muru_onoff, mt7915_muru_onoff_get,
+                       mt7915_muru_onoff_set, "%llx\n");
+
 static int mt7915_amsduinfo_read(struct seq_file *s, void *data)
 {
 	struct mt7915_dev *dev = dev_get_drvdata(s->private);
@@ -3963,6 +3996,7 @@ int mt7915_mtk_init_debugfs(struct mt7915_phy *phy, struct dentry *dir)
 
 	mt7915_mcu_fw_log_2_host(dev, MCU_FW_LOG_WM, 0);
 
+	debugfs_create_file("muru_onoff", 0600, dir, phy, &fops_muru_onoff);
 	debugfs_create_file("fw_debug_module", 0600, dir, dev,
 			    &fops_fw_debug_module);
 	debugfs_create_file("fw_debug_level", 0600, dir, dev,
@@ -4028,6 +4062,7 @@ int mt7915_mtk_init_debugfs(struct mt7915_phy *phy, struct dentry *dir)
 			    &fops_txpower_level);
 
 	debugfs_create_u8("sku_disable", 0600, dir, &dev->dbg.sku_disable);
+	debugfs_create_u8("mgmt_pwr_enhance", 0600, dir, &phy->mt76->mgmt_pwr_enhance);
 
 	debugfs_create_file("sw_aci", 0600, dir, dev,
 			    &fops_sw_aci);

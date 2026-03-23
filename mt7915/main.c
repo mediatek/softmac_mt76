@@ -505,6 +505,10 @@ static int mt7915_config(struct ieee80211_hw *hw, int radio_idx,
 			mutex_unlock(&dev->mt76.mutex);
 		}
 #endif
+		ret = mt7915_mcu_set_edcca(phy, EDCCA_CTRL_SET_EN, NULL, 0);
+		if (ret)
+			return ret;
+
 		ret = mt76_update_channel(phy->mt76);
 		if (ret)
 			return ret;
@@ -864,7 +868,6 @@ int mt7915_mac_sta_add(struct mt76_dev *mdev, struct ieee80211_vif *vif,
 	msta->wcid.sta_disabled = 1;
 	msta->wcid.idx = idx;
 	msta->wcid.phy_idx = ext_phy;
-	msta->jiffies = jiffies;
 	msta->wcid.tx_info |= MT_WCID_TX_INFO_SET;
 
 	if (sta->tdls)
@@ -942,6 +945,8 @@ int mt7915_mac_sta_event(struct mt76_dev *mdev, struct ieee80211_vif *vif,
 {
 	struct mt7915_dev *dev = container_of(mdev, struct mt7915_dev, mt76);
 	struct mt7915_sta *msta = (struct mt7915_sta *)sta->drv_priv;
+	struct mt7915_vif *mvif = (struct mt7915_vif *)vif->drv_priv;
+	struct mt7915_phy *phy = msta->vif->phy;
 	int i, ret;
 	u32 addr;
 
@@ -954,10 +959,17 @@ int mt7915_mac_sta_event(struct mt76_dev *mdev, struct ieee80211_vif *vif,
 		addr = mt7915_mac_wtbl_lmac_addr(dev, msta->wcid.idx, 30);
 		mt76_rmw_field(dev, addr, GENMASK(7, 0), 0xa0);
 
+#ifdef CONFIG_MTK_VENDOR
+		mt7915_vendor_amnt_sta_remove(mvif->phy, sta);
+#endif
 		ret = mt7915_mcu_add_rate_ctrl(dev, vif, sta, &msta->wcid, false);
 		if (ret)
 			return ret;
 
+#ifdef CONFIG_MTK_VENDOR
+	if (phy->muru_onoff & MUMIMO_DL_CERT)
+		mt7915_mcu_set_mimo(phy, 0);
+#endif
 		msta->wcid.tx_info |= MT_WCID_TX_INFO_SET;
 		msta->wcid.sta = 1;
 		msta->wcid.sta_disabled = 0;
@@ -991,6 +1003,19 @@ void mt7915_mac_sta_remove(struct mt76_dev *mdev, struct ieee80211_vif *vif,
 	struct mt7915_dev *dev = container_of(mdev, struct mt7915_dev, mt76);
 	struct mt7915_sta *msta = (struct mt7915_sta *)sta->drv_priv;
 	struct mt7915_phy *phy = msta->vif->phy;
+#ifdef CONFIG_MTK_VENDOR
+	struct csi_mac_filter *ent;
+
+	mutex_lock(&phy->csi.mac_filter_lock);
+	ent = mt7915_csi_mac_filter_find(phy, sta->addr);
+	if (ent && !mt7915_mcu_set_csi(phy, 2, 8, 1, 0, sta->addr, 0)) {
+		list_del(&ent->node);
+		kfree(ent);
+		phy->csi.mac_filter_cnt--;
+	}
+
+	mutex_unlock(&phy->csi.mac_filter_lock);
+#endif
 
 	mt7915_mac_wtbl_update(dev, msta->wcid.idx,
 			       MT_WTBL_UPDATE_ADM_COUNT_CLEAR);

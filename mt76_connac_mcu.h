@@ -1089,6 +1089,7 @@ enum {
 	MCU_EXT_EVENT_WF_RF_PIN_CTRL = 0x9a,
 	MCU_EXT_EVENT_MURU_CTRL = 0x9f,
 	MCU_EXT_EVENT_SR = 0xa8,
+	MCU_EXT_EVENT_CSI_REPORT = 0xc2,
 };
 
 /* unified event table */
@@ -1336,9 +1337,15 @@ enum {
 	MCU_EXT_CMD_GROUP_PRE_CAL_INFO = 0xab,
 	MCU_EXT_CMD_DPD_PRE_CAL_INFO = 0xac,
 	MCU_EXT_CMD_PHY_STAT_INFO = 0xad,
+	/* for vendor csi and air monitor */
+	MCU_EXT_CMD_SMESH_CTRL = 0xae,
 	MCU_EXT_CMD_SET_QOS_MAP = 0xb4,
+	MCU_EXT_CMD_SET_CFG = 0xb7,
+	MCU_EXT_CMD_EDCCA = 0xba,
 	MCU_EXT_CMD_WF_RF_PIN_CTRL = 0xbd,
 	MCU_EXT_CMD_SWLNA_ACI_CTRL = 0xc0,
+	MCU_EXT_CMD_CSI_CTRL = 0xc2,
+	MCU_EXT_CMD_LPI_CTRL = 0xc8,
 };
 
 enum {

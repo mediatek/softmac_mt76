@@ -1205,6 +1205,10 @@ enum offs_rev {
 #define MT_WF_IRPI_NSS(phy, nss)	MT_WF_IRPI(0x6000 + ((phy) << 20) + ((nss) << 16))
 #define MT_WF_IRPI_NSS_MT7916(phy, nss)	MT_WF_IRPI(0x1000 + ((phy) << 20) + ((nss) << 16))
 
+#define MT_WF_IRPI_TPC_CTRL_STAT(_phy)		MT_WF_IRPI(0xc794 + ((_phy) << 16))
+#define MT_WF_IRPI_TPC_CTRL_STAT_MT7916(_phy)	MT_WF_IRPI(0xc794 + ((_phy) << 20))
+#define MT_WF_IRPI_TPC_POWER			GENMASK(31, 24)
+
 /* PHY */
 #define MT_WF_PHY_BASE			0x83080000
 #define MT_WF_PHY(ofs)			(MT_WF_PHY_BASE + (ofs))
@@ -1218,10 +1222,6 @@ enum offs_rev {
 #define MT_WF_PHY_RXTD12_MT7916(_phy)	MT_WF_PHY(0x8230 + ((_phy) << 20))
 #define MT_WF_PHY_RXTD12_IRPI_SW_CLR_ONLY	BIT(18)
 #define MT_WF_PHY_RXTD12_IRPI_SW_CLR		BIT(29)
-
-#define MT_WF_PHY_TPC_CTRL_STAT(_phy)		MT_WF_PHY(0xe7a0 + ((_phy) << 16))
-#define MT_WF_PHY_TPC_CTRL_STAT_MT7916(_phy)	MT_WF_PHY(0xe7a0 + ((_phy) << 20))
-#define MT_WF_PHY_TPC_POWER			GENMASK(15, 8)
 
 #define MT_MCU_WM_CIRQ_BASE			0x89010000
 #define MT_MCU_WM_CIRQ(ofs)			(MT_MCU_WM_CIRQ_BASE + (ofs))

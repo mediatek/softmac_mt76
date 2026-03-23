@@ -533,6 +533,7 @@ void mt76_connac2_mac_write_txwi(struct mt76_dev *dev, __le32 *txwi,
 				 struct ieee80211_key_conf *key, int pid,
 				 enum mt76_txq_id qid, u32 changed)
 {
+#define MT_TX_BW_IDX_80	2
 	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
 	u8 phy_idx = (info->hw_queue & MT_TX_HW_QUEUE_PHY) >> 2;
 	struct ieee80211_vif *vif = info->control.vif;
@@ -627,7 +628,8 @@ void mt76_connac2_mac_write_txwi(struct mt76_dev *dev, __le32 *txwi,
 							vif ? &vif->bss_conf : NULL,
 							beacon, multicast);
 		u32 val = MT_TXD6_FIXED_BW;
-
+		if (dev->phys[band_idx]->beacon_dup)
+			val |= MT_TX_BW_IDX_80;
 		/* hardware won't add HTC for mgmt/ctrl frame */
 		txwi[2] |= cpu_to_le32(MT_TXD2_HTC_VLD);
 
@@ -640,7 +642,9 @@ void mt76_connac2_mac_write_txwi(struct mt76_dev *dev, __le32 *txwi,
 
 			if (!spe_idx)
 				spe_idx = 24 + phy_idx;
-			txwi[7] |= cpu_to_le32(FIELD_PREP(MT_TXD7_SPE_IDX, spe_idx));
+			txwi[7] |= cpu_to_le32(FIELD_PREP(MT_TXD7_SPE_IDX,
+							  dev->phys[band_idx]->mgmt_pwr_enhance ?
+							  0 : spe_idx));
 		}
 
 		txwi[7] &= ~cpu_to_le32(MT_TXD7_HW_AMSDU);

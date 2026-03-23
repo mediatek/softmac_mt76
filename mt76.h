@@ -1145,6 +1145,8 @@ struct mt76_phy {
 	u8 macaddr[ETH_ALEN];
 
 	int txpower_cur;
+	u8 beacon_dup;
+	u8 mgmt_pwr_enhance;
 	u8 sku_idx;
 	char sku_filename[SKU_FILENAME_MAX];
 	u8 antenna_mask;
