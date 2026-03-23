@@ -1261,6 +1261,7 @@ int mt7915_register_device(struct mt7915_dev *dev)
 	spin_lock_init(&dev->phy.stats_lock);
 	INIT_WORK(&dev->rc_work, mt7915_mac_sta_rc_work);
 	INIT_DELAYED_WORK(&dev->mphy.mac_work, mt7915_mac_work);
+	INIT_DELAYED_WORK(&dev->scs_work, mt7915_mcu_scs_sta_poll);
 	INIT_LIST_HEAD(&dev->sta_rc_list);
 	INIT_LIST_HEAD(&dev->twt_list);
 

@@ -36,6 +36,45 @@ struct mt7915_mcu_thermal_notify {
 	u8 rsv[8];
 } __packed;
 
+#ifdef MTK_DEBUG
+struct mt7915_mcu_sr_basic_event {
+	struct mt76_connac2_mcu_rxd rxd;
+
+	u8 sub_event_id;
+	u8 arg_num;
+	u8 band_idx;
+	u8 status;
+	u8 rsv[4];
+	__le32 value;
+} __packed;
+
+struct mt7915_mcu_sr_swsd_event {
+	struct mt7915_mcu_sr_basic_event basic;
+	u8 rsv[32];
+	__le32 sr_tx_airtime[2];
+	__le32 obss_airtime[2];
+	__le32 my_tx_airtime[2];
+	__le32 my_rx_airtime[2];
+	__le32 channel_busy_time[2];
+	__le32 total_airtime[2];
+	__le32 total_airtime_ratio[2];
+	__le32 obss_airtime_ratio[2];
+	u8 rule[2];
+	u8 rsv2[102];
+} __packed;
+
+struct mt7915_mcu_sr_hw_ind_event {
+	struct mt7915_mcu_sr_basic_event basic;
+	u8 rsv[2];
+	__le16 non_srg_valid_cnt;
+	u8 rsv2[4];
+	__le16 inter_bss_ppdu_cnt;
+	u8 rsv3[6];
+	__le32 sr_ampdu_mpdu_cnt;
+	__le32 sr_ampdu_mpdu_acked_cnt;
+} __packed;
+#endif
+
 struct mt7915_mcu_csa_notify {
 	struct mt76_connac2_mcu_rxd_hdr rxd;
 
@@ -356,6 +395,10 @@ enum {
 	MCU_WA_PARAM_PDMA_RX = 0x04,
 	MCU_WA_PARAM_CPU_UTIL = 0x0b,
 	MCU_WA_PARAM_RED = 0x0e,
+#ifdef MTK_DEBUG
+	MCU_WA_PARAM_RED_SHOW_STA = 0xf,
+	MCU_WA_PARAM_RED_TARGET_DELAY = 0x10,
+#endif
 	MCU_WA_PARAM_BSS_ACQ_PKT_CNT = 0x12,
 	MCU_WA_PARAM_WED_VERSION = 0x32,
 	MCU_WA_PARAM_RED_SETTING = 0x40,
@@ -528,19 +571,29 @@ enum {
 };
 
 enum {
-	TX_POWER_INFO_PATH = 1,
+	TX_POWER_INFO_BASIC,
+	TX_POWER_INFO_PATH,
 	TX_POWER_INFO_RATE,
 };
 
 enum {
 	SPR_ENABLE = 0x1,
+	SPR_GET_ENABLE = 0x2,
 	SPR_ENABLE_SD = 0x3,
 	SPR_ENABLE_MODE = 0x5,
 	SPR_ENABLE_DPD = 0x23,
 	SPR_ENABLE_TX = 0x25,
 	SPR_SET_SRG_BITMAP = 0x80,
+	SPR_GET_SCENE_COND = 0x84,
 	SPR_SET_PARAM = 0xc2,
+	SPR_GET_STATS = 0xd4,
 	SPR_SET_SIGA = 0xdc,
+};
+
+enum {
+	SPR_EVENT_CFG_SR_ENABLE = 0x1,
+	SPR_EVENT_SR_SW_SD = 0x82,
+	SPR_EVENT_SR_HW_IND = 0xC9,
 };
 
 enum {
@@ -617,6 +670,30 @@ enum {
 					 sizeof(struct bss_info_ext_bss))
 
 enum {
-	MCU_GET_TX_RATE = 4
+	MCU_GET_TX_RATE = 4,
+	MCU_GET_TX_STAT_CNT = 8
+};
+
+struct mt7915_mcu_tx_stat_v1 {
+	u8 wlan_idx_lo;
+	u8 band_idx;
+	u8 wlan_idx_hi;
+	u8 __rsv1[29];
+	__le32 tx_cnt;
+	__le32 tx_failed;
+	u8 __rsv2[26];
+};
+
+struct mt7915_mcu_tx_stat_v2 {
+	u8 __rsv1[4];
+	__le16 wlan_idx;
+	u8 __rsv2[2];
+	__le32 tx_cnt;
+	__le32 tx_failed;
+};
+
+enum {
+	SCS_SEND_DATA = 0,
+	SCS_ENABLE = 3,
 };
 #endif

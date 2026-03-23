@@ -392,6 +392,7 @@ struct mt76_sta_stats {
 	u64 tx_bytes_per_ac[IEEE80211_NUM_ACS];
 	u64 tx_bytes_failed;
 	u64 tx_bytes_failed_per_ac[IEEE80211_NUM_ACS];
+	u64 last_tx_bytes;
 	/* WED TX */
 	u32 tx_packets;		/* unit: MSDU */
 	u32 tx_packets_retried;
@@ -400,6 +401,8 @@ struct mt76_sta_stats {
 	u32 tx_retries;
 	u32 tx_failed;
 	u64 tx_airtime;
+	u32 tx_mpdu_cnt;
+	u32 tx_failed_wm;
 	/* WED RX */
 	u64 rx_bytes;
 	u64 rx_bytes_per_ac[IEEE80211_NUM_ACS];
@@ -409,6 +412,7 @@ struct mt76_sta_stats {
 	u32 rx_errors;
 	u32 rx_drops;
 	u64 rx_airtime;
+	u64 last_rx_bytes;
 };
 
 enum mt76_wcid_flags {

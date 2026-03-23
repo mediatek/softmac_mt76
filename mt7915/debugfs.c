@@ -8,6 +8,9 @@
 #include "mac.h"
 
 #define FW_BIN_LOG_MAGIC	0x44e98caf
+#ifdef MTK_DEBUG
+#define FW_BIN_LOG_MAGIC_V2	0x44d9c99a
+#endif
 
 /** global debugfs **/
 
@@ -541,6 +544,9 @@ mt7915_fw_debug_wm_set(void *data, u64 val)
 	int ret;
 
 	dev->fw.debug_wm = val ? MCU_FW_LOG_TO_HOST : 0;
+#ifdef MTK_DEBUG
+	dev->fw.debug_wm = val;
+#endif
 
 	if (dev->fw.debug_bin)
 		val = 16;
@@ -565,6 +571,9 @@ mt7915_fw_debug_wm_set(void *data, u64 val)
 		if (ret)
 			goto out;
 	}
+#ifdef MTK_DEBUG
+	mt7915_mcu_fw_dbg_ctrl(dev, 68, !!val);
+#endif
 
 	/* WM CPU info record control */
 	mt76_clear(dev, MT_CPU_UTIL_CTRL, BIT(0));
@@ -572,6 +581,12 @@ mt7915_fw_debug_wm_set(void *data, u64 val)
 		(dev->fw.debug_wm ? 0 : BIT(0)));
 	mt76_wr(dev, MT_MCU_WM_CIRQ_IRQ_MASK_CLR_ADDR, BIT(5));
 	mt76_wr(dev, MT_MCU_WM_CIRQ_IRQ_SOFT_ADDR, BIT(5));
+
+#ifdef MTK_DEBUG
+	if (dev->fw.debug_bin & BIT(3))
+		/* use bit 7 to indicate v2 magic number */
+		dev->fw.debug_wm |= BIT(7);
+#endif
 
 out:
 	if (ret)
@@ -585,7 +600,11 @@ mt7915_fw_debug_wm_get(void *data, u64 *val)
 {
 	struct mt7915_dev *dev = data;
 
-	*val = dev->fw.debug_wm;
+#ifdef MTK_DEBUG
+	*val = dev->fw.debug_wm & ~BIT(7);
+#else
+	val = dev->fw.debug_wm;
+#endif
 
 	return 0;
 }
@@ -599,7 +618,11 @@ mt7915_fw_debug_wa_set(void *data, u64 val)
 	struct mt7915_dev *dev = data;
 	int ret;
 
-	dev->fw.debug_wa = val ? MCU_FW_LOG_TO_HOST : 0;
+	/* bit 0: log to uart, bit 1: log to Host */
+	if (val > 3)
+		return -EINVAL;
+
+	dev->fw.debug_wa = val;
 
 	ret = mt7915_mcu_fw_log_2_host(dev, MCU_FW_LOG_WA, dev->fw.debug_wa);
 	if (ret)
@@ -660,15 +683,29 @@ mt7915_fw_debug_bin_set(void *data, u64 val)
 	};
 	struct mt7915_dev *dev = data;
 
-	if (!dev->relay_fwlog)
+	if (!dev->relay_fwlog && val) {
 		dev->relay_fwlog = relay_open("fwlog_data", dev->debugfs_dir,
 					    1500, 512, &relay_cb, NULL);
-	if (!dev->relay_fwlog)
-		return -ENOMEM;
+		if (!dev->relay_fwlog)
+			return -ENOMEM;
+	}
 
 	dev->fw.debug_bin = val;
 
 	relay_reset(dev->relay_fwlog);
+
+#ifdef MTK_DEBUG
+	dev->dbg.dump_mcu_pkt = val & BIT(4) ? true : false;
+	dev->dbg.dump_txd = val & BIT(5) ? true : false;
+	dev->dbg.dump_tx_pkt = val & BIT(6) ? true : false;
+	dev->dbg.dump_rx_pkt = val & BIT(7) ? true : false;
+	dev->dbg.dump_rx_raw = val & BIT(8) ? true : false;
+#endif
+
+	if (dev->relay_fwlog && !val) {
+		relay_close(dev->relay_fwlog);
+		dev->relay_fwlog = NULL;
+	}
 
 	return mt7915_fw_debug_wm_set(dev, dev->fw.debug_wm);
 }
@@ -1261,6 +1298,91 @@ mt7915_txpower_path_show(struct seq_file *file, void *data)
 DEFINE_SHOW_ATTRIBUTE(mt7915_txpower_path);
 
 static int
+mt7915_txpower_info_show(struct seq_file *file, void *data)
+{
+	struct mt7915_phy *phy = file->private;
+	struct {
+		u8 category;
+		u8 rsv1;
+
+		/* basic info */
+		u8 band_idx;
+		u8 band;
+
+		/* board type info */
+		bool is_epa;
+		bool is_elna;
+
+		/* power percentage info */
+		bool percentage_ctrl_enable;
+		s8 power_drop_level;
+
+		/* frond-end loss TX info */
+		s8 front_end_loss_tx[4];
+
+		/* frond-end loss RX info */
+		s8 front_end_loss_rx[4];
+
+		/* thermal info */
+		bool thermal_compensate_enable;
+		s8 thermal_compensate_value;
+		u8 rsv2;
+
+		/* TX power max/min limit info */
+		s8 max_power_bound;
+		s8 min_power_bound;
+
+		/* power limit info */
+		bool sku_enable;
+		bool bf_backoff_enable;
+
+		/* MU TX power info */
+		bool mu_tx_power_manual_enable;
+		s8 mu_tx_power_auto;
+		s8 mu_tx_power_manual;
+		u8 rsv3;
+	} __packed basic_info = {};
+	int ret;
+
+	ret = mt7915_mcu_get_txpower_sku(phy, (s8 *)&basic_info, sizeof(basic_info),
+					 TX_POWER_INFO_BASIC);
+	if (ret || basic_info.category != TX_POWER_INFO_BASIC)
+		goto out;
+
+	seq_puts(file, "======================== BASIC INFO ========================\n");
+	seq_printf(file, "    Band Index: %d, Channel Band: %d\n",
+		   basic_info.band_idx, basic_info.band);
+	seq_printf(file, "    PA Type: %s\n", basic_info.is_epa ? "ePA" : "iPA");
+	seq_printf(file, "    LNA Type: %s\n", basic_info.is_elna ? "eLNA" : "iLNA");
+	seq_puts(file, "------------------------------------------------------------\n");
+	seq_printf(file, "    SKU: %s\n", basic_info.sku_enable ? "enable" : "disable");
+	seq_printf(file, "    Percentage Control: %s\n",
+		   basic_info.percentage_ctrl_enable ? "enable" : "disable");
+	seq_printf(file, "    Power Drop: %d [dBm]\n", basic_info.power_drop_level >> 1);
+	seq_printf(file, "    Backoff: %s\n",
+		   basic_info.bf_backoff_enable ? "enable" : "disable");
+	seq_printf(file, "    TX Front-end Loss:  %d, %d, %d, %d\n",
+		   basic_info.front_end_loss_tx[0], basic_info.front_end_loss_tx[1],
+		   basic_info.front_end_loss_tx[2], basic_info.front_end_loss_tx[3]);
+	seq_printf(file, "    RX Front-end Loss:  %d, %d, %d, %d\n",
+		   basic_info.front_end_loss_rx[0], basic_info.front_end_loss_rx[1],
+		   basic_info.front_end_loss_rx[2], basic_info.front_end_loss_rx[3]);
+	seq_printf(file, "    MU TX Power Mode:  %s\n",
+		   basic_info.mu_tx_power_manual_enable ? "manual" : "auto");
+	seq_printf(file, "    MU TX Power (Auto / Manual): %d / %d [0.5 dBm]\n",
+		   basic_info.mu_tx_power_auto, basic_info.mu_tx_power_manual);
+	seq_printf(file, "    Thermal Compensation:  %s\n",
+		   basic_info.thermal_compensate_enable ? "enable" : "disable");
+	seq_printf(file, "    Theraml Compensation Value: %d\n",
+		   basic_info.thermal_compensate_value);
+
+out:
+	return ret;
+}
+
+DEFINE_SHOW_ATTRIBUTE(mt7915_txpower_info);
+
+static int
 mt7915_twt_stats(struct seq_file *s, void *data)
 {
 	struct mt7915_dev *dev = dev_get_drvdata(s->private);
@@ -1317,6 +1439,46 @@ mt7915_rf_regval_set(void *data, u64 val)
 DEFINE_DEBUGFS_ATTRIBUTE(fops_rf_regval, mt7915_rf_regval_get,
 			 mt7915_rf_regval_set, "0x%08llx\n");
 
+static ssize_t
+mt7915_efuse_get(struct file *file, char __user *user_buf,
+		 size_t count, loff_t *ppos)
+{
+	struct mt7915_dev *dev = file->private_data;
+	struct mt76_dev *mdev = &dev->mt76;
+	u8 *buff = mdev->otp.data;
+	int i;
+	ssize_t ret;
+	u32 block_num;
+
+	mdev->otp.size = mt7915_eeprom_size(dev);
+	if (is_mt7986(&dev->mt76))
+		mdev->otp.size += MT_EE_ADIE1_BASE_7896;
+
+	if (!mdev->otp.data) {
+		mdev->otp.data = devm_kzalloc(mdev->dev, mdev->otp.size, GFP_KERNEL);
+		if (!mdev->otp.data)
+			return -ENOMEM;
+
+		block_num = DIV_ROUND_UP(mdev->otp.size, MT7915_EEPROM_BLOCK_SIZE);
+		for (i = 0; i < block_num; i++) {
+			buff = mdev->otp.data + i * MT7915_EEPROM_BLOCK_SIZE;
+			ret = mt7915_mcu_get_eeprom(dev, i * MT7915_EEPROM_BLOCK_SIZE, buff);
+			if (ret)
+				continue;
+		}
+	}
+
+	ret = simple_read_from_buffer(user_buf, count, ppos, mdev->otp.data, mdev->otp.size);
+
+	return ret;
+}
+
+static const struct file_operations mt7915_efuse_ops = {
+	.read = mt7915_efuse_get,
+	.open = simple_open,
+	.llseek = default_llseek,
+};
+
 int mt7915_init_debugfs(struct mt7915_phy *phy)
 {
 	struct mt7915_dev *dev = phy->dev;
@@ -1348,6 +1510,8 @@ int mt7915_init_debugfs(struct mt7915_phy *phy)
 			    &mt7915_txpower_fops);
 	debugfs_create_file("txpower_path", 0400, dir, phy,
 			    &mt7915_txpower_path_fops);
+	debugfs_create_file("txpower_info", 0400, dir, phy,
+			    &mt7915_txpower_info_fops);
 	debugfs_create_devm_seqfile(dev->mt76.dev, "twt_stats", dir,
 				    mt7915_twt_stats);
 	debugfs_create_file("rf_regval", 0600, dir, dev, &fops_rf_regval);
@@ -1362,9 +1526,15 @@ int mt7915_init_debugfs(struct mt7915_phy *phy)
 		debugfs_create_devm_seqfile(dev->mt76.dev, "rdd_monitor", dir,
 					    mt7915_rdd_monitor);
 	}
+	debugfs_create_file("otp", 0400, dir, dev, &mt7915_efuse_ops);
 
 	if (!ext_phy)
 		dev->debugfs_dir = dir;
+
+#ifdef MTK_DEBUG
+	debugfs_create_u16("wlan_idx", 0600, dir, &dev->wlan_idx);
+	mt7915_mtk_init_debugfs(phy, dir);
+#endif
 
 	return 0;
 }
@@ -1378,6 +1548,12 @@ mt7915_debugfs_write_fwlog(struct mt7915_dev *dev, const void *hdr, int hdrlen,
 	void *dest;
 
 	spin_lock_irqsave(&lock, flags);
+
+	if (!dev->relay_fwlog) {
+		spin_unlock_irqrestore(&lock, flags);
+		return;
+	}
+
 	dest = relay_reserve(dev->relay_fwlog, hdrlen + len + 4);
 	if (dest) {
 		*(u32 *)dest = hdrlen + len;
@@ -1406,17 +1582,50 @@ void mt7915_debugfs_rx_fw_monitor(struct mt7915_dev *dev, const void *data, int 
 		.msg_type = cpu_to_le16(PKT_TYPE_RX_FW_MONITOR),
 	};
 
-	if (!dev->relay_fwlog)
-		return;
+#ifdef MTK_DEBUG
+	struct {
+		__le32 magic;
+		u8 version;
+		u8 _rsv;
+		__le16 serial_id;
+		__le32 timestamp;
+		__le16 msg_type;
+		__le16 len;
+	} hdr2 = {
+		.version = 0x1,
+		.magic = cpu_to_le32(FW_BIN_LOG_MAGIC_V2),
+		.msg_type = PKT_TYPE_RX_FW_MONITOR,
+	};
+#endif
 
+#ifdef MTK_DEBUG
+	/* old magic num */
+	if (!(dev->fw.debug_wm & BIT(7))) {
+		hdr.timestamp = mt76_rr(dev, MT_LPON_FRCR(0));
+		hdr.len = *(__le16 *)data;
+		mt7915_debugfs_write_fwlog(dev, &hdr, sizeof(hdr), data, len);
+	} else {
+		hdr2.serial_id = dev->dbg.fwlog_seq++;
+		hdr2.timestamp = mt76_rr(dev, MT_LPON_FRCR(0));
+		hdr2.len = *(__le16 *)data;
+		mt7915_debugfs_write_fwlog(dev, &hdr2, sizeof(hdr2), data, len);
+	}
+#else
 	hdr.timestamp = cpu_to_le32(mt76_rr(dev, MT_LPON_FRCR(0)));
 	hdr.len = *(__le16 *)data;
 	mt7915_debugfs_write_fwlog(dev, &hdr, sizeof(hdr), data, len);
+#endif
 }
 
 bool mt7915_debugfs_rx_log(struct mt7915_dev *dev, const void *data, int len)
 {
+#ifdef MTK_DEBUG
+	if (get_unaligned_le32(data) != FW_BIN_LOG_MAGIC &&
+	    get_unaligned_le32(data) != FW_BIN_LOG_MAGIC_V2 &&
+	    get_unaligned_le32(data) != PKT_BIN_DEBUG_MAGIC)
+#else
 	if (get_unaligned_le32(data) != FW_BIN_LOG_MAGIC)
+#endif
 		return false;
 
 	if (dev->relay_fwlog)

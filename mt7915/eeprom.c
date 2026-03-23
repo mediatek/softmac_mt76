@@ -37,6 +37,7 @@ static int mt7915_eeprom_load_precal(struct mt7915_dev *dev)
 	if (!ret)
 		return ret;
 
+out:
 	dev_warn(mdev->dev, "missing precal data, size=%d\n", size);
 	devm_kfree(mdev->dev, dev->cal);
 	dev->cal = NULL;

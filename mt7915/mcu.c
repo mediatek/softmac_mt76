@@ -233,6 +233,10 @@ mt7915_mcu_send_message(struct mt76_dev *mdev, struct sk_buff *skb,
 		qid = MT_MCUQ_WM;
 
 	mt7915_mcu_set_timeout(mdev, cmd);
+#ifdef MTK_DEBUG
+	if (dev->dbg.dump_mcu_pkt)
+		mt7915_packet_log_to_host(dev, skb->data, skb->len, PKT_BIN_DEBUG_MCU, 0);
+#endif
 
 	return mt76_tx_queue_skb_raw(dev, mdev->q_mcu[qid], skb, 0);
 }
@@ -489,6 +493,93 @@ mt7915_mcu_rx_bss_acq_pkt_cnt(struct mt7915_dev *dev, struct sk_buff * skb)
 	}
 }
 
+#ifdef MTK_DEBUG
+static void
+mt7915_mcu_rx_sr_swsd(struct mt7915_dev *dev, struct sk_buff *skb)
+{
+#define SR_SCENE_DETECTION_TIMER_PERIOD_MS 500
+	struct mt7915_mcu_sr_swsd_event *event;
+	static const char * const rules[] = {"NO CONNECTED", "NO CONGESTION",
+					     "NO INTERFERENCE", "MESH ILLEGAL APCLI",
+					     "SR ON"};
+	u8 idx;
+
+	event = (struct mt7915_mcu_sr_swsd_event *)skb->data;
+	idx = event->basic.band_idx;
+
+	dev_info(dev->mt76.dev, "Band index = %u\n", event->basic.band_idx);
+	dev_info(dev->mt76.dev, "Hit Rule = %s\n", rules[event->rule[idx]]);
+	dev_info(dev->mt76.dev, "Timer Period = %d(us)\n"
+		 "Congestion Ratio  = %d.%1d%%\n",
+		 SR_SCENE_DETECTION_TIMER_PERIOD_MS * 1000,
+		 le32_to_cpu(event->total_airtime_ratio[idx]) / 10,
+		 le32_to_cpu(event->total_airtime_ratio[idx]) % 10);
+	dev_info(dev->mt76.dev,
+		 "Total Airtime = %d(us)\n"
+		 "ChBusy = %d\n"
+		 "SrTx = %d\n"
+		 "OBSS = %d\n"
+		 "MyTx = %d\n"
+		 "MyRx = %d\n"
+		 "Interference Ratio = %d.%1d%%\n",
+		 le32_to_cpu(event->total_airtime[idx]),
+		 le32_to_cpu(event->channel_busy_time[idx]),
+		 le32_to_cpu(event->sr_tx_airtime[idx]),
+		 le32_to_cpu(event->obss_airtime[idx]),
+		 le32_to_cpu(event->my_tx_airtime[idx]),
+		 le32_to_cpu(event->my_rx_airtime[idx]),
+		 le32_to_cpu(event->obss_airtime_ratio[idx]) / 10,
+		 le32_to_cpu(event->obss_airtime_ratio[idx]) % 10);
+}
+
+static void
+mt7915_mcu_rx_sr_hw_indicator(struct mt7915_dev *dev, struct sk_buff *skb)
+{
+	struct mt7915_mcu_sr_hw_ind_event *event;
+
+	event = (struct mt7915_mcu_sr_hw_ind_event *)skb->data;
+
+	dev_info(dev->mt76.dev, "Inter PPDU Count = %u\n",
+		 le16_to_cpu(event->inter_bss_ppdu_cnt));
+	dev_info(dev->mt76.dev, "SR Valid Count = %u\n",
+		 le16_to_cpu(event->non_srg_valid_cnt));
+	dev_info(dev->mt76.dev, "SR Tx Count = %u\n",
+		 le32_to_cpu(event->sr_ampdu_mpdu_cnt));
+	dev_info(dev->mt76.dev, "SR Tx Acked Count = %u\n",
+		 le32_to_cpu(event->sr_ampdu_mpdu_acked_cnt));
+}
+
+static void
+mt7915_mcu_rx_sr_event(struct mt7915_dev *dev, struct sk_buff *skb)
+{
+	struct mt7915_mcu_sr_basic_event *event;
+	struct mt7915_phy *phy;
+
+	event = (struct mt7915_mcu_sr_basic_event *)skb->data;
+
+	if (event->band_idx > MT_BAND1)
+		dev_info(dev->mt76.dev, "Invalid band idx %d\n", event->band_idx);
+
+	switch (event->sub_event_id) {
+	case SPR_EVENT_CFG_SR_ENABLE:
+		phy = dev->mt76.phys[event->band_idx]->priv;
+		if (phy)
+			phy->sr_enable = le32_to_cpu(event->value);
+		break;
+	case SPR_EVENT_SR_SW_SD:
+		mt7915_mcu_rx_sr_swsd(dev, skb);
+		break;
+	case SPR_EVENT_SR_HW_IND:
+		mt7915_mcu_rx_sr_hw_indicator(dev, skb);
+		break;
+	default:
+		dev_info(dev->mt76.dev, "Unknown SR event tag %d\n",
+			 event->sub_event_id);
+		break;
+	}
+}
+#endif
+
 static void
 mt7915_mcu_rx_ps_sync(struct mt7915_dev *dev, struct sk_buff *skb)
 {
@@ -529,6 +620,11 @@ mt7915_mcu_rx_ext_event(struct mt7915_dev *dev, struct sk_buff *skb)
 	case MCU_EXT_EVENT_PS_SYNC:
 		mt7915_mcu_rx_ps_sync(dev, skb);
 		break;
+#ifdef MTK_DEBUG
+	case MCU_EXT_EVENT_SR:
+		mt7915_mcu_rx_sr_event(dev, skb);
+		break;
+#endif
 	case MCU_EXT_EVENT_BSS_ACQ_PKT_CNT:
 		mt7915_mcu_rx_bss_acq_pkt_cnt(dev, skb);
 		break;
@@ -563,6 +659,7 @@ void mt7915_mcu_rx_event(struct mt7915_dev *dev, struct sk_buff *skb)
 	     rxd->ext_eid == MCU_EXT_EVENT_ASSERT_DUMP ||
 	     rxd->ext_eid == MCU_EXT_EVENT_PS_SYNC ||
 	     rxd->ext_eid == MCU_EXT_EVENT_BCC_NOTIFY ||
+	     rxd->ext_eid == MCU_EXT_EVENT_SR ||
 	     !rxd->seq) &&
 	     !(rxd->eid == MCU_CMD_EXT_CID &&
 	       rxd->ext_eid == MCU_EXT_EVENT_WA_TX_STAT))
@@ -2480,7 +2577,10 @@ static int mt7915_red_set_watermark(struct mt7915_dev *dev)
 				 sizeof(req), false);
 }
 
-static int mt7915_mcu_set_red(struct mt7915_dev *dev, bool enabled)
+#ifndef MTK_DEBUG
+static
+#endif
+int mt7915_mcu_set_red(struct mt7915_dev *dev, bool enabled)
 {
 #define RED_DISABLE		0
 #define RED_BY_WA_ENABLE	2
@@ -3699,6 +3799,8 @@ int mt7915_mcu_get_txpower_sku(struct mt7915_phy *phy, s8 *txpower, int len,
 			return -EINVAL;
 		}
 		memcpy(txpower, skb->data + 4, len);
+	} else if (category == TX_POWER_INFO_BASIC) {
+		memcpy(txpower, skb->data, len);
 	}
 
 	dev_kfree_skb(skb);
@@ -3944,8 +4046,7 @@ int mt7915_mcu_set_txbf(struct mt7915_dev *dev, u8 action)
 				 sizeof(req), true);
 }
 
-static int
-mt7915_mcu_enable_obss_spr(struct mt7915_phy *phy, u8 action, u8 val)
+int mt7915_mcu_enable_obss_spr(struct mt7915_phy *phy, u8 action, u8 val)
 {
 	struct mt7915_dev *dev = phy->dev;
 	struct mt7915_mcu_sr_ctrl req = {
@@ -4109,6 +4210,10 @@ int mt7915_mcu_add_obss_spr(struct mt7915_phy *phy, struct ieee80211_vif *vif,
 	ret = mt7915_mcu_enable_obss_spr(phy, SPR_ENABLE, he_obss_pd->enable);
 	if (ret)
 		return ret;
+
+#ifdef MTK_DEBUG
+	phy->sr_enable = he_obss_pd->enable;
+#endif
 
 	if (sr_scene_detect || !he_obss_pd->enable)
 		return 0;
@@ -4463,6 +4568,114 @@ int mt7915_mcu_get_tx_rate(struct mt7915_phy *phy, u16 wcidx)
 		return mt7915_mcu_get_tx_rate_v2(phy, wcidx);
 }
 
+static int mt7915_mcu_get_tx_stat_v1(struct mt7915_phy *phy,
+				     u16 wlan_idx)
+{
+#define to_wcid(hi, lo) (hi << 8 | lo)
+	struct mt7915_dev *dev = phy->dev;
+	struct mt76_phy *mphy = phy->mt76;
+	struct mt7915_mcu_tx_stat_v1 *res;
+	struct mt76_wcid *wcid;
+	struct sk_buff *skb;
+	struct {
+		__le32 category;
+		u8 wlan_idx_lo;
+		u8 band;
+		u8 wlan_idx_hi;
+		u8 __rsv[5];
+	} __packed req = {
+		.category = cpu_to_le32(MCU_GET_TX_STAT_CNT),
+		.band = mphy->band_idx,
+		.wlan_idx_lo = to_wcid_lo(wlan_idx),
+		.wlan_idx_hi = to_wcid_hi(wlan_idx),
+	};
+	int ret;
+
+	ret = mt76_mcu_send_and_get_msg(&dev->mt76, MCU_EXT_QUERY(GET_TX_STAT),
+					&req, sizeof(req), true, &skb);
+	if (ret)
+		return ret;
+
+	res = (struct mt7915_mcu_tx_stat_v1 *)skb->data;
+
+	if (to_wcid(res->wlan_idx_hi, res->wlan_idx_lo) != wlan_idx) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	rcu_read_lock();
+
+	wcid = rcu_dereference(dev->mt76.wcid[wlan_idx]);
+	if (wcid) {
+		wcid->stats.tx_mpdu_cnt += le32_to_cpu(res->tx_cnt);
+		wcid->stats.tx_failed_wm += le32_to_cpu(res->tx_failed);
+	} else {
+		ret = -EINVAL;
+	}
+
+	rcu_read_unlock();
+out:
+	dev_kfree_skb(skb);
+
+	return ret;
+}
+
+static int mt7915_mcu_get_tx_stat_v2(struct mt7915_phy *phy,
+				     u16 wlan_idx)
+{
+	struct mt7915_dev *dev = phy->dev;
+	struct mt76_phy *mphy = phy->mt76;
+	struct mt7915_mcu_tx_stat_v2 *res;
+	struct mt76_wcid *wcid;
+	struct sk_buff *skb;
+	struct {
+		u8 category;
+		u8 band;
+		__le16 wcid;
+	} __packed req = {
+		.category = MCU_GET_TX_STAT_CNT,
+		.band = mphy->band_idx,
+		.wcid = cpu_to_le16(wlan_idx),
+	};
+	int ret;
+
+	ret = mt76_mcu_send_and_get_msg(&dev->mt76, MCU_EXT_QUERY(GET_TX_STAT),
+					&req, sizeof(req), true, &skb);
+	if (ret)
+		return ret;
+
+	res = (struct mt7915_mcu_tx_stat_v2 *)skb->data;
+
+	if (le16_to_cpu(res->wlan_idx) != wlan_idx) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	rcu_read_lock();
+
+	wcid = rcu_dereference(dev->mt76.wcid[wlan_idx]);
+	if (wcid) {
+		wcid->stats.tx_mpdu_cnt += le32_to_cpu(res->tx_cnt);
+		wcid->stats.tx_failed_wm += le32_to_cpu(res->tx_failed);
+	} else {
+		ret = -EINVAL;
+	}
+
+	rcu_read_unlock();
+out:
+	dev_kfree_skb(skb);
+
+	return ret;
+}
+
+int mt7915_get_tx_stat(struct mt7915_phy *phy, u16 wlan_idx)
+{
+	if (is_mt7915(&phy->dev->mt76))
+		return mt7915_mcu_get_tx_stat_v1(phy, wlan_idx);
+
+	return mt7915_mcu_get_tx_stat_v2(phy, wlan_idx);
+}
+
 int mt7915_mcu_update_bss_color(struct mt7915_dev *dev, struct ieee80211_vif *vif,
 				struct cfg80211_he_bss_color *he_bss_color)
 {
@@ -4607,6 +4820,23 @@ out:
 	return ret;
 }
 
+#ifdef MTK_DEBUG
+int mt7915_dbg_mcu_wa_cmd(struct mt7915_dev *dev, int cmd, u32 a1, u32 a2, u32 a3, bool wait_resp)
+{
+	struct {
+		__le32 args[3];
+	} req = {
+		.args = {
+			cpu_to_le32(a1),
+			cpu_to_le32(a2),
+			cpu_to_le32(a3),
+		},
+	};
+
+	return mt76_mcu_send_msg(&dev->mt76, cmd, &req, sizeof(req), wait_resp);
+}
+#endif
+
 int mt7915_mcu_rf_regval(struct mt7915_dev *dev, u32 regidx, u32 *val, bool set)
 {
 	struct {
@@ -4634,4 +4864,195 @@ int mt7915_mcu_rf_regval(struct mt7915_dev *dev, u32 regidx, u32 *val, bool set)
 	dev_kfree_skb(skb);
 
 	return 0;
+}
+
+#ifdef MTK_DEBUG
+int mt7915_mcu_set_amsdu_algo(struct mt7915_dev *dev, u16 wcid, u8 enable)
+{
+	struct {
+		u16 action;
+		u8 _rsv1[2];
+		u16 wcid;
+		u8 enable;
+		u8 _rsv2[5];
+	} __packed req = {
+		.action = cpu_to_le16(1),
+		.wcid = cpu_to_le16(wcid),
+		.enable = enable,
+	};
+
+	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(MEC_CTRL), &req, sizeof(req), true);
+}
+#endif
+
+int mt7915_mcu_sw_aci_set(struct mt7915_dev *dev, bool val)
+{
+#define SWLNA_ENABLE 6
+	struct {
+		u32 subcmd;
+		u8 enable;
+	} req = {
+		.subcmd = SWLNA_ENABLE,
+		.enable = val ? 1 : 0,
+	};
+
+	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(SWLNA_ACI_CTRL), &req,
+				 sizeof(req), NULL);
+}
+
+int mt7915_mcu_set_scs_en(struct mt7915_phy *phy, u8 enable)
+{
+	struct mt7915_dev *dev = phy->dev;
+	struct {
+		__le32 subcmd;
+		u8 band_idx;
+		u8 enable;
+	} __packed req = {
+		.subcmd = cpu_to_le32(SCS_ENABLE),
+		.band_idx = phy->mt76->band_idx,
+		.enable = enable + 1,
+	};
+
+	phy->scs_ctrl.scs_enable = !!enable;
+
+	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(SCS_FEATURE_CTRL),
+				 &req, sizeof(req), NULL);
+}
+
+static void
+mt7915_sta_scs_para(void *data, struct ieee80211_sta *sta)
+{
+#define SCS_ACTIVE_STA_CRITERIA_2M 250000
+	struct mt7915_sta *msta = (struct mt7915_sta *)sta->drv_priv;
+	struct mt7915_phy *poll_phy = (struct mt7915_phy *)data;
+	u8 band_idx = msta->wcid.phy_idx;
+	s64 tx_bytes_last_sec, rx_bytes_last_sec;
+	u64 total_bytes_last_sec;
+
+	if (band_idx > MT_BAND1)
+		return;
+
+	tx_bytes_last_sec = (s64)msta->wcid.stats.tx_bytes -
+			    (s64)msta->wcid.stats.last_tx_bytes;
+	rx_bytes_last_sec = (s64)msta->wcid.stats.rx_bytes -
+			    (s64)msta->wcid.stats.last_rx_bytes;
+
+	/**
+	 * Since wo reports rx stats every 900ms, it needs to be converted as
+	 * statistics every one second.
+	 */
+	rx_bytes_last_sec = rx_bytes_last_sec / 9 * 10;
+
+	poll_phy->scs_ctrl.tx_bytes_last_sec += tx_bytes_last_sec;
+	poll_phy->scs_ctrl.rx_bytes_last_sec += rx_bytes_last_sec;
+
+	total_bytes_last_sec = tx_bytes_last_sec + rx_bytes_last_sec;
+	if (total_bytes_last_sec > SCS_ACTIVE_STA_CRITERIA_2M) {
+		poll_phy->scs_ctrl.tput += total_bytes_last_sec >> 17;
+		poll_phy->scs_ctrl.active_sta++;
+	}
+
+	msta->wcid.stats.last_tx_bytes = msta->wcid.stats.tx_bytes;
+	msta->wcid.stats.last_rx_bytes = msta->wcid.stats.rx_bytes;
+
+	if (poll_phy->scs_ctrl.sta_min_rssi > msta->ack_signal)
+		poll_phy->scs_ctrl.sta_min_rssi = msta->ack_signal;
+}
+
+static int
+mt7915_mcu_set_scs_stats(struct mt7915_phy *phy)
+{
+	struct mt7915_dev *dev = phy->dev;
+	struct {
+		__le32 subcmd;
+		u8 band_idx;
+		u8 active_sta;
+		__le16 tput;
+		bool rx_only_mode;
+		u8 __rsv;
+		s8 min_rssi;
+	} __packed req = {
+		.subcmd = cpu_to_le32(SCS_SEND_DATA),
+		.band_idx = phy->mt76->band_idx,
+		.active_sta = phy->scs_ctrl.active_sta,
+		.tput = cpu_to_le16(phy->scs_ctrl.tput),
+		.rx_only_mode = false,
+		.min_rssi = phy->scs_ctrl.sta_min_rssi,
+	};
+
+	/* Rx only mode is that Rx percentage is larger than 90% */
+	if (phy->scs_ctrl.tx_bytes_last_sec < phy->scs_ctrl.rx_bytes_last_sec / 9)
+		req.rx_only_mode = true;
+
+	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(SCS_FEATURE_CTRL),
+				 &req, sizeof(req), NULL);
+}
+
+void mt7915_mcu_scs_sta_poll(struct work_struct *work)
+{
+	struct mt7915_dev *dev = container_of(work, struct mt7915_dev,
+					      scs_work.work);
+	struct mt7915_phy *phy;
+	bool scs_enable_flag = false;
+	u8 i;
+
+	for (i = MT_BAND0; i < MT_BAND2; i++) {
+		if (!dev->mt76.phys[i])
+			continue;
+
+		phy = dev->mt76.phys[i]->priv;
+		if (!phy->scs_ctrl.scs_enable ||
+		    !test_bit(MT76_STATE_RUNNING, &phy->mt76->state))
+			continue;
+
+		ieee80211_iterate_stations_atomic(dev->mt76.phys[i]->hw,
+						  mt7915_sta_scs_para, phy);
+
+		mt7915_mcu_set_scs_stats(phy);
+
+		memset(&phy->scs_ctrl, 0, sizeof(phy->scs_ctrl));
+		phy->scs_ctrl.scs_enable = true;
+
+		scs_enable_flag = true;
+	}
+
+	if (scs_enable_flag)
+		ieee80211_queue_delayed_work(mt76_hw(dev), &dev->scs_work, HZ);
+}
+
+int mt7915_mcu_thermal_debug(struct mt7915_dev *dev, u8 mode, u8 action)
+{
+	struct {
+		u8 mode;
+		u8 action;
+		u8 rsv[2];
+	} req = {
+		.mode = mode,
+		.action = action,
+	};
+
+	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(THERMAL_DEBUG), &req,
+				 sizeof(req), true);
+}
+
+int mt7915_mcu_set_ps_ctrl(struct mt7915_dev *dev, u16 threshold)
+{
+	struct {
+		__le16 per_sta_threshold;
+		__le16 flush_threshold;
+		u8 enable;
+		u8 rsv[3];
+	} req = {
+		.enable = true,
+		.per_sta_threshold = cpu_to_le16(threshold),
+	};
+	u16 thresh = dev->mt76.token_size;
+
+	if (mtk_wed_device_active(&dev->mt76.mmio.wed))
+		thresh += dev->mt76.mmio.wed.wlan.nbuf;
+
+	req.flush_threshold = cpu_to_le16(thresh * 4 / 5);
+
+	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(PS_CTRL), &req,
+				 sizeof(req), true);
 }
