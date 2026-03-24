@@ -112,6 +112,13 @@ enum mt7915_sku_rate_group {
 	MAX_SKU_RATE_GROUP_NUM,
 };
 
+enum mt7915_eeprom_mode {
+	DEFAULT_BIN_MODE,
+	EFUSE_MODE,
+	FLASH_MODE,
+	BIN_FILE_MODE,
+};
+
 static inline int
 mt7915_get_channel_group_5g(int channel, bool is_7976)
 {

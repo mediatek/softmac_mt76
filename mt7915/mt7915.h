@@ -460,6 +460,8 @@ struct mt7915_dev {
 	bool limited_wtbl_size;
 	bool dbdc_support;
 	bool flash_mode;
+	bool bin_file_mode;
+	u8 eeprom_mode;
 	bool muru_debug;
 	bool ibf;
 
@@ -905,6 +907,7 @@ int mt7915_mcu_set_txpower_level(struct mt7915_phy *phy, u8 drop_level);
 void mt7915_packet_log_to_host(struct mt7915_dev *dev, const void *data, int len, int type, int des_len);
 int mt7915_mcu_set_amsdu_algo(struct mt7915_dev *dev, u16 wcid, u8 enable);
 int mt7915_mcu_sw_aci_set(struct mt7915_dev *dev, bool val);
+const char *mt7915_eeprom_name(struct mt7915_dev *dev);
 
 #define PKT_BIN_DEBUG_MAGIC	0xc8763123
 enum {
