@@ -1287,7 +1287,8 @@ static void mt7915_sta_rc_update(struct ieee80211_hw *hw,
 
 static int
 mt7915_set_bitrate_mask(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
-			const struct cfg80211_bitrate_mask *mask)
+			const struct cfg80211_bitrate_mask *mask,
+			unsigned int link_id)
 {
 	struct mt7915_vif *mvif = (struct mt7915_vif *)vif->drv_priv;
 	struct mt7915_phy *phy = mt7915_hw_phy(hw);
@@ -1739,7 +1740,7 @@ void mt7915_get_et_stats(struct ieee80211_hw *hw,
 
 static int
 mt7915_twt_teardown_request(struct ieee80211_hw *hw,
-			    struct ieee80211_sta *sta,
+			    struct ieee80211_sta *sta, u8 link_id,
 			    struct ieee80211_twt_teardown *td)
 {
 	struct mt7915_sta *msta = (struct mt7915_sta *)sta->drv_priv;

@@ -642,7 +642,7 @@ int mt7915_mac_twt_teardown_flow(struct mt7915_dev *dev,
 				 struct mt7915_sta *msta,
 				 struct ieee80211_twt_teardown *td);
 int mt7915_mac_add_twt_setup(struct ieee80211_hw *hw,
-			     struct ieee80211_sta *sta,
+			     struct ieee80211_sta *sta, u8 link_id,
 			     struct ieee80211_twt_setup *twt);
 int mt7915_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
 			  enum mt76_txq_id qid, struct mt76_wcid *wcid,

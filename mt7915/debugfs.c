@@ -1250,7 +1250,7 @@ mt7915_twt_stats(struct seq_file *s, void *data)
 	struct mt7915_dev *dev = dev_get_drvdata(s->private);
 	struct mt7915_twt_flow *iter;
 
-	rcu_read_lock();
+	mutex_lock(&dev->mt76.mutex);
 
 	seq_puts(s, "     wcid |       id |    flags |      exp | mantissa");
 	seq_puts(s, " | duration |            tsf |\n");
@@ -1265,7 +1265,7 @@ mt7915_twt_stats(struct seq_file *s, void *data)
 			iter->exp, iter->mantissa,
 			iter->duration, iter->tsf);
 
-	rcu_read_unlock();
+	mutex_unlock(&dev->mt76.mutex);
 
 	return 0;
 }

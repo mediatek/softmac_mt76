@@ -658,8 +658,8 @@ int mt7915_mmio_wed_init(struct mt7915_dev *dev, void *pdev_ptr,
 				       MT_INT_WED_MASK_CSR;
 		wed->wlan.wpdma_phys = pci_resource_start(pci_dev, 0) +
 				       MT_WFDMA_EXT_CSR_BASE;
-		wed->wlan.wpdma_tx = pci_resource_start(pci_dev, 0) +
-				     MT_TXQ_WED_RING_BASE;
+		wed->wlan.wpdma_tx[0] = pci_resource_start(pci_dev, 0) +
+					MT_TXQ_WED_RING_BASE;
 		wed->wlan.wpdma_txfree = pci_resource_start(pci_dev, 0) +
 					 MT_RXQ_WED_RING_BASE;
 		wed->wlan.wpdma_rx_glo = pci_resource_start(pci_dev, 0) +
@@ -684,7 +684,7 @@ int mt7915_mmio_wed_init(struct mt7915_dev *dev, void *pdev_ptr,
 		wed->wlan.phy_base = res->start;
 		wed->wlan.wpdma_int = res->start + MT_INT_SOURCE_CSR;
 		wed->wlan.wpdma_mask = res->start + MT_INT_MASK_CSR;
-		wed->wlan.wpdma_tx = res->start + MT_TXQ_WED_RING_BASE;
+		wed->wlan.wpdma_tx[0] = res->start + MT_TXQ_WED_RING_BASE;
 		wed->wlan.wpdma_txfree = res->start + MT_RXQ_WED_RING_BASE;
 		wed->wlan.wpdma_rx_glo = res->start + MT_WPDMA_GLO_CFG;
 		wed->wlan.wpdma_rx[0] = res->start + MT_RXQ_WED_DATA_RING_BASE;

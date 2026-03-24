@@ -532,7 +532,8 @@ mt7915_mac_fill_rx(struct mt7915_dev *dev, struct sk_buff *skb,
 	if (rxv && mode >= MT_PHY_TYPE_HE_SU && !(status->flag & RX_FLAG_8023))
 		mt76_connac2_mac_decode_he_radiotap(&dev->mt76, skb, rxv, mode);
 
-	if (!status->wcid || !ieee80211_is_data_qos(fc))
+	status->wcid_idx = status->wcid ? status->wcid->idx : 0;
+	if (!status->wcid_idx || !ieee80211_is_data_qos(fc))
 		return 0;
 
 	status->aggr = unicast &&
@@ -738,6 +739,7 @@ int mt7915_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
 	struct mt76_connac_fw_txp *txp;
 	struct mt76_txwi_cache *t;
 	int id, i, nbuf = tx_info->nbuf - 1;
+	u8 phy_idx = (info->hw_queue & MT_TX_HW_QUEUE_PHY) >> 2;
 	u8 *txwi = (u8 *)txwi_ptr;
 	int pid;
 
@@ -2293,7 +2295,7 @@ mt7915_mac_twt_param_equal(struct mt7915_sta *msta,
 }
 
 int mt7915_mac_add_twt_setup(struct ieee80211_hw *hw,
-			     struct ieee80211_sta *sta,
+			     struct ieee80211_sta *sta, u8 link_id,
 			     struct ieee80211_twt_setup *twt)
 {
 	enum ieee80211_twt_setup_cmd setup_cmd = TWT_SETUP_CMD_REJECT;
