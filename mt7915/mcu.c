@@ -2943,6 +2943,7 @@ int mt7915_mcu_get_eeprom(struct mt7915_dev *dev, u32 offset, u8 *read_buf)
 	struct sk_buff *skb;
 	u8 *buf = read_buf;
 	int ret;
+	bool valid;
 
 	ret = mt76_mcu_send_and_get_msg(&dev->mt76,
 					MCU_EXT_QUERY(EFUSE_ACCESS),
@@ -2954,7 +2955,8 @@ int mt7915_mcu_get_eeprom(struct mt7915_dev *dev, u32 offset, u8 *read_buf)
 	if (!buf) {
 		u32 addr = le32_to_cpu(res->addr);
 
-		if (addr > dev->mt76.eeprom.size - MT7915_EEPROM_BLOCK_SIZE) {
+		valid = !!le32_to_cpu(res->valid);
+		if (!valid || (addr > dev->mt76.eeprom.size - MT7915_EEPROM_BLOCK_SIZE)) {
 			dev_kfree_skb(skb);
 			return -EINVAL;
 		}
