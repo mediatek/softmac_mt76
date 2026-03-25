@@ -2937,6 +2937,9 @@ void mt7996_mac_reset_work(struct work_struct *work)
 
 	dev_info(dev->mt76.dev,"\n%s L1 SER recovery completed.",
 		 wiphy_name(dev->mt76.hw->wiphy));
+#ifdef CONFIG_MULDF_HELPER
+	mt76_muldf_drv_notify(&dev->mt76, CONSYS_MONITOR_L1SER, true);
+#endif
 }
 
 /* firmware coredump */
@@ -4388,6 +4391,9 @@ void mt7996_beacon_mon_work(struct work_struct *work)
 				mt76_bss_dbg(vif, "link %d: detect %d beacon loss",
 					     link_id, MT7996_MAX_BEACON_LOSS);
 				state = MON_STATE_SEND_PROBE;
+#ifdef CONFIG_MULDF_HELPER
+				mt76_muldf_drv_notify(&dev->mt76, CONSYS_MONITOR_NOBCN, true);
+#endif
 			}
 		}
 

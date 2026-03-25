@@ -156,10 +156,10 @@ mt7999_tm_check_antenna(struct mt7999_phy *phy)
 
 	aux_rx_mask = BIT(fls(chainmask)) * phy->has_aux_rx;
 	if (td->tx_antenna_mask & ~(chainmask | aux_rx_mask)) {
-		mt76_err(&dev->mt76,
-			 "%s: antenna mask 0x%x exceeds limit (chainmask 0x%x, %s auxiliary RX)\n",
-			 __func__, td->tx_antenna_mask, chainmask,
-			 phy->has_aux_rx ? "has" : "no");
+		dev_err(dev->mt76.dev,
+			"%s: antenna mask 0x%x exceeds limit (chainmask 0x%x, %s auxiliary RX)\n",
+			__func__, td->tx_antenna_mask, chainmask,
+			phy->has_aux_rx ? "has" : "no");
 		return -EINVAL;
 	}
 
@@ -359,7 +359,7 @@ mt7999_tm_update_channel(struct mt7999_phy *phy)
 	int width_mhz;
 
 	if (!chan) {
-		mt76_err(&dev->mt76, "%s: no channel found, update failed\n", __func__);
+		dev_err(dev->mt76.dev, "%s: no channel found, update failed\n", __func__);
 		return;
 	}
 
@@ -520,8 +520,8 @@ mt7999_tm_set_rx_frames(struct mt7999_phy *phy, bool en)
 
 	ret = mt7999_tm_rx_stats_user_ctrl(phy, td->aid);
 	if (ret) {
-		mt76_err(&dev->mt76, "%s: failed to set RX stats user control (%d)\n",
-			 __func__, ret);
+		dev_err(dev->mt76.dev, "%s: failed to set RX stats user control (%pe)\n",
+			__func__, ERR_PTR(ret));
 		return;
 	}
 
@@ -627,8 +627,8 @@ mt7999_tm_group_prek(struct mt7999_phy *phy, enum mt76_testmode_state state)
 	int ret = 0;
 
 	if (dev->eeprom_mode != EEPROM_MODE_FLASH && dev->eeprom_mode != EEPROM_MODE_BIN) {
-		mt76_err(&dev->mt76, "%s: currently not in FLASH or BIN FILE mode, return\n",
-			 __func__);
+		dev_err(dev->mt76.dev, "%s: currently not in FLASH or BIN FILE mode, return\n",
+			__func__);
 		return -EOPNOTSUPP;
 	}
 
@@ -676,8 +676,8 @@ mt7999_tm_group_prek(struct mt7999_phy *phy, enum mt76_testmode_state state)
 				   30 * HZ);
 
 		if (ret)
-			mt76_err(&dev->mt76, "%s: failed to send mcu msg (%d)\n",
-				 __func__, ret);
+			dev_err(dev->mt76.dev, "%s: failed to send mcu msg (%pe)\n",
+				__func__, ERR_PTR(ret));
 		else
 			eeprom[offs] |= do_precal;
 		break;
@@ -733,8 +733,8 @@ mt7999_tm_dpd_prek_send_req(struct mt7999_phy *phy, struct mt7999_tm_req *req,
 		ret = mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(TESTMODE_CTRL), req,
 					sizeof(*req), false);
 		if (ret) {
-			mt76_err(&dev->mt76, "%s: failed to send mcu msg (%d)\n",
-				 __func__, ret);
+			dev_err(dev->mt76.dev, "%s: failed to send mcu msg (%pe)\n",
+				__func__, ERR_PTR(ret));
 			goto out;
 		}
 	}
@@ -770,8 +770,8 @@ mt7999_tm_dpd_prek(struct mt7999_phy *phy, enum mt76_testmode_state state)
 	int ret = 0;
 
 	if (dev->eeprom_mode != EEPROM_MODE_FLASH && dev->eeprom_mode != EEPROM_MODE_BIN) {
-		mt76_err(&dev->mt76, "%s: currently not in FLASH or BIN FILE mode, return\n",
-			 __func__);
+		dev_err(dev->mt76.dev, "%s: currently not in FLASH or BIN FILE mode, return\n",
+			__func__);
 		return -EOPNOTSUPP;
 	}
 
@@ -923,7 +923,7 @@ mt7999_tm_dump_precal(struct mt76_phy *mphy, struct sk_buff *msg, int flag, int 
 	};
 
 	if (!dev->cal.data) {
-		mt76_err(&dev->mt76, "%s: no pre-cal found\n", __func__);
+		dev_err(dev->mt76.dev, "%s: no pre-cal found\n", __func__);
 		return 0;
 	}
 
@@ -1025,8 +1025,8 @@ mt7999_tm_rx_gain_cal(struct mt7999_phy *phy, enum mt76_testmode_state state)
 	int ret = 0;
 
 	if (dev->eeprom_mode != EEPROM_MODE_FLASH && dev->eeprom_mode != EEPROM_MODE_BIN) {
-		mt76_err(&dev->mt76, "%s: currently not in FLASH or BIN FILE mode, return\n",
-			 __func__);
+		dev_err(dev->mt76.dev, "%s: currently not in FLASH or BIN FILE mode, return\n",
+			__func__);
 		return -EOPNOTSUPP;
 	}
 
@@ -1038,8 +1038,8 @@ mt7999_tm_rx_gain_cal(struct mt7999_phy *phy, enum mt76_testmode_state state)
 		ret = mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(TESTMODE_CTRL), &req,
 					sizeof(req), false);
 		if (ret) {
-			mt76_err(&dev->mt76, "%s: failed to send mcu msg (%d)\n",
-				 __func__, ret);
+			dev_err(dev->mt76.dev, "%s: failed to send mcu msg (%pe)\n",
+				__func__, ERR_PTR(ret));
 			return ret;
 		}
 
@@ -1097,8 +1097,8 @@ mt7999_tm_re_cal_event(struct mt7999_dev *dev, struct mt7999_tm_rf_test_data *da
 		       MT_EE_CAL_DPD_SIZE_5G;
 		break;
 	default:
-		mt76_err(&dev->mt76, "%s: unknown calibration type %x\n",
-			 __func__, cal_type);
+		dev_err(dev->mt76.dev, "%s: unknown calibration type %x\n",
+			__func__, cal_type);
 		return;
 	}
 
@@ -1178,8 +1178,8 @@ mt7999_tm_set_offchan(struct mt7999_phy *phy)
 
 	if (!mphy->cap.has_5ghz) {
 		ret = -EINVAL;
-		mt76_err(&dev->mt76, "%s: failed to set offchan, invalid band\n",
-			 __func__);
+		dev_err(dev->mt76.dev, "%s: failed to set offchan, invalid band\n",
+			__func__);
 		goto out;
 	}
 
@@ -1200,8 +1200,8 @@ mt7999_tm_set_offchan(struct mt7999_phy *phy)
 							      NL80211_BAND_5GHZ);
 	if (!cfg80211_chandef_valid(&chandef)) {
 		ret = -EINVAL;
-		mt76_err(&dev->mt76, "%s: failed to set offchan (invalid chandef)\n",
-			 __func__);
+		dev_err(dev->mt76.dev, "%s: failed to set offchan (invalid chandef)\n",
+			__func__);
 		goto out;
 	}
 
@@ -2074,7 +2074,7 @@ mt7999_tm_set_txbf(struct mt7999_phy *phy)
 		bool bfer = !!val[1];
 
 		if (!tag) {
-			mt76_err(&dev->mt76, "%s: pfmu tag is not initialized\n", __func__);
+			dev_err(dev->mt76.dev, "%s: pfmu tag is not initialized\n", __func__);
 			return -EINVAL;
 		}
 
@@ -2743,7 +2743,7 @@ mt7999_tm_dump_seg_list(struct mt7999_phy *phy)
 	int i, cbw, dbw;
 
 	if (!phy->mt76->lists) {
-		mt76_err(&dev->mt76, "%s: no available segment list\n", __func__);
+		dev_err(dev->mt76.dev, "%s: no available segment list\n", __func__);
 		return 0;
 	}
 

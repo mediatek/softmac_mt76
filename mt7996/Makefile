@@ -13,5 +13,6 @@ mt7996e-y := pci.o init.o dma.o eeprom.o main.o mcu.o mac.o \
 mt7996e-$(CONFIG_MT7996_NPU) += npu.o
 mt7996e-$(CONFIG_DEV_COREDUMP) += coredump.o
 mt7996e-$(CONFIG_NL80211_TESTMODE) += testmode.o
+mt7996e-$(CONFIG_MULDF_HELPER) += muldf.o
 
 mt7996e-y += mtk_mcu.o trace.o mtk_debugfs.o

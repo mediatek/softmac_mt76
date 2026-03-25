@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: BSD-3-Clause-Clear
-ccflags-y += -Werror -DCONFIG_MT76_LEDS -DCONFIG_MTK_DEBUG
+ccflags-y += -Werror -DCONFIG_MT76_LEDS -DCONFIG_MTK_DEBUG -DDEBUG
 obj-m := mt76.o
 obj-$(CONFIG_MT76_USB) += mt76-usb.o
 obj-$(CONFIG_MT76_SDIO) += mt76-sdio.o
@@ -16,6 +16,7 @@ mt76-y := \
 mt76-$(CONFIG_MT76_NPU) += npu.o
 mt76-$(CONFIG_PCI) += pci.o
 mt76-$(CONFIG_NL80211_TESTMODE) += testmode.o
+mt76-$(CONFIG_MULDF_HELPER) += muldf.o
 
 mt76-usb-y := usb.o usb_trace.o
 mt76-sdio-y := sdio.o sdio_txrx.o

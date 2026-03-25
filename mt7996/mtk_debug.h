@@ -943,6 +943,9 @@ struct queue_desc {
 #define WF_RRO_TOP_BASE                                        0xA000 /*0x820C2000 */
 #define WF_RRO_TOP_IND_CMD_0_CTRL0_ADDR                        (WF_RRO_TOP_BASE + 0x40) // 2040
 #define WF_RRO_TOP_RX_RING_AP_0_CTRL0_ADDR                     (WF_RRO_TOP_BASE + 0x650) // 2650
+#define WF_RRO_TOP_RX_RING_AP_1_CTRL0_ADDR                     (WF_RRO_TOP_BASE + 0x660) // 2660
+#define WF_RRO_TOP_RX_RING_AP_2_CTRL0_ADDR                     (WF_RRO_TOP_BASE + 0x670) // 2670
+#define WF_RRO_TOP_RX_RING_AP_3_CTRL0_ADDR                     (WF_RRO_TOP_BASE + 0x680) // 2680
 
 struct berse_wtbl_parse {
 	u8 *name;

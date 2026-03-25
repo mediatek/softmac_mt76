@@ -434,7 +434,7 @@ mt76_testmode_tx_config_check(struct mt76_phy *phy)
 
 	return 0;
 fail:
-	mt76_err(dev, "%s: invalid %s\n", __func__, invalid_msg[type]);
+	dev_err(dev->dev, "%s: invalid %s\n", __func__, invalid_msg[type]);
 	return -EINVAL;
 }
 

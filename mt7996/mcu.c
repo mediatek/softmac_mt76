@@ -10,6 +10,7 @@
 #include "mac.h"
 #include "eeprom.h"
 #include "mt7996_trace.h"
+#include "muldf.h"
 
 #define fw_name(_dev, name, ...)	({			\
 	char *_fw;						\
@@ -240,6 +241,9 @@ mt7996_mcu_parse_response(struct mt76_dev *mdev, int cmd,
 	if (!skb) {
 		dev_err(mdev->dev, "Message %08x (seq %d) timeout\n",
 			cmd, seq);
+#ifdef CONFIG_MULDF_HELPER
+		mt76_muldf_drv_notify(mdev, CONSYS_MONITOR_CMD_TIMEOUT, true);
+#endif
 		return -ETIMEDOUT;
 	}
 
@@ -1877,6 +1881,11 @@ mt7996_mcu_uni_rx_unsolicited_event(struct mt7996_dev *dev, struct sk_buff *skb)
 #ifdef CONFIG_MTK_VENDOR
 	case MCU_UNI_EVENT_CSI_REPORT:
 		mt7996_mcu_csi_report_event(dev, skb);
+		break;
+#endif
+#ifdef CONFIG_FW_CANARY_MONITOR
+	case MCU_UNI_EVENT_CANARY_MONITOR:
+		mt7996_muldf_canary_monitor_event(dev, skb);
 		break;
 #endif
 	default:

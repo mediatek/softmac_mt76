@@ -2122,6 +2122,10 @@ int mt7996_register_device(struct mt7996_dev *dev)
 	if (ret)
 		goto error;
 
+	ret = mt7996_muldf_init(dev);
+	if (ret)
+		goto error;
+
 	return 0;
 
 error:
@@ -2151,6 +2155,8 @@ void mt7996_unregister_device(struct mt7996_dev *dev)
 	    !mtk_wed_device_active(&dev->mt76.mmio.wed))
 		mt7996_rro_msdu_page_map_free(dev);
 	tasklet_disable(&dev->mt76.irq_tasklet);
+
+	mt76_muldf_exit(&dev->mt76);
 
 	mt76_free_device(&dev->mt76);
 }

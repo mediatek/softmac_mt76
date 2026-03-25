@@ -1649,4 +1649,13 @@ mt7999_packet_log_to_host(struct mt7999_dev *dev, const void *data, int len, int
 }
 #endif
 
+#ifdef CONFIG_MULDF_HELPER
+int mt7999_muldf_init(struct mt7999_dev *dev);
+#else
+static inline int mt7999_muldf_init(struct mt7999_dev *dev)
+{
+	return 0;
+}
+#endif
+
 #endif

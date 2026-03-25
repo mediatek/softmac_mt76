@@ -25,6 +25,7 @@
 #include "util.h"
 #include "testmode.h"
 #include "debug.h"
+#include "muldf.h"
 
 #define CHAN2G(_idx, _freq) {			\
 	.band = NL80211_BAND_2GHZ,		\
@@ -1354,6 +1355,10 @@ struct mt76_dev {
 	const char *bin_file_name;
 
 	u8 chainshift[__MT_MAX_BAND];
+
+#ifdef CONFIG_MULDF_HELPER
+	struct muldf muldf;
+#endif
 };
 
 /* per-phy stats.  */

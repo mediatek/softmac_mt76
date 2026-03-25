@@ -543,6 +543,11 @@ mt7996_fw_debug_wm_set(void *data, u64 val)
 	    (dev->fw_debug_bin & GENMASK(__PKT_BIN_DEBUG_MAX, PKT_BIN_DEBUG_FIRST)))
 		return 0;
 
+#ifdef CONFIG_MULDF_HELPER
+	if (dev->mt76.muldf.fwlog_en)
+		return 0;
+#endif
+
 	for (i = 0; i < ARRAY_SIZE(debug_category); i++) {
 		/* only enable necessary fwlog modules to prevent WM busy.
 		 * for other modules, user can enable it by using fw_debug_module
@@ -1570,6 +1575,21 @@ mt7996_debugfs_write_fwlog(struct mt7996_dev *dev, const void *hdr, int hdrlen,
 	unsigned long flags;
 	void *dest;
 
+#ifdef CONFIG_MULDF_HELPER
+	if (dev->mt76.muldf.fwlog_en && dev->mt76.muldf.fwlog_bin_en) {
+		if (hdrlen) {
+			dest = dev->mt76.muldf.data;
+			memcpy(dest, hdr, hdrlen);
+			memcpy(dest + hdrlen, data, len);
+		} else {
+			dest = (void *)data;
+		}
+
+		muldf_xmit_ics(dest, hdrlen + len);
+		return;
+	}
+#endif
+
 	if (!dev->relay_fwlog)
 		return;
 
@@ -1633,9 +1653,6 @@ void mt7996_debugfs_rx_fw_monitor(struct mt7996_dev *dev, const void *data, int 
 		.msg_type = cpu_to_le16(PKT_TYPE_RX_FW_MONITOR),
 	};
 
-	if (!dev->relay_fwlog)
-		return;
-
 	hdr.serial_id = cpu_to_le16(dev->fw_debug_seq++);
 	hdr.timestamp = cpu_to_le32(mt76_rr(dev, MT_LPON_FRCR(0)));
 	hdr.len = *(__le16 *)data;
@@ -1650,8 +1667,7 @@ bool mt7996_debugfs_rx_log(struct mt7996_dev *dev, const void *data, int len)
 #endif
 
 	if (is_fwlog) {
-		if (dev->relay_fwlog)
-			mt7996_debugfs_write_fwlog(dev, NULL, 0, data, len);
+		mt7996_debugfs_write_fwlog(dev, NULL, 0, data, len);
 	} else if (dev->relay_idxlog)
 		mt7996_debugfs_write_idxlog(dev, data, len);
 	else
