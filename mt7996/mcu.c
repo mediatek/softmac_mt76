@@ -4899,7 +4899,7 @@ mt7996_mcu_beacon_cont(struct mt7996_dev *dev,
 	u8 *buf, keyidx = link->msta_link.wcid.hw_key_idx2;
 	struct mt76_wcid *wcid;
 
-	if (is_mt7990(&dev->mt76) && (keyidx == 6 || keyidx == 7))
+	if (is_mt7990(&dev->mt76) && mt76_is_bigtk(keyidx))
 		wcid = &link->msta_link.wcid;
 	else
 		wcid = &dev->mt76.global_wcid;
@@ -8331,22 +8331,6 @@ static int mt7996_afc_update_power_limit(struct mt7996_dev *dev,
 	return 0;
 }
 
-static bool mt7996_is_psd_country(char *country)
-{
-	char psd_country_list[][3] = {"US", "KR", "BR", "CL", "MY", ""};
-	int i;
-
-	if (strlen(country) != 2)
-		return 0;
-
-	for (i = 0; psd_country_list[i][0] != '\0'; i++) {
-		if (!strncmp(country, psd_country_list[i], 2))
-			return 1;
-	}
-
-	return 0;
-}
-
 static s8 mt7996_get_power_bound(struct mt7996_phy *phy, s8 txpower)
 {
        struct mt76_phy *mphy = phy->mt76;
@@ -8431,7 +8415,7 @@ int mt7996_mcu_set_txpower_sku(struct mt7996_phy *phy,
 	 * driver doesn't need to do it
 	 */
 	if (phy->mt76->cap.has_6ghz && mphy->dev->lpi_mode && mphy->dev->lpi_psd &&
-	    !mt7996_is_psd_country(dev->mt76.alpha2)) {
+	    !mt76_is_psd_country(dev->mt76.alpha2)) {
 		switch (mphy->main_chandef.width) {
 		case NL80211_CHAN_WIDTH_20:
 			skb_put_data(skb, &la->eht[3], 8);
@@ -8564,7 +8548,7 @@ int mt7996_mcu_set_lpi_psd(struct mt7996_phy *phy, u8 enable)
 		.len = cpu_to_le16(sizeof(req) - 4),
 		.lpi_enable = enable,
 		.psd_limit = enable && dev->mt76.lpi_mode ?
-				mt7996_is_psd_country(dev->mt76.alpha2) : 0,
+				mt76_is_psd_country(dev->mt76.alpha2) : 0,
 	};
 
 	return mt76_mcu_send_msg(&phy->dev->mt76, MCU_WM_UNI_CMD(BAND_CONFIG),

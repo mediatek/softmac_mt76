@@ -70,7 +70,7 @@ struct mt76_connac2_mcu_txd {
 } __packed __aligned(4);
 
 /**
- * struct mt76_connac2_mcu_uni_txd - mcu command descriptor for connac2 and connac3
+ * struct mt76_connac2_mcu_uni_txd - mcu command descriptor for connac2, connac3, and connac5
  * @txd: hardware descriptor
  * @len: total length not including txd
  * @cid: command identifier
@@ -867,10 +867,11 @@ enum {
 	STA_REC_KEY_V3 = 0x27,
 	STA_REC_HDRT = 0x28,
 	STA_REC_EML_OP = 0x29,
-	STA_REC_HDR_TRANS = 0x2B,
+	STA_REC_HDR_TRANS = 0x2b,
 	STA_REC_TX_CAP = 0x2f,
 	STA_REC_GET_WTBL = 0x42,
 	STA_REC_PS_LEAVE = 0x45,
+	STA_REC_UHR = 0x47,
 	STA_REC_MAX_NUM
 };
 
@@ -964,6 +965,9 @@ enum {
 #define PHY_MODE_BE_24G				BIT(1)
 #define PHY_MODE_BE_5G				BIT(2)
 #define PHY_MODE_BE_6G				BIT(3)
+#define PHY_MODE_BN_24G				BIT(4)
+#define PHY_MODE_BN_5G				BIT(5)
+#define PHY_MODE_BN_6G				BIT(6)
 
 #define MODE_CCK				BIT(0)
 #define MODE_OFDM				BIT(1)
@@ -1369,7 +1373,7 @@ enum {
 	MCU_UNI_CMD_SET_DOMAIN_INFO = 0x15,
 	MCU_UNI_CMD_SCAN_REQ = 0x16,
 	MCU_UNI_CMD_RDD_CTRL = 0x19,
-	MCU_UNI_CMD_GET_MAC_INFO = 0x1A,
+	MCU_UNI_CMD_GET_MAC_INFO = 0x1a,
 	MCU_UNI_CMD_GET_MIB_INFO = 0x22,
 	MCU_UNI_CMD_GET_STAT_INFO = 0x23,
 	MCU_UNI_CMD_SNIFFER = 0x24,
@@ -1508,15 +1512,8 @@ enum {
 
 enum UNI_PER_STA_INFO_TAG {
 	UNI_PER_STA_RSSI,
-	UNI_PER_STA_CONTENTION_RX_RATE,
-	UNI_PER_STA_PER,
-	UNI_PER_STA_SNR,
-	UNI_PER_STA_TX_RATE,
-	UNI_PER_STA_TX_CNT,
-	UNI_PER_STA_TID_SN_GET,
-	UNI_PER_STA_TID_SN_SET,
-	UNI_PER_STA_PKT_CNT,
-	UNI_PER_STA_MAX_NUM
+	UNI_PER_STA_SNR = 3,
+	UNI_PER_STA_PKT_CNT = 8,
 };
 
 enum UNI_ALL_STA_INFO_TAG {
@@ -1525,11 +1522,8 @@ enum UNI_ALL_STA_INFO_TAG {
 	UNI_ALL_STA_TXRX_ADM_STAT,
 	UNI_ALL_STA_TXRX_AIR_TIME,
 	UNI_ALL_STA_DATA_TX_RETRY_COUNT,
-	UNI_ALL_STA_GI_MODE,
-	UNI_ALL_STA_TXRX_MSDU_COUNT,
-	UNI_ALL_STA_TXOP_ACCESS_DELAY,
-	UNI_ALL_STA_RX_MPDU_COUNT,
-	UNI_ALL_STA_MAX_NUM
+	UNI_ALL_STA_TXRX_MSDU_COUNT = 6,
+	UNI_ALL_STA_RX_MPDU_COUNT = 8,
 };
 
 enum {

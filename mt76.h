@@ -186,6 +186,7 @@ enum mt76_rxq_id {
 	MT_RXQ_NPU0,
 	MT_RXQ_NPU1,
 	MT_RXQ_WED_RX_DATA,
+	MT_RXQ_ICS_DATA,
 	__MT_RXQ_MAX
 };
 
@@ -425,7 +426,7 @@ enum mt76_wcid_flags {
 	NUM_MT76_WCID_FLAGS,
 };
 
-#define MT76_N_WCIDS 1088
+#define MT76_N_WCIDS 1600
 
 /* stored in ieee80211_tx_info::hw_queue */
 #define MT_TX_HW_QUEUE_PHY		GENMASK(3, 2)
@@ -594,6 +595,7 @@ enum {
 	MT76_STATE_ROC,
 	MT76_STATE_PM,
 	MT76_STATE_WED_RESET,
+	MT76_STATE_MCU_FWDL,
 };
 
 enum mt76_sta_event {
@@ -864,6 +866,8 @@ struct mt76_testmode_ops {
 	int (*dump_tb_info)(struct mt76_phy *phy);
 	int (*dump_icap)(struct mt76_phy *phy);
 	int (*get_attr)(struct mt76_phy *phy, int attr, u32 *val);
+	int (*set_appdu_info)(struct mt76_phy *phy, u8 appdu_idx);
+	int (*set_chan_switch_mode)(struct mt76_phy *phy);
 };
 
 #define MT_TM_FW_RX_COUNT	BIT(0)
@@ -880,6 +884,9 @@ struct mt76_sta_ru_info {
 	u8 mu_nss;
 	u8 ss_idx;
 	u16 tx_mpdu_len;
+	u8 dru_enable;
+	u8 dru_bw;
+	u8 appdu_idx;
 };
 
 struct mt76_tb_info {
@@ -924,6 +931,16 @@ enum {
 };
 
 #define MT_TM_ICAP_SAMPLE_LEN	256
+
+struct mt76_appdu_info {
+	u8 tx_rate_mode;
+	u8 tx_pkt_bw;
+	u8 tx_pri_sel;
+	u16 tx_pp_bitmap;
+	u8 sig_mcs;
+};
+
+#define MT_TM_MAX_APPDU_NUM	2
 
 struct mt76_testmode_data {
 	enum mt76_testmode_state state;
@@ -1021,6 +1038,7 @@ struct mt76_testmode_data {
 	struct mt76_tb_info tb_info;
 	u8 ru_sta_num;
 	u8 ru_sta_idx;
+	bool ru_appdu_en;
 
 	u32 rx_filter;
 
@@ -1033,6 +1051,16 @@ struct mt76_testmode_data {
 	} tone;
 
 	u8 tx_len_mode;
+	u32 tx_symbol_num;
+
+	u8 ueqm_pattern;
+	struct mt76_appdu_info appdu[MT_TM_MAX_APPDU_NUM];
+
+	struct {
+		u8 mode;
+		u8 sub_pri_sel;
+		u16 sub_chan;
+	} chsw;
 };
 
 enum {
@@ -1516,7 +1544,7 @@ bool __mt76_poll(struct mt76_dev *dev, u32 offset, u32 mask, u32 val,
 #define mt76_poll(dev, ...) __mt76_poll(&((dev)->mt76), __VA_ARGS__)
 
 bool ____mt76_poll_msec(struct mt76_dev *dev, u32 offset, u32 mask, u32 val,
-			int timeout, int kick);
+			int timeout, int tick);
 #define __mt76_poll_msec(...)         ____mt76_poll_msec(__VA_ARGS__, 10)
 #define mt76_poll_msec(dev, ...)      ____mt76_poll_msec(&((dev)->mt76), __VA_ARGS__, 10)
 #define mt76_poll_msec_tick(dev, ...) ____mt76_poll_msec(&((dev)->mt76), __VA_ARGS__)
@@ -2522,5 +2550,8 @@ mt76_vif_link_phy(struct mt76_vif_link *mlink)
 
 	return ctx->phy;
 }
+
+bool mt76_is_psd_country(char *country);
+bool mt76_is_bigtk(u8 key_idx);
 
 #endif

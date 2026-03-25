@@ -2284,3 +2284,26 @@ void mt76_offchannel_notify(struct mt76_phy *phy, bool offchannel)
 	local_bh_enable();
 }
 EXPORT_SYMBOL_GPL(mt76_offchannel_notify);
+
+bool mt76_is_psd_country(char *country)
+{
+	char psd_country_list[][3] = {"US", "KR", "BR", "CL", "MY", ""};
+	int i;
+
+	if (strlen(country) != 2)
+		return 0;
+
+	for (i = 0; psd_country_list[i][0] != '\0'; i++) {
+		if (!strncmp(country, psd_country_list[i], 2))
+			return 1;
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(mt76_is_psd_country);
+
+bool mt76_is_bigtk(u8 key_idx)
+{
+	return key_idx == 6 || key_idx == 7;
+}
+EXPORT_SYMBOL_GPL(mt76_is_bigtk);

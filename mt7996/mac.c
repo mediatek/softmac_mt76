@@ -773,7 +773,7 @@ mt7996_mac_write_txwi_80211(struct mt7996_dev *dev, __le32 *txwi,
 		val |= MT_TXD1_FIXED_RATE;
 
 	if (is_mt7990(&dev->mt76) && ieee80211_is_beacon(fc) &&
-	    (wcid->hw_key_idx2 == 6 || wcid->hw_key_idx2 == 7))
+	    mt76_is_bigtk(wcid->hw_key_idx2))
 		hw_bigtk = true;
 
 	if ((key && multicast && ieee80211_is_robust_mgmt_frame(skb)) || hw_bigtk) {

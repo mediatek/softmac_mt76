@@ -336,6 +336,11 @@ static inline bool is_mt799x(struct mt76_dev *dev)
 	return is_mt7996(dev) || is_mt7992(dev) || is_mt7990(dev);
 }
 
+static inline bool is_mt7999(struct mt76_dev *dev)
+{
+	return mt76_chip(dev) == 0x80f0;
+}
+
 static inline bool is_mt7622(struct mt76_dev *dev)
 {
 	if (!IS_ENABLED(CONFIG_MT7622_WMAC))
@@ -507,6 +512,24 @@ mt76_connac_mutex_release(struct mt76_dev *dev, struct mt76_connac_pm *pm)
 	mutex_unlock(&dev->mutex);
 }
 
+#define __bitrate_mask_check(_mcs, _mode)				\
+({									\
+	u8 i = 0;							\
+	for (nss = 0; i < ARRAY_SIZE(mask->control[band]._mcs); i++) {	\
+		if (!mask->control[band]._mcs[i])			\
+			continue;					\
+		if (hweight16(mask->control[band]._mcs[i]) == 1) {	\
+			mode = MT_PHY_TYPE_##_mode;			\
+			rateidx = ffs(mask->control[band]._mcs[i]) - 1;	\
+			if (mode == MT_PHY_TYPE_HT)			\
+				rateidx += 8 * i;			\
+			else						\
+				nss = i + 1;				\
+			goto out;					\
+		}							\
+	}								\
+})
+
 void mt76_connac_gen_ppe_thresh(u8 *he_ppet, int nss, enum nl80211_band band);
 int mt76_connac_init_tx_queues(struct mt76_phy *phy, int idx, int n_desc,
 			       int ring_base, void *wed, u32 flags);
@@ -557,5 +580,13 @@ void mt76_connac2_tx_token_put(struct mt76_dev *dev);
 void mt76_connac3_mac_decode_he_radiotap(struct sk_buff *skb, __le32 *rxv,
 					 u8 mode);
 void mt76_connac3_mac_decode_eht_radiotap(struct sk_buff *skb, __le32 *rxv,
+					  u8 mode);
+/* connac5 */
+u16 mt76_connac5_mac_tx_rate_val(struct mt76_phy *mphy,
+				 struct ieee80211_bss_conf *conf,
+				 bool beacon, bool mcast);
+void mt76_connac5_mac_decode_he_radiotap(struct sk_buff *skb, __le32 *rxv,
+					 u8 mode);
+void mt76_connac5_mac_decode_eht_radiotap(struct sk_buff *skb, __le32 *rxv,
 					  u8 mode);
 #endif /* __MT76_CONNAC_H */

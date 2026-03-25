@@ -1434,8 +1434,7 @@ u8 mt76_connac_get_phy_mode(struct mt76_phy *phy, struct ieee80211_vif *vif,
 		if (he_cap && he_cap->has_he)
 			mode |= PHY_MODE_AX_5G;
 	} else if (band == NL80211_BAND_6GHZ) {
-		mode |= PHY_MODE_A | PHY_MODE_AN |
-			PHY_MODE_AC | PHY_MODE_AX_5G;
+		mode |= PHY_MODE_AN | PHY_MODE_AC | PHY_MODE_AX_5G;
 	}
 
 	return mode;
@@ -1446,27 +1445,39 @@ u8 mt76_connac_get_phy_mode_ext(struct mt76_phy *phy, struct ieee80211_bss_conf 
 				enum nl80211_band band)
 {
 	const struct ieee80211_sta_eht_cap *eht_cap;
+	const struct ieee80211_sta_uhr_cap *uhr_cap;
 	struct ieee80211_supported_band *sband;
+	enum nl80211_iftype iftype = conf->vif->type;
+	bool has_uhr;
 	u8 mode = 0;
 
 	if (band == NL80211_BAND_6GHZ)
 		mode |= PHY_MODE_AX_6G;
 
 	sband = phy->hw->wiphy->bands[band];
-	eht_cap = ieee80211_get_eht_iftype_cap(sband, conf->vif->type);
+	eht_cap = ieee80211_get_eht_iftype_cap(sband, iftype);
+	uhr_cap = ieee80211_get_uhr_iftype_cap(sband, iftype);
 
 	if (!eht_cap || !eht_cap->has_eht || !conf->eht_support)
 		return mode;
 
+	has_uhr = uhr_cap && uhr_cap->has_uhr && conf->uhr_support;
+
 	switch (band) {
 	case NL80211_BAND_6GHZ:
 		mode |= PHY_MODE_BE_6G;
+		if (has_uhr)
+			mode |= PHY_MODE_BN_6G;
 		break;
 	case NL80211_BAND_5GHZ:
 		mode |= PHY_MODE_BE_5G;
+		if (has_uhr)
+			mode |= PHY_MODE_BN_5G;
 		break;
 	case NL80211_BAND_2GHZ:
 		mode |= PHY_MODE_BE_24G;
+		if (has_uhr)
+			mode |= PHY_MODE_BN_24G;
 		break;
 	default:
 		break;

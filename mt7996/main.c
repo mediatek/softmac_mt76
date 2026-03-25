@@ -268,7 +268,7 @@ mt7996_set_hw_key(struct ieee80211_hw *hw, enum set_key_cmd cmd,
 	}
 	wcid_keyidx = &msta_link->wcid.hw_key_idx;
 
-	is_bigtk = key->keyidx == 6 || key->keyidx == 7;
+	is_bigtk = mt76_is_bigtk(key->keyidx);
 	switch (key->cipher) {
 	case WLAN_CIPHER_SUITE_AES_CMAC:
 	case WLAN_CIPHER_SUITE_BIP_CMAC_256:
@@ -941,7 +941,7 @@ static int mt7996_set_key(struct ieee80211_hw *hw, enum set_key_cmd cmd,
 	case WLAN_CIPHER_SUITE_BIP_CMAC_256:
 	case WLAN_CIPHER_SUITE_BIP_GMAC_128:
 	case WLAN_CIPHER_SUITE_BIP_GMAC_256:
-		if (key->keyidx == 6 || key->keyidx == 7)
+		if (mt76_is_bigtk(key->keyidx))
 			break;
 		fallthrough;
 	case WLAN_CIPHER_SUITE_WEP40:
