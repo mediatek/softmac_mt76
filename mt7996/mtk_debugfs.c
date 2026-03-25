@@ -5807,6 +5807,17 @@ mt7996_cp_mode_set(void *data, u64 val)
 DEFINE_DEBUGFS_ATTRIBUTE(fops_cp_mode, NULL,
 			 mt7996_cp_mode_set, "%llu\n");
 
+static int
+mt7996_fw_time_sync_set(void *data, u64 val)
+{
+	struct mt7996_dev *dev = data;
+
+	return mt7996_mcu_fw_time_sync(&dev->mt76);
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(fops_fw_time_sync, NULL,
+			 mt7996_fw_time_sync_set, "%llu\n");
+
 static ssize_t mt7996_ple_flush_sta_set(struct file *file,
 					const char __user *user_buf,
 					size_t count, loff_t *ppos)
@@ -5950,6 +5961,7 @@ void mt7996_mtk_init_dev_debugfs(struct mt7996_dev *dev, struct dentry *dir)
 				    mt7996_fw_wa_info_read);
 	debugfs_create_devm_seqfile(dev->mt76.dev, "fw_wm_info", dir,
 				    mt7996_fw_wm_info_read);
+	debugfs_create_file("fw_time_sync", 0200, dir, dev, &fops_fw_time_sync);
 
 	debugfs_create_devm_seqfile(dev->mt76.dev, "sta_info", dir,
 				    mt7996_sta_info);
