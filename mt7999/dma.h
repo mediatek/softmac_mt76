@@ -1,0 +1,41 @@
+#ifndef __MT7999_DMA_H
+#define __MT7999_DMA_H
+
+struct __prefetch_config {
+	u32 base;
+	u32 val;
+};
+
+static const struct __prefetch_config mt7999_prefetch_config[] = {
+	{MT_RXQ_EXT_CTRL(0),	0x00000004},
+	{MT_RXQ_EXT_CTRL(1),	0x00400004},
+	{MT_RXQ_EXT_CTRL(2),	0x00800004},
+	{MT_RXQ_EXT_CTRL(3),	0x00c00004},
+	{MT_RXQ_EXT_CTRL(4),	0x01000010},
+	{MT_RXQ_EXT_CTRL(5),	0x02000010},
+	{MT_RXQ_EXT_CTRL(6),	0x03000004},
+	{MT_RXQ_EXT_CTRL(7),	0x03400004},
+	{MT_RXQ_EXT_CTRL(8),	0x03800020},
+	{MT_RXQ_EXT_CTRL(9),	0x05800020},
+	{MT_RXQ_EXT_CTRL(10),	0x07800010},
+	{MT_RXQ_EXT_CTRL(11),	0x08800004},
+	{MT_RXQ_EXT_CTRL(12),	0x08c00004},
+	{MT_TXQ_EXT_CTRL(16),	0x09001004},
+	{MT_TXQ_EXT_CTRL(17),	0x09401104},
+	{MT_TXQ_EXT_CTRL(18),	0x09801208},
+	{MT_TXQ_EXT_CTRL(19),	0x0a001208},
+	{MT_TXQ_EXT_CTRL(20),	0x0a801404},
+	{MT_TXQ_EXT_CTRL(21),	0x0ac01308},
+	{MT_TXQ_EXT_CTRL(22),	0x0b401308},
+};
+
+static const struct __prefetch_config mt7999_prefetch_config_pcie1[] = {
+	{MT_RXQ_EXT_CTRL(3),	0x00000004},
+	{MT_RXQ_EXT_CTRL(5),	0x00400008},
+	{MT_RXQ_EXT_CTRL(7),	0x00c00004},
+	{MT_RXQ_EXT_CTRL(9),	0x01000020},
+	{MT_TXQ_EXT_CTRL(21),	0x03001308},
+	{MT_TXQ_EXT_CTRL(22),	0x03801308},
+};
+
+#endif

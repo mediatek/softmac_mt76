@@ -160,6 +160,7 @@ enum mt76_mcuq_id {
 	MT_MCUQ_WM,
 	MT_MCUQ_WA,
 	MT_MCUQ_FWDL,
+	MT_MCUQ_WM_VIP,
 	__MT_MCUQ_MAX
 };
 

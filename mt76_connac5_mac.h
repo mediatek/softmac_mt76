@@ -275,6 +275,12 @@ enum tx_rem_count {
 #define MT_TXD5_PN_HIGH			GENMASK(31, 16)
 #define MT_TXD5_PID			GENMASK(7, 0)
 
+enum tx_prot_frm_option {
+	MT_PTF_OPT_AUTO,
+	MT_PTF_OPT_ENABLE,
+	MT_PTF_OPT_DISABLE,
+};
+
 #define MT_TXD6_TX_SRC			GENMASK(31, 30)
 #define MT_TXD6_DROP_BY_SDO		BIT(29)
 #define MT_TXD6_BW			GENMASK(26, 23)
@@ -285,6 +291,7 @@ enum tx_rem_count {
 #define MT_TXD6_MSDU_CNT		GENMASK(15, 11)
 #define MT_TXD6_HW_AMSDU		BIT(9)
 #define MT_TXD6_AMSDU_CAP		BIT(8)
+#define MT_TXD6_PTF_OPT			GENMASK(4, 3)
 #define MT_TXD6_DIS_MAT			BIT(2)
 #define MT_TXD6_DAS			BIT(1)
 
