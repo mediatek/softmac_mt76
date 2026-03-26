@@ -36,6 +36,9 @@ static const char * const testmode_tx_mode[] = {
 	[MT76_TM_TX_MODE_EHT_SU] = "eht_su",
 	[MT76_TM_TX_MODE_EHT_TRIG] = "eht_tb",
 	[MT76_TM_TX_MODE_EHT_MU] = "eht_mu",
+	[MT76_TM_TX_MODE_UHR_SU] = "uhr_su",
+	[MT76_TM_TX_MODE_UHR_MU] = "uhr_mu",
+	[MT76_TM_TX_MODE_UHR_TRIG] = "uhr_tb",
 };
 
 static const char * const testmode_bw[] = {
@@ -126,6 +129,20 @@ const char * const testmode_cfg_type[] = {
 static const char * const testmode_tx_len_mode[] = {
 	[MT76_TM_TX_LEN_MODE_LENGTH] = "tx_length",
 	[MT76_TM_TX_LEN_MODE_TIME] = "tx_time",
+	[MT76_TM_TX_LEN_MODE_SYMBOL] = "tx_symbol_num",
+};
+
+static const char * const testmode_dru_bw[] = {
+	[MT76_TM_DRU_BW_20] = "20",
+	[MT76_TM_DRU_BW_40] = "40",
+	[MT76_TM_DRU_BW_80] = "80",
+};
+
+static const char * const testmode_chan_switch_mode[] = {
+	[MT76_TM_CHAN_SWITCH_MODE_NONE] = "none",
+	[MT76_TM_CHAN_SWITCH_MODE_DSO] = "dso",
+	[MT76_TM_CHAN_SWITCH_MODE_DSO_MANUAL] = "dso_manual",
+	[MT76_TM_CHAN_SWITCH_MODE_NPCA] = "npca",
 };
 
 static void print_enum(const struct tm_field *field, struct nlattr *attr)
@@ -652,6 +669,15 @@ static const struct tm_field testdata_fields[NUM_MT76_TM_ATTRS] = {
 	FIELD(u16, MU_AID, "mu_aid"),
 	FIELD(u16, TX_PP_BITMAP, "tx_pp_bitmap", .hex_dump = true),
 	FIELD_ENUM(TX_LEN_MODE, "tx_len_mode", testmode_tx_len_mode),
+	FIELD(u32, TX_SYMBOL_NUM, "tx_symbol_num"),
+	FIELD_ENUM(RU_DRU_BW, "dru_bw", testmode_dru_bw),
+	FIELD(u8, UEQM_PATTERN, "ueqm_pattern"),
+	FIELD(u8, APPDU_EN, "appdu_en"),
+	FIELD(u8, APPDU_IDX, "appdu_idx"),
+	FIELD(u8, APPDU_SIG, "appdu_sig"),
+	FIELD_ENUM(CHAN_SWITCH_MODE, "chan_switch_mode", testmode_chan_switch_mode),
+	FIELD(u16, SUB_CHAN, "sub_chan"),
+	FIELD(u8, SUB_PRI_SEL, "sub_pri_sel"),
 };
 #undef FIELD_NAME
 
@@ -727,6 +753,15 @@ static struct nla_policy testdata_policy[NUM_MT76_TM_ATTRS] = {
 	[MT76_TM_ATTR_TX_TONE_DC_OFFSET] = { .type = NLA_NESTED },
 	[MT76_TM_ATTR_TX_PP_BITMAP] = { .type = NLA_U16 },
 	[MT76_TM_ATTR_TX_LEN_MODE] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_TX_SYMBOL_NUM] = { .type = NLA_U32 },
+	[MT76_TM_ATTR_RU_DRU_BW] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_UEQM_PATTERN] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_APPDU_EN] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_APPDU_IDX] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_APPDU_SIG] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_CHAN_SWITCH_MODE] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_SUB_CHAN] = { .type = NLA_U16 },
+	[MT76_TM_ATTR_SUB_PRI_SEL] = { .type = NLA_U8 },
 };
 
 const struct tm_field msg_field = {

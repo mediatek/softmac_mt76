@@ -60,12 +60,21 @@ const struct nla_policy mt76_tm_policy[NUM_MT76_TM_ATTRS] = {
 	[MT76_TM_ATTR_TX_TONE_DC_OFFSET] = { .type = NLA_NESTED },
 	[MT76_TM_ATTR_TX_PP_BITMAP] = { .type = NLA_U16 },
 	[MT76_TM_ATTR_TX_LEN_MODE] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_TX_SYMBOL_NUM] = { .type = NLA_U32 },
+	[MT76_TM_ATTR_RU_DRU_BW] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_UEQM_PATTERN] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_APPDU_EN] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_APPDU_IDX] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_APPDU_SIG] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_CHAN_SWITCH_MODE] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_SUB_CHAN] = { .type = NLA_U16 },
+	[MT76_TM_ATTR_SUB_PRI_SEL] = { .type = NLA_U8 },
 };
 EXPORT_SYMBOL_GPL(mt76_tm_policy);
 
 static inline bool mt76_testmode_offload(struct mt76_dev *dev)
 {
-	return is_mt799x(dev);
+	return is_mt799x(dev) || is_mt7999(dev);
 }
 
 MT76_TM_NLA_GET(u8)
@@ -129,7 +138,9 @@ mt76_testmode_max_mpdu_len(struct mt76_phy *phy, u8 tx_rate_mode)
 	case MT76_TM_TX_MODE_EHT_SU:
 	case MT76_TM_TX_MODE_EHT_TRIG:
 	case MT76_TM_TX_MODE_EHT_MU:
-		/* TODO: check the limit */
+	case MT76_TM_TX_MODE_UHR_SU:
+	case MT76_TM_TX_MODE_UHR_MU:
+	case MT76_TM_TX_MODE_UHR_TRIG:
 		return UINT_MAX;
 	case MT76_TM_TX_MODE_CCK:
 	case MT76_TM_TX_MODE_OFDM:
@@ -571,6 +582,9 @@ mt76_testmode_init_defaults(struct mt76_phy *phy)
 	td->payload = 0xaa;
 	td->max_pkt_ext = MT76_TM_MAX_PKT_EXT_8US;
 
+	td->ueqm_pattern = MT76_TM_UEQM_PATTERN_INVALID;
+	td->chsw.mode = MT76_TM_CHAN_SWITCH_MODE_NONE;
+
 	memcpy(td->addr[0], addr, ETH_ALEN);
 	memcpy(td->addr[1], addr, ETH_ALEN);
 	memcpy(td->addr[2], addr, ETH_ALEN);
@@ -767,7 +781,7 @@ mt76_testmode_set_list_mode(struct mt76_phy *phy, struct nlattr **tb)
 	    mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_RATE_NSS], &list->tx_rate_nss,
 			   1, hweight8(phy->antenna_mask)) ||
 	    mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_RATE_SGI], &list->tx_rate_sgi, 0, 4) ||
-	    mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_RATE_LDPC], &list->tx_rate_ldpc, 0, 1) ||
+	    mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_RATE_LDPC], &list->tx_rate_ldpc, 0, 2) ||
 	    mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_RATE_STBC], &list->tx_rate_stbc, 0, 1) ||
 	    mt76_tm_get_u8(tb[MT76_TM_ATTR_LM_CENTER_CH], &list->center_ch1, min_ch, max_ch))
 		return -EINVAL;
@@ -842,6 +856,11 @@ mt76_testmode_set_ru_sta(struct mt76_phy *phy, struct nlattr **tb)
 			goto out;
 		}
 
+		if (tb[MT76_TM_ATTR_APPDU_EN])
+			td->ru_appdu_en = !!nla_get_u8(tb[MT76_TM_ATTR_APPDU_EN]);
+		else
+			td->ru_appdu_en = false;
+
 		if (dev->test_ops->set_sta_ru_info(phy, true))
 			goto out;
 	}
@@ -868,14 +887,20 @@ mt76_testmode_set_ru_sta(struct mt76_phy *phy, struct nlattr **tb)
 		    mt76_tm_get_u8(tb[MT76_TM_ATTR_RU_SEG_IDX], &sta->seg_idx, 0, 3))
 			goto out;
 
-		if (mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_RATE_LDPC], &sta->tx_rate_ldpc, 0, 1) ||
+		if (mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_RATE_LDPC], &sta->tx_rate_ldpc, 0, 2) ||
 		    mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_RATE_NSS], &sta->tx_rate_nss,
 				   1, hweight8(phy->antenna_mask)) ||
 		    mt76_tm_get_u8(tb[MT76_TM_ATTR_MU_NSS], &sta->mu_nss,
 				   1, hweight8(phy->antenna_mask)) ||
 		    mt76_tm_get_u8(tb[MT76_TM_ATTR_RU_SS_IDX], &sta->ss_idx,
-				   0, hweight8(phy->antenna_mask) - 1))
+				   0, hweight8(phy->antenna_mask) - 1) ||
+		    mt76_tm_get_u8(tb[MT76_TM_ATTR_RU_DRU_BW], &sta->dru_bw,
+				   0, MT76_TM_DRU_BW_MAX) ||
+		    mt76_tm_get_u8(tb[MT76_TM_ATTR_APPDU_IDX], &sta->appdu_idx,
+				   0, MT_TM_MAX_APPDU_NUM - 1))
 			goto out;
+
+		sta->dru_enable = !!tb[MT76_TM_ATTR_RU_DRU_BW];
 
 		/* the correct tx rate mode might not be set here,
 		 * so defer the tx length check to mt76_testmode_tx_config_check
@@ -885,6 +910,85 @@ mt76_testmode_set_ru_sta(struct mt76_phy *phy, struct nlattr **tb)
 		if (dev->test_ops->set_sta_ru_info(phy, false))
 			goto out;
 	}
+
+	ret = 0;
+out:
+	return ret;
+}
+
+static int
+mt76_testmode_set_appdu(struct mt76_phy *phy, struct nlattr **tb)
+{
+	struct mt76_testmode_data *td = &phy->test;
+	struct mt76_dev *dev = phy->dev;
+	struct mt76_appdu_info *appdu;
+	int ret = -EINVAL;
+	u8 appdu_idx;
+
+	if (!dev->test_ops->set_appdu_info) {
+		ret = -EOPNOTSUPP;
+		goto out;
+	}
+
+	if (mt76_tm_get_u8(tb[MT76_TM_ATTR_APPDU_IDX], &appdu_idx,
+			   0, MT_TM_MAX_APPDU_NUM - 1))
+		goto out;
+
+	if (!tb[MT76_TM_ATTR_TX_RATE_MODE] || !tb[MT76_TM_ATTR_APPDU_SIG] ||
+	    !tb[MT76_TM_ATTR_TX_PKT_BW] || !tb[MT76_TM_ATTR_TX_PRI_SEL] ||
+	    !tb[MT76_TM_ATTR_TX_PP_BITMAP])
+		goto out;
+
+	appdu = &td->appdu[appdu_idx];
+
+	if (mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_RATE_MODE], &appdu->tx_rate_mode,
+			   MT76_TM_TX_MODE_VHT, MT76_TM_TX_MODE_MAX) ||
+	    mt76_tm_get_u8(tb[MT76_TM_ATTR_APPDU_SIG], &appdu->sig_mcs, 0, 5) ||
+	    mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_PKT_BW], &appdu->tx_pkt_bw,
+			   NL80211_CHAN_WIDTH_20_NOHT, NL80211_CHAN_WIDTH_320) ||
+	    mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_PRI_SEL], &appdu->tx_pri_sel, 0, 15) ||
+	    mt76_tm_get_u16(tb[MT76_TM_ATTR_TX_PP_BITMAP], &appdu->tx_pp_bitmap,
+			    1, MT76_TM_NO_PUNCTURED))
+		goto out;
+
+	if (dev->test_ops->set_appdu_info(phy, appdu_idx))
+		goto out;
+
+	ret = 0;
+out:
+	return ret;
+}
+
+static int
+mt76_testmode_set_chan_switch_mode(struct mt76_phy *phy, struct nlattr **tb)
+{
+	struct mt76_testmode_data *td = &phy->test;
+	struct mt76_dev *dev = phy->dev;
+	int i, ret = -EINVAL;
+
+	if (!dev->test_ops->set_chan_switch_mode) {
+		ret = -EOPNOTSUPP;
+		goto out;
+	}
+
+	if (mt76_tm_get_u8(tb[MT76_TM_ATTR_CHAN_SWITCH_MODE], &td->chsw.mode,
+			   MT76_TM_CHAN_SWITCH_MODE_NONE, MT76_TM_CHAN_SWITCH_MODE_MAX))
+		goto out;
+
+	if (td->chsw.mode != MT76_TM_CHAN_SWITCH_MODE_NONE &&
+	    (!tb[MT76_TM_ATTR_SUB_CHAN] || !tb[MT76_TM_ATTR_SUB_PRI_SEL]))
+		goto out;
+
+	if (mt76_tm_get_u8(tb[MT76_TM_ATTR_SUB_PRI_SEL], &td->chsw.sub_pri_sel, 0, 15) ||
+	    mt76_tm_get_u16(tb[MT76_TM_ATTR_SUB_CHAN], &td->chsw.sub_chan, 1, 257))
+		goto out;
+
+	for (i = MT76_TM_ATTR_CHAN_SWITCH_MODE; i <= MT76_TM_ATTR_SUB_PRI_SEL; i++)
+		if (tb[i])
+			mt76_testmode_param_set(td, i);
+
+	if (dev->test_ops->set_chan_switch_mode(phy))
+		goto out;
 
 	ret = 0;
 out:
@@ -970,7 +1074,8 @@ mt76_testmode_txbf_profile_update_all_cmd(struct mt76_phy *phy, struct nlattr **
 int mt76_testmode_cmd(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 		      void *data, int len)
 {
-#define MT76_TM_MAX_PPDU_TX_TIME	5484
+#define MT76_TM_MAX_PPDU_TX_TIME		5484
+#define MT76_TM_MAX_PPDU_TX_SYMBOL_NUM		1523
 	struct mt76_phy *phy = hw->priv;
 	struct mt76_dev *dev = phy->dev;
 	struct mt76_testmode_data *td = &phy->test;
@@ -1014,6 +1119,16 @@ int mt76_testmode_cmd(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 		goto out;
 	}
 
+	if (tb[MT76_TM_ATTR_APPDU_IDX]) {
+		err = mt76_testmode_set_appdu(phy, tb);
+		goto out;
+	}
+
+	if (tb[MT76_TM_ATTR_CHAN_SWITCH_MODE]) {
+		err = mt76_testmode_set_chan_switch_mode(phy, tb);
+		goto out;
+	}
+
 	if (tb[MT76_TM_ATTR_EEPROM_ACTION]) {
 		err = mt76_testmode_set_eeprom(phy, tb);
 		goto out;
@@ -1032,7 +1147,7 @@ int mt76_testmode_cmd(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	    mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_RATE_NSS], &td->tx_rate_nss,
 			   1, hweight8(phy->antenna_mask)) ||
 	    mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_RATE_SGI], &td->tx_rate_sgi, 0, 4) ||
-	    mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_RATE_LDPC], &td->tx_rate_ldpc, 0, 1) ||
+	    mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_RATE_LDPC], &td->tx_rate_ldpc, 0, 2) ||
 	    mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_RATE_STBC], &td->tx_rate_stbc, 0, 1) ||
 	    mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_LTF], &td->tx_ltf, 0, 2) ||
 	    mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_ANTENNA], &td->tx_antenna_mask, 0, 0xff) ||
@@ -1068,7 +1183,9 @@ int mt76_testmode_cmd(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	    mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_TONE_TYPE], &td->tone.type,
 			   0, MT76_TM_TX_TONE_TYPE_MAX) ||
 	    mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_TONE_FREQ_OFFSET], &td->tone.freq_offset,
-			   0, MT76_TM_TX_TONE_FREQ_OFFS_MAX))
+			   0, MT76_TM_TX_TONE_FREQ_OFFS_MAX) ||
+	    mt76_tm_get_u8(tb[MT76_TM_ATTR_UEQM_PATTERN], &td->ueqm_pattern,
+			   0, MT76_TM_UEQM_PATTERN_MAX))
 		goto out;
 
 	if (mt76_tm_get_u16(tb[MT76_TM_ATTR_TX_LENGTH], &td->tx_mpdu_len,
@@ -1089,7 +1206,9 @@ int mt76_testmode_cmd(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	    mt76_tm_get_u32(tb[MT76_TM_ATTR_TX_TIME], &td->tx_time,
 			    0, MT76_TM_MAX_PPDU_TX_TIME) ||
 	    mt76_tm_get_u32(tb[MT76_TM_ATTR_RX_FILTER], &td->rx_filter,
-			    0, GENMASK(23, 0)))
+			    0, GENMASK(23, 0)) ||
+	    mt76_tm_get_u32(tb[MT76_TM_ATTR_TX_SYMBOL_NUM], &td->tx_symbol_num,
+			    0, MT76_TM_MAX_PPDU_TX_SYMBOL_NUM))
 		goto out;
 
 	/* allow setting offchan channel to 0 to disable RDD */
@@ -1618,7 +1737,17 @@ int mt76_testmode_dump(struct ieee80211_hw *hw, struct sk_buff *msg,
 	    (mt76_testmode_param_present(td, MT76_TM_ATTR_TX_TONE_TYPE) &&
 	     nla_put_u8(msg, MT76_TM_ATTR_TX_TONE_TYPE, td->tone.type)) ||
 	    (mt76_testmode_param_present(td, MT76_TM_ATTR_TX_TONE_FREQ_OFFSET) &&
-	     nla_put_u8(msg, MT76_TM_ATTR_TX_TONE_FREQ_OFFSET, td->tone.freq_offset)))
+	     nla_put_u8(msg, MT76_TM_ATTR_TX_TONE_FREQ_OFFSET, td->tone.freq_offset)) ||
+	    (mt76_testmode_param_present(td, MT76_TM_ATTR_TX_SYMBOL_NUM) &&
+	     nla_put_u32(msg, MT76_TM_ATTR_TX_SYMBOL_NUM, td->tx_symbol_num)) ||
+	    (mt76_testmode_param_present(td, MT76_TM_ATTR_UEQM_PATTERN) &&
+	     nla_put_u8(msg, MT76_TM_ATTR_UEQM_PATTERN, td->ueqm_pattern)) ||
+	    (mt76_testmode_param_present(td, MT76_TM_ATTR_CHAN_SWITCH_MODE) &&
+	     nla_put_u8(msg, MT76_TM_ATTR_CHAN_SWITCH_MODE, td->chsw.mode)) ||
+	    (mt76_testmode_param_present(td, MT76_TM_ATTR_SUB_CHAN) &&
+	     nla_put_u16(msg, MT76_TM_ATTR_SUB_CHAN, td->chsw.sub_chan)) ||
+	    (mt76_testmode_param_present(td, MT76_TM_ATTR_SUB_PRI_SEL) &&
+	     nla_put_u8(msg, MT76_TM_ATTR_SUB_PRI_SEL, td->chsw.sub_pri_sel)))
 		goto out;
 
 	if (mt76_testmode_param_present(td, MT76_TM_ATTR_TX_POWER) ||

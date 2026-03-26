@@ -14,6 +14,9 @@
 
 #define MT76_TM_NO_PUNCTURED		0xffff
 
+#define MT76_TM_UEQM_PATTERN_MAX	3
+#define MT76_TM_UEQM_PATTERN_INVALID	7
+
 #define MT76_TM_NLA_GET(type)								\
 static int mt76_tm_get_##type(struct nlattr *attr, type *dest, type min, type max)	\
 {											\
@@ -147,7 +150,7 @@ static int mt76_tm_get_##type(struct nlattr *attr, type *dest, type min, type ma
  *	(nested, see &enum mt76_testmode_icap_stats_attr)
  *
  * @MT76_TM_ATTR_TX_TONE_TYPE: config the TX tone to be single or dual
- *	(u8, see &enum mt76_testmode_tx_tone_type)
+ *	(u8, see & enum mt76_testmode_tx_tone_type)
  * @MT76_TM_ATTR_TX_TONE_FREQ_OFFSET: config the frequency offset of the tone
  *	(u8, see &enum mt76_testmode_tx_tone_freq_offs)
  * @MT76_TM_ATTR_TX_TONE_DC_OFFSET: config the DC offset of the tone
@@ -158,6 +161,19 @@ static int mt76_tm_get_##type(struct nlattr *attr, type *dest, type min, type ma
  *
  * @MT76_TM_ATTR_TX_LEN_MODE: show the current tx length mode
  *	(u8, see &enum mt76_testmode_tx_len_mode)
+ * @MT76_TM_ATTR_TX_SYMBOL_NUM: config the TX symbol number (u32)
+ * @MT76_TM_ATTR_RU_DRU_BW: config the bandwidth of the distributed RU
+ *	(u8, see &enum mt76_testmode_dru_bw)
+ *
+ * @MT76_TM_ATTR_UEQM_PATTERN: config the unequal modulation pattern (u8)
+ * @MT76_TM_ATTR_APPDU_EN: enable aggregated PPDU (u8)
+ * @MT76_TM_ATTR_APPDU_IDX: config the aggregated PPDU index (u8)
+ * @MT76_TM_ATTR_APPDU_SIG: config the HE SIG-B or EHT SIG for the aggregated PPDU (u8)
+ * @MT76_TM_ATTR_CHAN_SWITCH_MODE: config the channel switch mode
+ *	(u8, see &enum mt76_testmode_chan_switch_mode)
+ * @MT76_TM_ATTR_SUB_CHAN: config the sub channel for DSO/NPCA (u16)
+ * @MT76_TM_ATTR_SUB_PRI_SEL: config the primary channel selection index of
+ *	the sub channel for DSO/NPCA (u8)
  */
 enum mt76_testmode_attr {
 	MT76_TM_ATTR_UNSPEC,
@@ -271,6 +287,17 @@ enum mt76_testmode_attr {
 	MT76_TM_ATTR_TX_PP_BITMAP,
 
 	MT76_TM_ATTR_TX_LEN_MODE,
+	MT76_TM_ATTR_TX_SYMBOL_NUM,
+
+	MT76_TM_ATTR_RU_DRU_BW,
+
+	MT76_TM_ATTR_UEQM_PATTERN,
+	MT76_TM_ATTR_APPDU_EN,
+	MT76_TM_ATTR_APPDU_IDX,
+	MT76_TM_ATTR_APPDU_SIG,
+	MT76_TM_ATTR_CHAN_SWITCH_MODE,
+	MT76_TM_ATTR_SUB_CHAN,
+	MT76_TM_ATTR_SUB_PRI_SEL,
 
 	/* keep last */
 	NUM_MT76_TM_ATTRS,
@@ -396,6 +423,9 @@ enum mt76_testmode_state {
  * @MT76_TM_TX_MODE_EHT_SU: 802.11be single-user MIMO
  * @MT76_TM_TX_MODE_EHT_TRIG: 802.11be trigger-based
  * @MT76_TM_TX_MODE_EHT_MU: 802.11be multi-user MIMO
+ * @MT76_TM_TX_MODE_UHR_SU: 802.11bn single-user MIMO
+ * @MT76_TM_TX_MODE_UHR_MU: 802.11bn multi-user MIMO
+ * @MT76_TM_TX_MODE_UHR_TRIG: 802.11bn trigger-based
  */
 enum mt76_testmode_tx_mode {
 	MT76_TM_TX_MODE_CCK,
@@ -409,6 +439,9 @@ enum mt76_testmode_tx_mode {
 	MT76_TM_TX_MODE_EHT_SU,
 	MT76_TM_TX_MODE_EHT_TRIG,
 	MT76_TM_TX_MODE_EHT_MU,
+	MT76_TM_TX_MODE_UHR_SU,
+	MT76_TM_TX_MODE_UHR_MU,
+	MT76_TM_TX_MODE_UHR_TRIG,
 
 	/* keep last */
 	NUM_MT76_TM_TX_MODES,
@@ -707,9 +740,46 @@ enum mt76_testmode_tx_tone_freq_offs {
 enum mt76_testmode_tx_len_mode {
 	MT76_TM_TX_LEN_MODE_LENGTH,
 	MT76_TM_TX_LEN_MODE_TIME,
+	MT76_TM_TX_LEN_MODE_SYMBOL,
 
 	/* keep last */
 	NUM_MT76_TM_TX_LEN_MODE,
 	MT76_TM_TX_LEN_MODE_MAX = NUM_MT76_TM_TX_LEN_MODE - 1,
+};
+
+/**
+ * enum mt76_testmode_dru_bw - bandwidth of the distributed RU
+ *
+ * @MT76_TM_DRU_BW_20: distributed RU bandwidth 20 MHz
+ * @MT76_TM_DRU_BW_40: distributed RU bandwidth 40 MHz
+ * @MT76_TM_DRU_BW_80: distributed RU bandwidth 80 MHz
+ */
+enum mt76_testmode_dru_bw {
+	MT76_TM_DRU_BW_20,
+	MT76_TM_DRU_BW_40,
+	MT76_TM_DRU_BW_80,
+
+	/* keep last */
+	NUM_MT76_TM_DRU_BW,
+	MT76_TM_DRU_BW_MAX = NUM_MT76_TM_DRU_BW - 1,
+};
+
+/**
+ * enum mt76_testmode_chan_switch_mode - channel switch mode
+ *
+ * @MT76_TM_CHAN_SWITCH_MODE_NONE: disable DSO/NPCA
+ * @MT76_TM_CHAN_SWITCH_MODE_DSO: enable and trigger DSO based on ICF frame
+ * @MT76_TM_CHAN_SWITCH_MODE_DSO_MANUAL: enable and trigger DSO manually
+ * @MT76_TM_CHAN_SWITCH_MODE_NPCA: enable NPCA
+ */
+enum mt76_testmode_chan_switch_mode {
+	MT76_TM_CHAN_SWITCH_MODE_NONE,
+	MT76_TM_CHAN_SWITCH_MODE_DSO,
+	MT76_TM_CHAN_SWITCH_MODE_DSO_MANUAL,
+	MT76_TM_CHAN_SWITCH_MODE_NPCA,
+
+	/* keep last */
+	NUM_MT76_TM_CHAN_SWITCH_MODE,
+	MT76_TM_CHAN_SWITCH_MODE_MAX = NUM_MT76_TM_CHAN_SWITCH_MODE - 1,
 };
 #endif
