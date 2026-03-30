@@ -528,7 +528,7 @@ mt7999_tm_set_rx_frames(struct mt7999_phy *phy, bool en)
 	if (td->tx_rate_mode >= MT76_TM_TX_MODE_HE_MU &&
 	    td->tx_rate_mode != MT76_TM_TX_MODE_EHT_TRIG &&
 	    td->tx_rate_mode != MT76_TM_TX_MODE_UHR_TRIG)
-		mt7999_tm_set(dev, SET_ID(RX_MU_AID), td->mu_aid ?: MT76_TM_MAX_MU_AID);
+		mt7999_tm_set(dev, SET_ID(RX_MU_AID), td->mu_aid);
 
 	mt7999_tm_set(dev, SET_ID(TX_MODE),
 		      mt7999_tm_rate_mapping(td->tx_rate_mode, RATE_MODE_TO_PHY));
