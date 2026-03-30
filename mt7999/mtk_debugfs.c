@@ -4570,34 +4570,34 @@ static const struct file_operations fops_mlo_agc_trig = {
 };
 
 static int
-mt7999_sr_pp_enable_get(void *data, u64 *val)
+mt7999_sr_pp_disable_get(void *data, u64 *val)
 {
 	struct mt7999_dev *dev = data;
 
-	*val = dev->sr_pp_enable;
+	*val = dev->sr_pp_disable;
 
 	return 0;
 }
 static int
-mt7999_sr_pp_enable_set(void *data, u64 val)
+mt7999_sr_pp_disable_set(void *data, u64 val)
 {
 	struct mt7999_dev *dev = data;
 	int ret;
-	bool en = !!val;
+	bool disable = !!val;
 
-	if (en == dev->sr_pp_enable)
+	if (disable == dev->sr_pp_disable)
 		return 0;
 
-	ret = mt7999_mcu_set_sr_pp_en(dev, en);
+	ret = mt7999_mcu_set_sr_pp_en(dev, !disable);
 	if (ret)
 		return ret;
 
-	dev->sr_pp_enable = en;
+	dev->sr_pp_disable = disable;
 
 	return 0;
 }
-DEFINE_DEBUGFS_ATTRIBUTE(fops_sr_pp_enable, mt7999_sr_pp_enable_get,
-			 mt7999_sr_pp_enable_set, "%lld\n");
+DEFINE_DEBUGFS_ATTRIBUTE(fops_sr_pp_disable, mt7999_sr_pp_disable_get,
+			 mt7999_sr_pp_disable_set, "%lld\n");
 
 static int
 mt7999_pcie_l1ss_enable_get(void *data, u64 *val)
@@ -5043,7 +5043,7 @@ void mt7999_mtk_init_dev_debugfs(struct mt7999_dev *dev, struct dentry *dir)
 	debugfs_create_file("pbc_lower_bound", 0600, dir, dev,
 			     &fops_mt7999_pbc_lower_bound);
 
-	debugfs_create_file("sr_pp_enable", 0600, dir, dev, &fops_sr_pp_enable);
+	debugfs_create_file("sr_pp_disable", 0600, dir, dev, &fops_sr_pp_disable);
 
 	/* Low power related */
 	debugfs_create_file("pci_l1ss", 0600, dir, dev, &fops_pcie_l1ss_enable);

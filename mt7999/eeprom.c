@@ -347,10 +347,6 @@ static int mt7999_eeprom_parse_efuse_hw_cap(struct mt7999_phy *phy,
 	/* FIXME: remove it when uhr is supported */
 	dev->has_uhr = false;
 
-#ifdef CONFIG_MTK_DEBUG
-	dev->sr_pp_enable = true;
-#endif
-
 	return 0;
 }
 

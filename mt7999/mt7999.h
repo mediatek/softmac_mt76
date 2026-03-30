@@ -972,7 +972,7 @@ struct mt7999_dev {
 		bool ignore_radar_event;
 	} dbg;
 	const struct mt7999_dbg_reg_desc *dbg_reg;
-	bool sr_pp_enable:1;
+	bool sr_pp_disable:1;
 	bool red_enable:1;
 
 	struct {
