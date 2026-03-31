@@ -1625,6 +1625,7 @@ int mt76_testmode_dump(struct ieee80211_hw *hw, struct sk_buff *msg,
 	    nla_put_u8(msg, MT76_TM_ATTR_PAYLOAD_RULE, td->payload_rule) ||
 	    nla_put_u8(msg, MT76_TM_ATTR_PAYLOAD, td->payload) ||
 	    nla_put_u8(msg, MT76_TM_ATTR_MAX_PKT_EXT, td->max_pkt_ext) ||
+	    nla_put_u16(msg, MT76_TM_ATTR_MU_AID, td->mu_aid) ||
 	    nla_put_u8(msg, MT76_TM_ATTR_TX_LEN_MODE, td->tx_len_mode) ||
 	    (mt76_testmode_param_present(td, MT76_TM_ATTR_TX_LTF) &&
 	     nla_put_u8(msg, MT76_TM_ATTR_TX_LTF, td->tx_ltf)) ||
