@@ -1172,11 +1172,30 @@ struct ra_fixed_rate_reset {
 	u8 rsv[18];
 } __packed;
 
-/* opt param bitmap - BIT(n) to enable fixed specific parameter:
- * bit(0): phymode, bit(1): mcs, bit(2): nss, bit(3): bw,
- * bit(4): gi, bit(5): ecc, bit(6): stbc, bit(7): ltf,
- * bit(8): spe, bit(9): ueqm, bit(10): dcm
- */
+enum ra_phy_mode {
+	RA_PHY_MODE_CCK,
+	RA_PHY_MODE_OFDM,
+	RA_PHY_MODE_HT,
+	RA_PHY_MODE_VHT,
+	RA_PHY_MODE_PLR,
+	RA_PHY_MODE_HE,
+	RA_PHY_MODE_EHT,
+	RA_PHY_MODE_UHR,
+	RA_PHY_MODE_ELR,
+};
+
+#define RA_OPT_PARAM_PHYMODE	BIT(0)
+#define RA_OPT_PARAM_MCS	BIT(1)
+#define RA_OPT_PARAM_NSS	BIT(2)
+#define RA_OPT_PARAM_BW		BIT(3)
+#define RA_OPT_PARAM_GI		BIT(4)
+#define RA_OPT_PARAM_ECC	BIT(5)
+#define RA_OPT_PARAM_STBC	BIT(6)
+#define RA_OPT_PARAM_LTF	BIT(7)
+#define RA_OPT_PARAM_SPE	BIT(8)
+#define RA_OPT_PARAM_UEQM	BIT(9)
+#define RA_OPT_PARAM_DCM	BIT(10)
+
 struct ra_fixed_rate_opt_param_set {
 	struct ra_common_hdr hdr;
 	__le16 opt_param_bitmap;
@@ -1211,12 +1230,7 @@ enum {
 
 enum {
 	RATE_PARAM_VHT_OMN_UPDATE = 1,
-	RATE_PARAM_FIXED = 3,
 	RATE_PARAM_MMPS_UPDATE = 5,
-	RATE_PARAM_FIXED_HE_LTF = 7,
-	RATE_PARAM_FIXED_MCS,
-	RATE_PARAM_FIXED_GI = 11,
-	RATE_PARAM_FIXED_ENCODING,
 	RATE_PARAM_AUTO = 20,
 #ifdef CONFIG_MTK_VENDOR
 	RATE_PARAM_FIXED_MIMO = 30,

@@ -125,6 +125,7 @@ struct mt7999_vif;
 struct mt7999_sta;
 struct mt7999_dfs_pulse;
 struct mt7999_dfs_pattern;
+struct ra_rate_params;
 
 enum mt7999_ram_type {
 	MT7999_RAM_TYPE_WM,
@@ -1291,8 +1292,12 @@ int mt7999_mcu_set_tx(struct mt7999_dev *dev, struct ieee80211_vif *vif,
 		      struct ieee80211_bss_conf *link_conf);
 int mt7999_mcu_set_fixed_rate_ctrl(struct mt7999_dev *dev, void *data, u16 tag,
 				   u16 version);
-int mt7999_mcu_set_fixed_field(struct mt7999_dev *dev, struct mt7999_sta *msta,
-			       void *data, u8 link_id, u32 field);
+int mt7999_mcu_set_fixed_rate_param(struct mt7999_dev *dev,
+				    struct mt7999_sta *msta,
+				    struct ra_rate_params *params,
+				    u8 link_id, u16 bitmap);
+int mt7999_mcu_sta_rate_update(struct mt7999_dev *dev, struct mt7999_sta *msta,
+			       u8 link_id, u32 field);
 int mt7999_mcu_set_eeprom(struct mt7999_dev *dev);
 int mt7999_mcu_get_eeprom(struct mt7999_dev *dev, u32 offset, u8 *buf, u32 buf_len,
 			  enum mt7999_eeprom_mode mode);

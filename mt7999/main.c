@@ -212,6 +212,8 @@ mt7999_init_bitrate_mask(struct ieee80211_vif *vif, struct mt7999_vif_link *mlin
 		mlink->bitrate_mask.control[i].gi = NL80211_TXRATE_DEFAULT_GI;
 		mlink->bitrate_mask.control[i].he_gi = 0xff;
 		mlink->bitrate_mask.control[i].he_ltf = 0xff;
+		mlink->bitrate_mask.control[i].eht_gi = 0xff;
+		mlink->bitrate_mask.control[i].eht_ltf = 0xff;
 		mlink->bitrate_mask.control[i].legacy = GENMASK(31, 0);
 		memset(mlink->bitrate_mask.control[i].ht_mcs, 0xff,
 		       sizeof(mlink->bitrate_mask.control[i].ht_mcs));
@@ -219,6 +221,8 @@ mt7999_init_bitrate_mask(struct ieee80211_vif *vif, struct mt7999_vif_link *mlin
 		       sizeof(mlink->bitrate_mask.control[i].vht_mcs));
 		memset(mlink->bitrate_mask.control[i].he_mcs, 0xff,
 		       sizeof(mlink->bitrate_mask.control[i].he_mcs));
+		memset(mlink->bitrate_mask.control[i].eht_mcs, 0xff,
+		       sizeof(mlink->bitrate_mask.control[i].eht_mcs));
 	}
 }
 

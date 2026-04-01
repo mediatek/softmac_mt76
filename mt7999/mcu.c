@@ -3041,19 +3041,18 @@ int mt7999_mcu_set_fixed_rate_ctrl(struct mt7999_dev *dev, void *data,
 	return mt76_mcu_skb_send_msg(&dev->mt76, skb, MCU_WM_UNI_CMD(RA), true);
 }
 
-int mt7999_mcu_set_fixed_field(struct mt7999_dev *dev, struct mt7999_sta *msta,
-			       void *data, u8 link_id, u32 field)
+int mt7999_mcu_sta_rate_update(struct mt7999_dev *dev, struct mt7999_sta *msta,
+			       u8 link_id, u32 field)
 {
 	struct mt7999_vif *mvif = msta->vif;
-	struct mt7999_sta_link *msta_link;
 	struct sta_rec_ra_fixed_uni *ra;
-	struct sta_phy_uni *phy = data;
-	struct mt76_vif_link *mlink;
-	struct sk_buff *skb;
-	int err = -ENODEV;
-	struct tlv *tlv;
-	struct ieee80211_sta *sta;
+	struct mt7999_sta_link *msta_link;
 	struct ieee80211_link_sta *link_sta;
+	struct mt76_vif_link *mlink;
+	struct ieee80211_sta *sta;
+	struct sk_buff *skb;
+	struct tlv *tlv;
+	int err = -ENODEV;
 
 	rcu_read_lock();
 
@@ -3083,14 +3082,6 @@ int mt7999_mcu_set_fixed_field(struct mt7999_dev *dev, struct mt7999_sta *msta,
 
 	switch (field) {
 	case RATE_PARAM_AUTO:
-		break;
-	case RATE_PARAM_FIXED:
-	case RATE_PARAM_FIXED_MCS:
-	case RATE_PARAM_FIXED_GI:
-	case RATE_PARAM_FIXED_HE_LTF:
-	case RATE_PARAM_FIXED_ENCODING:
-		if (phy)
-			ra->phy = *phy;
 		break;
 	case RATE_PARAM_MMPS_UPDATE:
 		ra->mmps_mode = mt7999_mcu_get_mmps_mode(link_sta->smps_mode);
@@ -3136,35 +3127,153 @@ error_unlock:
 }
 
 static int
+mt7999_count_mcs_rates(const u16 *mcs_mask, int nss_max,
+		       u8 *out_mcs, u8 *out_nss)
+{
+	int i, nrates = 0;
+
+	for (i = 0; i < nss_max; i++) {
+		if (!mcs_mask[i])
+			continue;
+		nrates += hweight16(mcs_mask[i]);
+		if (nrates > 1)
+			return nrates;
+		*out_mcs = ffs(mcs_mask[i]) - 1;
+		*out_nss = i;
+	}
+
+	return nrates;
+}
+
+static int
+mt7999_count_ht_rates(const u8 *mcs_mask, u8 *out_mcs, u8 *out_nss)
+{
+	int i, nrates = 0;
+
+	for (i = 0; i < IEEE80211_HT_MCS_MASK_LEN; i++) {
+		if (!mcs_mask[i])
+			continue;
+		nrates += hweight8(mcs_mask[i]);
+		if (nrates > 1)
+			return nrates;
+		*out_mcs = ffs(mcs_mask[i]) - 1;
+		*out_nss = i;
+	}
+
+	return nrates;
+}
+
+/* n > 1 means a rate range (e.g. MCS 0-7), which firmware does not support. */
+static bool
+mt7999_find_fixed_rate(struct ieee80211_link_sta *link_sta,
+		       const struct cfg80211_bitrate_mask *mask,
+		       enum nl80211_band band,
+		       struct ra_rate_params *params)
+{
+	typeof(mask->control[0]) *ctrl = &mask->control[band];
+	u8 mcs = 0, nss = 0;
+	int n;
+
+	if (link_sta->eht_cap.has_eht) {
+		n = mt7999_count_mcs_rates(ctrl->eht_mcs, NL80211_EHT_NSS_MAX,
+					   &mcs, &nss);
+		if (n) {
+			params->phy_mode = RA_PHY_MODE_EHT;
+			params->mcs = mcs;
+			params->nss = nss;
+			return n == 1;
+		}
+	}
+
+	if (link_sta->he_cap.has_he) {
+		n = mt7999_count_mcs_rates(ctrl->he_mcs, NL80211_HE_NSS_MAX,
+					   &mcs, &nss);
+		if (n) {
+			params->phy_mode = RA_PHY_MODE_HE;
+			params->mcs = mcs;
+			params->nss = nss;
+			return n == 1;
+		}
+	}
+
+	if (link_sta->vht_cap.vht_supported) {
+		n = mt7999_count_mcs_rates(ctrl->vht_mcs, NL80211_VHT_NSS_MAX,
+					   &mcs, &nss);
+		if (n) {
+			params->phy_mode = RA_PHY_MODE_VHT;
+			params->mcs = mcs;
+			params->nss = nss;
+			return n == 1;
+		}
+	}
+
+	if (link_sta->ht_cap.ht_supported) {
+		n = mt7999_count_ht_rates(ctrl->ht_mcs, &mcs, &nss);
+		if (n) {
+			params->phy_mode = RA_PHY_MODE_HT;
+			params->mcs = mcs;
+			params->nss = nss;
+			return n == 1;
+		}
+	}
+
+	n = hweight32(ctrl->legacy);
+	if (n == 1) {
+		int idx = ffs(ctrl->legacy) - 1;
+
+		if (idx < 4 && band == NL80211_BAND_2GHZ) {
+			params->phy_mode = RA_PHY_MODE_CCK;
+			params->mcs = idx;
+		} else {
+			params->phy_mode = RA_PHY_MODE_OFDM;
+			params->mcs = (band == NL80211_BAND_2GHZ) ? idx - 4 : idx;
+		}
+		return true;
+	}
+
+	return false;
+}
+
+int mt7999_mcu_set_fixed_rate_param(struct mt7999_dev *dev,
+				    struct mt7999_sta *msta,
+				    struct ra_rate_params *params,
+				    u8 link_id, u16 bitmap)
+{
+	struct ra_fixed_rate_opt_param_set rate = {};
+	struct mt7999_sta_link *msta_link;
+
+	lockdep_assert_held(&dev->mt76.mutex);
+
+	msta_link = mt7999_sta_link_protected(dev, msta, link_id);
+	if (!msta_link)
+		return -ENODEV;
+
+	rate.hdr.wlan_idx[0] = cpu_to_le16(msta_link->wcid.idx);
+	rate.hdr.target_wlan_idx = cpu_to_le16(msta_link->wcid.idx);
+	rate.hdr.wlan_idx_num = 1;
+	rate.hdr.ac_idx_bitmap = GENMASK(IEEE80211_NUM_ACS - 1, 0);
+	rate.opt_param_bitmap = cpu_to_le16(bitmap);
+	rate.params = *params;
+
+	return mt7999_mcu_set_fixed_rate_ctrl(dev, &rate,
+					      UNI_RA_FIXED_RATE_OPT_PARAM_SET, 0);
+}
+
+static int
 mt7999_mcu_add_rate_ctrl_fixed(struct mt7999_dev *dev, struct mt7999_sta *msta,
 			       struct ieee80211_vif *vif, u8 link_id)
 {
-	struct ieee80211_link_sta *link_sta;
 	struct cfg80211_bitrate_mask mask;
+	struct ieee80211_link_sta *link_sta;
 	struct mt7999_sta_link *msta_link;
 	struct mt7999_vif_link *link;
-	struct sta_phy_uni phy = {};
+	struct ra_rate_params params = {};
+	typeof(mask.control[0]) *ctrl;
 	struct ieee80211_sta *sta;
-	int ret, nrates = 0, idx;
 	enum nl80211_band band;
 	struct mt76_phy *mphy;
-	bool has_he;
-
-#define __sta_phy_bitrate_mask_check(_mcs, _gi, _ht, _he)			\
-	do {									\
-		u8 i, gi = mask.control[band]._gi;				\
-		gi = (_he) ? gi : gi == NL80211_TXRATE_FORCE_SGI;		\
-		phy.sgi = gi;							\
-		phy.he_ltf = mask.control[band].he_ltf;				\
-		for (i = 0; i < ARRAY_SIZE(mask.control[band]._mcs); i++) {	\
-			if (!mask.control[band]._mcs[i])			\
-				continue;					\
-			nrates += hweight16(mask.control[band]._mcs[i]);	\
-			phy.mcs = ffs(mask.control[band]._mcs[i]) - 1;		\
-			if (_ht)						\
-				phy.mcs += 8 * i;				\
-		}								\
-	} while (0)
+	bool fixed_rate;
+	u16 bitmap = 0;
 
 	rcu_read_lock();
 
@@ -3186,70 +3295,46 @@ mt7999_mcu_add_rate_ctrl_fixed(struct mt7999_dev *dev, struct mt7999_sta *msta,
 		goto error_unlock;
 
 	band = mphy->chandef.chan->band;
-	has_he = link_sta->he_cap.has_he;
 	mask = link->bitrate_mask;
-	idx = msta_link->wcid.idx;
 
-	if (has_he) {
-		__sta_phy_bitrate_mask_check(he_mcs, he_gi, 0, 1);
-	} else if (link_sta->vht_cap.vht_supported) {
-		__sta_phy_bitrate_mask_check(vht_mcs, gi, 0, 0);
-	} else if (link_sta->ht_cap.ht_supported) {
-		__sta_phy_bitrate_mask_check(ht_mcs, gi, 1, 0);
-	} else {
-		nrates = hweight32(mask.control[band].legacy);
-		phy.mcs = ffs(mask.control[band].legacy) - 1;
-	}
+	fixed_rate = mt7999_find_fixed_rate(link_sta, &mask, band, &params);
 
 	rcu_read_unlock();
 
-#undef __sta_phy_bitrate_mask_check
+	ctrl = &mask.control[band];
 
-	/* fall back to auto rate control */
-	if (mask.control[band].gi == NL80211_TXRATE_DEFAULT_GI &&
-	    mask.control[band].he_gi == GENMASK(7, 0) &&
-	    mask.control[band].he_ltf == GENMASK(7, 0) &&
-	    nrates != 1)
+	/* HE/EHT GI 0 is 0.8us, but firmware GI 0 is 0.4us (legacy SGI) */
+	if (ctrl->eht_gi != 0xff)
+		params.gi = ctrl->eht_gi + 1;
+	else if (ctrl->he_gi != 0xff)
+		params.gi = ctrl->he_gi + 1;
+	else if (ctrl->gi == NL80211_TXRATE_FORCE_SGI)
+		params.gi = 0;
+	else if (ctrl->gi == NL80211_TXRATE_FORCE_LGI)
+		params.gi = 1;
+
+	if (ctrl->eht_ltf != 0xff)
+		params.ltf = ctrl->eht_ltf;
+	else if (ctrl->he_ltf != 0xff)
+		params.ltf = ctrl->he_ltf;
+
+	if (fixed_rate) {
+		bitmap |= RA_OPT_PARAM_PHYMODE | RA_OPT_PARAM_MCS;
+		if (params.phy_mode >= RA_PHY_MODE_HT)
+			bitmap |= RA_OPT_PARAM_NSS;
+	}
+
+	if (ctrl->gi != NL80211_TXRATE_DEFAULT_GI ||
+	    ctrl->he_gi != 0xff || ctrl->eht_gi != 0xff)
+		bitmap |= RA_OPT_PARAM_GI;
+
+	if (ctrl->he_ltf != 0xff || ctrl->eht_ltf != 0xff)
+		bitmap |= RA_OPT_PARAM_LTF;
+
+	if (!bitmap)
 		return 0;
 
-	/* fixed single rate */
-	if (nrates == 1) {
-		ret = mt7999_mcu_set_fixed_field(dev, msta, &phy, link_id,
-						 RATE_PARAM_FIXED_MCS);
-		if (ret)
-			return ret;
-	}
-
-	/* fixed GI */
-	if (mask.control[band].gi != NL80211_TXRATE_DEFAULT_GI ||
-	    mask.control[band].he_gi != GENMASK(7, 0)) {
-		u32 addr;
-
-		/* firmware updates only TXCMD but doesn't take WTBL into
-		 * account, so driver should update here to reflect the
-		 * actual txrate hardware sends out.
-		 */
-		addr = mt7999_mac_wtbl_lmac_addr(dev, idx, 7);
-		if (has_he)
-			mt76_rmw_field(dev, addr, GENMASK(31, 24), phy.sgi);
-		else
-			mt76_rmw_field(dev, addr, GENMASK(15, 12), phy.sgi);
-
-		ret = mt7999_mcu_set_fixed_field(dev, msta, &phy, link_id,
-						 RATE_PARAM_FIXED_GI);
-		if (ret)
-			return ret;
-	}
-
-	/* fixed HE_LTF */
-	if (mask.control[band].he_ltf != GENMASK(7, 0)) {
-		ret = mt7999_mcu_set_fixed_field(dev, msta, &phy, link_id,
-						 RATE_PARAM_FIXED_HE_LTF);
-		if (ret)
-			return ret;
-	}
-
-	return 0;
+	return mt7999_mcu_set_fixed_rate_param(dev, msta, &params, link_id, bitmap);
 
 error_unlock:
 	rcu_read_unlock();

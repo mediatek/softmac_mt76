@@ -3251,7 +3251,7 @@ void mt7999_mac_sta_rc_work(struct work_struct *work)
 		spin_unlock_bh(&dev->mt76.sta_poll_lock);
 
 		if (changed & IEEE80211_RC_VHT_OMN_CHANGED)
-			mt7999_mcu_set_fixed_field(dev, msta_link->sta, NULL,
+			mt7999_mcu_sta_rate_update(dev, msta_link->sta,
 						   msta_link->wcid.link_id,
 						   RATE_PARAM_VHT_OMN_UPDATE);
 		else if (changed & (IEEE80211_RC_SUPP_RATES_CHANGED |
@@ -3262,18 +3262,19 @@ void mt7999_mac_sta_rc_work(struct work_struct *work)
 						 true);
 
 		if (changed & IEEE80211_RC_SMPS_CHANGED)
-			mt7999_mcu_set_fixed_field(dev, msta_link->sta, NULL,
+			mt7999_mcu_sta_rate_update(dev, msta_link->sta,
 						   msta_link->wcid.link_id,
 						   RATE_PARAM_MMPS_UPDATE);
 #ifdef CONFIG_MTK_VENDOR
 		if (changed & IEEE80211_RC_CODING_TYPE_CHANGED) {
-			struct sta_phy_uni phy = {
+			struct ra_rate_params params = {
 				.ldpc = dev->coding_type,
 			};
 
-			mt7999_mcu_set_fixed_field(dev, msta_link->sta, &phy,
-						   msta_link->wcid.link_id,
-						   RATE_PARAM_FIXED_ENCODING);
+			mt7999_mcu_set_fixed_rate_param(dev, msta_link->sta,
+							&params,
+							msta_link->wcid.link_id,
+							RA_OPT_PARAM_ECC);
 		}
 #endif
 
