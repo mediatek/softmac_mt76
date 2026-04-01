@@ -738,6 +738,7 @@ int mt7999_txbf_init(struct mt7999_dev *dev)
 int mt7999_vow_init(struct mt7999_phy *phy)
 {
 	struct mt7999_vow_ctrl *vow = &phy->dev->vow;
+	unsigned long flags = 0;
 	int ret;
 
 	vow->atf_enable = true;
@@ -755,6 +756,9 @@ int mt7999_vow_init(struct mt7999_phy *phy)
 	vow->drr_quantum[6] = VOW_DRR_QUANTUM_L6;
 	vow->drr_quantum[7] = VOW_DRR_QUANTUM_L7;
 
+	bitmap_set(&flags, 0, VOW_FF_NUM);
+	clear_bit(VOW_FF_SPL_STA_NUM, &flags);
+
 	ret = mt7999_mcu_set_vow_drr_ctrl(phy, NULL, NULL, VOW_DRR_CTRL_AIRTIME_DEFICIT_BOUND);
 	if (ret)
 		return ret;
@@ -763,7 +767,7 @@ int mt7999_vow_init(struct mt7999_phy *phy)
 	if (ret)
 		return ret;
 
-	return mt7999_mcu_set_vow_feature_ctrl(phy);
+	return mt7999_mcu_set_vow_feature_ctrl(phy, flags);
 }
 
 static int mt7999_register_phy(struct mt7999_dev *dev, enum mt76_band_id band)

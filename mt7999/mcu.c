@@ -8285,7 +8285,7 @@ int mt7999_mcu_set_vow_drr_ctrl(struct mt7999_phy *phy,
 				enum vow_drr_ctrl_id id)
 {
 	struct mt7999_vow_sta_ctrl *vow = msta_link ? &msta_link->vow : NULL;
-	u32 val = 0;
+	u32 i, val = 0;
 	struct mt7999_mcu_vow_drr_ctrl req = {
 		.tag = cpu_to_le16(UNI_VOW_DRR_CTRL),
 		.len = cpu_to_le16(sizeof(req) - 4),
@@ -8312,7 +8312,8 @@ int mt7999_mcu_set_vow_drr_ctrl(struct mt7999_phy *phy,
 		req.val = cpu_to_le32(phy->dev->vow.max_deficit);
 		break;
 	case VOW_DRR_CTRL_AIRTIME_QUANTUM_ALL:
-		memcpy(req.drr_quantum, phy->dev->vow.drr_quantum, VOW_DRR_QUANTUM_NUM);
+		for (i = 0; i < VOW_DRR_QUANTUM_NUM; ++i)
+			req.drr_quantum[i] = phy->dev->vow.drr_quantum[i] - 1;
 		break;
 	case VOW_DRR_CTRL_STA_PAUSE:
 		req.val = cpu_to_le32(vow->paused);
@@ -8326,7 +8327,7 @@ int mt7999_mcu_set_vow_drr_ctrl(struct mt7999_phy *phy,
 	                         &req, sizeof(req), true);
 }
 
-int mt7999_mcu_set_vow_feature_ctrl(struct mt7999_phy *phy)
+int mt7999_mcu_set_vow_feature_ctrl(struct mt7999_phy *phy, unsigned long flags)
 {
 	struct mt7999_vow_ctrl *vow = &phy->dev->vow;
 	struct {
@@ -8420,21 +8421,8 @@ int mt7999_mcu_set_vow_feature_ctrl(struct mt7999_phy *phy)
 	} __packed req = {
 		.tag = cpu_to_le16(UNI_VOW_FEATURE_CTRL),
 		.len = cpu_to_le16(sizeof(req) - 4),
-		/* DW0 */
-		.apply_bwc_enable_per_grp = cpu_to_le16(0xffff),
-		.apply_bwc_refill_period = true,
-		.apply_band1_search_rule = true,
-		.apply_band0_search_rule = true,
-		.apply_watf_enable = true,
-		.apply_grp_no_change_in_txop = true,
-		.apply_atf_enable = true,
-		.apply_bwc_token_refill_enable = true,
-		.apply_bwc_enable = true,
-		/* DW1 */
-		.apply_bwc_check_time_token_per_grp = cpu_to_le16(0xffff),
-		/* DW2 */
-		.apply_bwc_check_len_token_per_grp = cpu_to_le16(0xffff),
 		/* DW3 */
+		/* band_idx is not used by per-dev config */
 		.band_idx = phy->mt76->band_idx,
 		/* DW5 */
 		.bwc_enable_per_grp = cpu_to_le16(0xffff),
@@ -8451,34 +8439,76 @@ int mt7999_mcu_set_vow_feature_ctrl(struct mt7999_phy *phy)
 		/* DW7 */
 		.bwc_check_len_token_per_grp = cpu_to_le16(0x0),
 		/* DW8 */
-		.apply_atf_rts_sta_lock = false,
-		.apply_atf_keep_quantum = true,
+		.atf_rts_sta_lock = true,
 		.atf_keep_quantum = true,
-		.apply_tx_cnt_mode_ctrl = false,
-		.apply_tx_measure_mode_enable = false,
-		.apply_backoff_ctrl = false,
-		.apply_atf_rts_fail_charge = false,
-		.apply_zero_eifs = false,
-		.apply_rx_rifs_enable = false,
-		.apply_vow_ctrl = true,
+		.tx_cnt_mode_ctrl = 0,
+		.tx_measure_mode_enable = true,
+		.backoff_bound_enable = true,
+		.backoff_bound = 6,
+		.atf_rts_fail_charge = false,
+		.zero_eifs = true,
+		.rx_rifs_enable = true,
 		.vow_ctrl_val = true,
 		/* Reset DRR table when SER occurs. */
 		.vow_ctrl_bit = 26,
 		/* DW9 */
-		.apply_spl_sta_num = false,
 		.dbg_lvl = 0,
-		.apply_atf_sch_ctrl = true,
 		.atf_sch_type = vow->sch_type,
 		.atf_sch_policy = vow->sch_policy
 	};
 
-	/* TODO: check the following settings and set to default on
-	 * apply_atf_rts_sta_lock, atf_rts_sta_lock,
-	 * apply_tx_cnt_mode_ctrl, apply_tx_measure_mode_enable, tx_measure_mode_enable,
-	 * apply_backoff_ctrl, backoff_bound_enable
-	 * apply_atf_rts_fail_charge, apply_zero_eifs, zero_eifs
-	 * apply_rx_rifs_enable, rx_rifs_enable
-	 */
+	/* DW0 */
+	req.apply_bwc_enable_per_grp =
+		!!test_bit(VOW_FF_BWC_ENABLE, &flags) ? cpu_to_le16(0xffff)
+						      : cpu_to_le16(0x0);
+	req.apply_bwc_refill_period =
+		!!test_bit(VOW_FF_BWC_REFILL_PERIOD, &flags);
+	req.apply_band1_search_rule =
+		!!test_bit(VOW_FF_BAND1_SEARCH_RULE, &flags);
+	req.apply_band0_search_rule =
+		!!test_bit(VOW_FF_BAND0_SEARCH_RULE, &flags);
+	req.apply_watf_enable =
+		!!test_bit(VOW_FF_WATF_ENABLE, &flags);
+	req.apply_grp_no_change_in_txop =
+		!!test_bit(VOW_FF_GRP_NO_CHANGE_IN_TXOP, &flags);
+	req.apply_atf_enable =
+		!!test_bit(VOW_FF_ATF_ENABLE, &flags);
+	req.apply_bwc_token_refill_enable =
+		!!test_bit(VOW_FF_BWC_TOKEN_REFILL_ENABLE, &flags);
+	req.apply_bwc_enable =
+		!!test_bit(VOW_FF_BWC_ENABLE, &flags);
+	/* DW1 */
+	req.apply_bwc_check_time_token_per_grp =
+		!!test_bit(VOW_FF_BWC_ENABLE, &flags) ? cpu_to_le16(0xffff)
+						      : cpu_to_le16(0x0);
+	/* DW2 */
+	req.apply_bwc_check_len_token_per_grp =
+		!!test_bit(VOW_FF_BWC_ENABLE, &flags) ? cpu_to_le16(0xffff)
+						      : cpu_to_le16(0x0);
+	/* DW8 */
+	req.apply_atf_rts_sta_lock =
+		!!test_bit(VOW_FF_ATF_RTS_STA_LOCK, &flags);
+	req.apply_atf_keep_quantum =
+		!!test_bit(VOW_FF_ATF_KEEP_QUANTUM, &flags);
+	req.apply_tx_cnt_mode_ctrl =
+		!!test_bit(VOW_FF_TX_CNT_MODE_CTRL, &flags);
+	req.apply_tx_measure_mode_enable =
+		!!test_bit(VOW_FF_TX_MEASURE_MODE_ENABLE, &flags);
+	req.apply_backoff_ctrl =
+		!!test_bit(VOW_FF_BACKOFF_CTRL, &flags);
+	req.apply_atf_rts_fail_charge =
+		!!test_bit(VOW_FF_ATF_RTS_FAIL_CHARGE, &flags);
+	req.apply_zero_eifs =
+		!!test_bit(VOW_FF_ZERO_EIFS, &flags);
+	req.apply_rx_rifs_enable =
+		!!test_bit(VOW_FF_RX_RIFS_ENABLE, &flags);
+	req.apply_vow_ctrl =
+		!!test_bit(VOW_FF_VOW_CTRL, &flags);
+	/* DW9 */
+	req.apply_spl_sta_num =
+		!!test_bit(VOW_FF_SPL_STA_NUM, &flags);
+	req.apply_atf_sch_ctrl =
+		!!test_bit(VOW_FF_ATF_SCH_CTRL, &flags);
 
 	return mt76_mcu_send_msg(&phy->dev->mt76, MCU_WM_UNI_CMD(VOW),
 	                         &req, sizeof(req), true);

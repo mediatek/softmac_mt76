@@ -270,6 +270,29 @@ enum mt7999_dpd_ch_num {
 	DPD_CH_NUM_TYPE_MAX,
 };
 
+enum vow_feature_flag {
+	VOW_FF_BWC_REFILL_PERIOD,
+	VOW_FF_BAND1_SEARCH_RULE,
+	VOW_FF_BAND0_SEARCH_RULE,
+	VOW_FF_WATF_ENABLE,
+	VOW_FF_GRP_NO_CHANGE_IN_TXOP,
+	VOW_FF_ATF_ENABLE,
+	VOW_FF_BWC_TOKEN_REFILL_ENABLE,
+	VOW_FF_BWC_ENABLE,
+	VOW_FF_ATF_RTS_STA_LOCK,
+	VOW_FF_ATF_KEEP_QUANTUM,
+	VOW_FF_TX_CNT_MODE_CTRL,
+	VOW_FF_TX_MEASURE_MODE_ENABLE,
+	VOW_FF_BACKOFF_CTRL,
+	VOW_FF_ATF_RTS_FAIL_CHARGE,
+	VOW_FF_ZERO_EIFS,
+	VOW_FF_RX_RIFS_ENABLE,
+	VOW_FF_VOW_CTRL,
+	VOW_FF_SPL_STA_NUM,
+	VOW_FF_ATF_SCH_CTRL,
+	VOW_FF_NUM
+};
+
 enum {
 	VOW_SEARCH_AC_FIRST,
 	VOW_SEARCH_WMM_FIRST
@@ -307,6 +330,7 @@ enum {
 enum {
 	VOW_SCH_POLICY_SRR, /* Shared Round-Robin */
 	VOW_SCH_POLICY_WRR, /* Weighted Round-Robin */
+	VOW_SCH_POLICY_RR, /* Round-Robin without ATF */
 	VOW_SCH_POLICY_NUM
 };
 
@@ -1328,7 +1352,7 @@ int mt7999_mcu_set_vow_drr_ctrl(struct mt7999_phy *phy,
 				struct mt7999_vif_link *mconf,
 				struct mt7999_sta_link *msta_link,
 				enum vow_drr_ctrl_id id);
-int mt7999_mcu_set_vow_feature_ctrl(struct mt7999_phy *phy);
+int mt7999_mcu_set_vow_feature_ctrl(struct mt7999_phy *phy, unsigned long flags);
 void mt7999_mcu_wmm_pbc_work(struct work_struct *work);
 int mt7999_mcu_ba_trigger_enable(struct mt7999_dev *dev, u8 enable);
 int mt7999_mcu_mld_reconf_stop_link(struct mt7999_dev *dev,

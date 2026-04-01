@@ -1175,16 +1175,11 @@ static int
 mt7999_atf_enable_set(void *data, u64 val)
 {
 	struct mt7999_phy *phy = data;
-	struct mt7999_vow_ctrl *vow = &phy->dev->vow;
-	int ret;
+	unsigned long flags = 0;
 
-	vow->max_deficit = val ? VOW_STA_MAX_WAIT_TIME : 1;
-	ret = mt7999_mcu_set_vow_drr_ctrl(phy, NULL, NULL, VOW_DRR_CTRL_AIRTIME_DEFICIT_BOUND);
-	if (ret)
-		return ret;
-
-	vow->atf_enable = !!val;
-	return mt7999_mcu_set_vow_feature_ctrl(phy);
+	set_bit(VOW_FF_ATF_ENABLE, &flags);
+	phy->dev->vow.atf_enable = !!val;
+	return mt7999_mcu_set_vow_feature_ctrl(phy, flags);
 }
 
 DEFINE_DEBUGFS_ATTRIBUTE(fops_atf_enable, mt7999_atf_enable_get,
@@ -1197,6 +1192,7 @@ static ssize_t mt7999_atf_sch_ctrl_set(struct file *file,
 	struct mt7999_phy *phy = file->private_data;
 	struct mt7999_dev *dev = phy->dev;
 	struct mt7999_vow_ctrl *vow = &dev->vow;
+	unsigned long flags = 0;
 	u8 type, policy;
 	char buf[100];
 	int ret;
@@ -1223,10 +1219,11 @@ static ssize_t mt7999_atf_sch_ctrl_set(struct file *file,
 		return -EINVAL;
 	}
 
+	set_bit(VOW_FF_ATF_SCH_CTRL, &flags);
 	vow->sch_type = type;
 	vow->sch_policy = policy;
 
-	ret = mt7999_mcu_set_vow_feature_ctrl(phy);
+	ret = mt7999_mcu_set_vow_feature_ctrl(phy, flags);
 	if (ret) {
 		dev_err(dev->mt76.dev, "Fail to set VoW feature control\n");
 		return ret;
@@ -1414,8 +1411,6 @@ int mt7999_init_band_debugfs(struct mt7999_phy *phy)
 			    &mt7999_xmit_queues_fops);
 	debugfs_create_file("sys_recovery", 0600, dir, phy,
 			    &mt7999_sys_recovery_ops);
-	debugfs_create_file("atf_enable", 0600, dir, phy, &fops_atf_enable);
-	debugfs_create_file("atf_sch_ctrl", 0600, dir, phy, &fops_atf_sch_ctrl);
 	debugfs_create_file("tx_stats", 0400, dir, phy, &mt7999_tx_stats_fops);
 	if (phy->mt76->cap.has_5ghz) {
 		debugfs_create_u32("dfs_hw_pattern", 0400, dir,
@@ -1460,6 +1455,8 @@ int mt7999_init_dev_debugfs(struct mt7999_phy *phy)
 	debugfs_create_file("precal", 0400, dir, dev, &mt7999_precal_ops);
 	debugfs_create_devm_seqfile(dev->mt76.dev, "vow_info", dir,
 				    mt7999_vow_info_read);
+	debugfs_create_file("atf_enable", 0600, dir, phy, &fops_atf_enable);
+	debugfs_create_file("atf_sch_ctrl", 0600, dir, phy, &fops_atf_sch_ctrl);
 	debugfs_create_devm_seqfile(dev->mt76.dev, "airtime", dir,
 				    mt7999_airtime_read);
 
