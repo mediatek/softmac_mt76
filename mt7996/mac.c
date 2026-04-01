@@ -717,11 +717,11 @@ static bool mt7996_use_altxq(struct ieee80211_mgmt *mgmt)
 
 	if (ieee80211_is_action(fc) &&
 	    mgmt->u.action.category == WLAN_CATEGORY_PROTECTED_EHT &&
-	    (mgmt->u.action.u.ttlm_req.action_code ==
+	    (mgmt->u.action.action_code ==
 	    WLAN_PROTECTED_EHT_ACTION_TTLM_REQ ||
-	    mgmt->u.action.u.ttlm_req.action_code ==
+	    mgmt->u.action.action_code ==
 	    WLAN_PROTECTED_EHT_ACTION_TTLM_RES ||
-	    mgmt->u.action.u.ttlm_req.action_code ==
+	    mgmt->u.action.action_code ==
 	    WLAN_PROTECTED_EHT_ACTION_TTLM_TEARDOWN))
 		return true;
 
@@ -1558,7 +1558,7 @@ mt7996_twt_event_enqueue(struct mt7996_dev *dev, struct sk_buff *skb, u16 wcid_i
 {
 	struct ieee80211_mgmt *mgmt = (struct ieee80211_mgmt *)skb->data;
 	struct ieee80211_twt_setup *twt =
-		(struct ieee80211_twt_setup *)mgmt->u.action.u.s1g.variable;
+		(struct ieee80211_twt_setup *)mgmt->u.action.s1g.variable;
 	struct ieee80211_twt_params *twt_agrt =
 		(struct ieee80211_twt_params *)twt->params;
 	struct mt7996_twt_event *ev;
@@ -1591,7 +1591,7 @@ mt7996_mac_txs_action_frame(struct mt7996_dev *dev, struct sk_buff *skb, u16 wci
 
 	switch (mgmt->u.action.category) {
 	case WLAN_CATEGORY_S1G:
-		if (mgmt->u.action.u.s1g.action_code == WLAN_S1G_TWT_SETUP)
+		if (mgmt->u.action.action_code == WLAN_S1G_TWT_SETUP)
 			mt7996_twt_event_enqueue(dev, skb, wcid_idx);
 		break;
 	default:

@@ -709,11 +709,11 @@ static bool mt7999_use_altxq(struct ieee80211_mgmt *mgmt)
 
 	if (ieee80211_is_action(fc) &&
 	    mgmt->u.action.category == WLAN_CATEGORY_PROTECTED_EHT &&
-	    (mgmt->u.action.u.ttlm_req.action_code ==
+	    (mgmt->u.action.action_code ==
 	    WLAN_PROTECTED_EHT_ACTION_TTLM_REQ ||
-	    mgmt->u.action.u.ttlm_req.action_code ==
+	    mgmt->u.action.action_code ==
 	    WLAN_PROTECTED_EHT_ACTION_TTLM_RES ||
-	    mgmt->u.action.u.ttlm_req.action_code ==
+	    mgmt->u.action.action_code ==
 	    WLAN_PROTECTED_EHT_ACTION_TTLM_TEARDOWN))
 		return true;
 
@@ -740,9 +740,9 @@ mt7999_mac_write_txwi_80211(struct mt7999_dev *dev, __le32 *txwi,
 		le32p_replace_bits(&txwi[0], MT_LMAC_ALTX0, MT_TXD0_Q_IDX);
 
 	if (ieee80211_is_action(fc) &&
-	    skb->len >= IEEE80211_MIN_ACTION_SIZE + 1 &&
+	    skb->len >= IEEE80211_MIN_ACTION_SIZE(action_code) &&
 	    mgmt->u.action.category == WLAN_CATEGORY_BACK &&
-	    mgmt->u.action.u.addba_req.action_code == WLAN_ACTION_ADDBA_REQ) {
+	    mgmt->u.action.action_code == WLAN_ACTION_ADDBA_REQ) {
 		txwi[6] |= cpu_to_le32(FIELD_PREP(MT_TXD6_TID_ADDBA, tid));
 		val = FIELD_PREP(MT_TXD1_MGMT_TYPE, MT_TX_MGMT_ADDBA);
 	} else if (ieee80211_is_mgmt(hdr->frame_control)) {
@@ -1447,7 +1447,7 @@ mt7999_twt_event_enqueue(struct mt7999_dev *dev, struct sk_buff *skb, u16 wcid_i
 {
 	struct ieee80211_mgmt *mgmt = (struct ieee80211_mgmt *)skb->data;
 	struct ieee80211_twt_setup *twt =
-		(struct ieee80211_twt_setup *)mgmt->u.action.u.s1g.variable;
+		(struct ieee80211_twt_setup *)mgmt->u.action.s1g.variable;
 	struct ieee80211_twt_params *twt_agrt =
 		(struct ieee80211_twt_params *)twt->params;
 	struct mt7999_twt_event *ev;
@@ -1480,7 +1480,7 @@ mt7999_mac_txs_action_frame(struct mt7999_dev *dev, struct sk_buff *skb, u16 wci
 
 	switch (mgmt->u.action.category) {
 	case WLAN_CATEGORY_S1G:
-		if (mgmt->u.action.u.s1g.action_code == WLAN_S1G_TWT_SETUP)
+		if (mgmt->u.action.action_code == WLAN_S1G_TWT_SETUP)
 			mt7999_twt_event_enqueue(dev, skb, wcid_idx);
 		break;
 	default:
