@@ -1153,8 +1153,11 @@ void mt7999_mcu_wmm_pbc_work(struct work_struct *work)
 	int i, ret;
 
 	for (i = 0; i < WMM_PBC_QUEUE_NUM; ++i) {
-		req.bound[i].low = dev->wmm_pbc_enable ? cpu_to_le16(dev->pbc_bound[i]) : 0;
-		req.bound[i].up = cpu_to_le16(WMM_PBC_BOUND_DEFAULT);
+		req.bound[i].low = cpu_to_le16(dev->wmm_pbc_enable ?
+					       dev->pbc_lower_bound[i] : 0);
+		req.bound[i].up = cpu_to_le16(dev->wmm_pbc_enable ?
+					      dev->pbc_upper_bound[i] :
+					      WMM_PBC_BOUND_DEFAULT);
 	}
 
 	ret = mt76_mcu_send_msg(&dev->mt76, MCU_WA_UNI_CMD(SDO),

@@ -119,6 +119,8 @@
 #define MT7999_HW_DROP_STAT	4
 #define MT7999_HW_DROP_REASON	0x20
 
+#define WMM_PBC_QUEUE_NUM	5
+#define WMM_PBC_BOUND_MGMT	32
 struct mt7999_vif;
 struct mt7999_sta;
 struct mt7999_dfs_pulse;
@@ -939,7 +941,8 @@ struct mt7999_dev {
 
 	bool wmm_pbc_enable;
 	struct work_struct wmm_pbc_work;
-	u16 pbc_bound[5];
+	u16 pbc_lower_bound[WMM_PBC_QUEUE_NUM];
+	u16 pbc_upper_bound[WMM_PBC_QUEUE_NUM];
 #ifdef CONFIG_MTK_DEBUG
 	u16 wlan_idx;
 	bool wtbl_query_cr;

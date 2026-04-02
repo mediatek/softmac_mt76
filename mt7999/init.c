@@ -1943,11 +1943,6 @@ void mt7999_set_stream_caps(struct mt7999_phy *phy)
 
 int mt7999_register_device(struct mt7999_dev *dev)
 {
-#define WMM_PBC_LOW_BOUND_VO	1900
-#define WMM_PBC_LOW_BOUND_VI	1900
-#define WMM_PBC_LOW_BOUND_BE	1500
-#define WMM_PBC_LOW_BOUND_BK	900
-#define WMM_PBC_LOW_BOUND_MGMT	32
 	struct ieee80211_hw *hw = mt76_hw(dev);
 	struct mt7999_phy *phy;
 	int ret;
@@ -1970,15 +1965,23 @@ int mt7999_register_device(struct mt7999_dev *dev)
 	INIT_WORK(&dev->dump_work, mt7999_mac_dump_work);
 	mutex_init(&dev->dump_mutex);
 
-#define pbc_acq_low_bound_config(_ac, _bound)				\
-	dev->pbc_bound[mt76_connac_lmac_mapping(_ac)] = (_bound)
+#define pbc_acq_lower_bound_config(_ac, _bound)			\
+	dev->pbc_lower_bound[mt76_connac_lmac_mapping(_ac)] = (_bound)
+#define pbc_acq_upper_bound_config(_ac, _bound)			\
+	dev->pbc_upper_bound[mt76_connac_lmac_mapping(_ac)] = (_bound)
+	pbc_acq_lower_bound_config(IEEE80211_AC_VO, 300);
+	pbc_acq_lower_bound_config(IEEE80211_AC_VI, 350);
+	pbc_acq_lower_bound_config(IEEE80211_AC_BE, 250);
+	pbc_acq_lower_bound_config(IEEE80211_AC_BK, 100);
+	dev->pbc_lower_bound[4] = WMM_PBC_BOUND_MGMT;
 
-	pbc_acq_low_bound_config(IEEE80211_AC_VO, WMM_PBC_LOW_BOUND_VO);
-	pbc_acq_low_bound_config(IEEE80211_AC_VI, WMM_PBC_LOW_BOUND_VI);
-	pbc_acq_low_bound_config(IEEE80211_AC_BE, WMM_PBC_LOW_BOUND_BE);
-	pbc_acq_low_bound_config(IEEE80211_AC_BK, WMM_PBC_LOW_BOUND_BK);
-	dev->pbc_bound[4] = WMM_PBC_LOW_BOUND_MGMT;
-#undef pbc_acq_low_bound_config
+	pbc_acq_upper_bound_config(IEEE80211_AC_VO, 11500);
+	pbc_acq_upper_bound_config(IEEE80211_AC_VI, 11500);
+	pbc_acq_upper_bound_config(IEEE80211_AC_BE, 9500);
+	pbc_acq_upper_bound_config(IEEE80211_AC_BK, 4000);
+	dev->pbc_upper_bound[4] = WMM_PBC_BOUND_MGMT;
+#undef pbc_acq_lower_bound_config
+#undef pbc_acq_upper_bound_config
 	INIT_WORK(&dev->wmm_pbc_work, mt7999_mcu_wmm_pbc_work);
 
 	ret = mt7999_init_hardware(dev);
