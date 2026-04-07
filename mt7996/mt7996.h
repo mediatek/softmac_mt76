@@ -436,6 +436,7 @@ struct mt7996_sta {
 	struct mt7996_sta_link __rcu *link[IEEE80211_MLD_MAX_NUM_LINKS];
 	u8 deflink_id;
 	u8 seclink_id;
+	u16 setup_links;
 
 	struct mt7996_vif *vif;
 

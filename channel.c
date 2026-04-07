@@ -69,6 +69,7 @@ void mt76_remove_chanctx(struct ieee80211_hw *hw,
 		return;
 
 	mt76_phy_dbg(phy, "remove %u", conf->def.chan->hw_value);
+	cancel_delayed_work_sync(&phy->mac_work);
 
 	if (dev->scan.phy == phy)
 		mt76_abort_scan(dev);
@@ -143,7 +144,6 @@ int mt76_assign_vif_chanctx(struct ieee80211_hw *hw,
 	}
 
 	mlink->ctx = conf;
-	mvif->band_to_link[phy->band_idx] = link_id;
 	ret = dev->drv->vif_link_add(phy, vif, link_conf, mlink);
 	if (ret) {
 		if (mlink_alloc)
@@ -173,7 +173,7 @@ void mt76_unassign_vif_chanctx(struct ieee80211_hw *hw,
 	struct mt76_dev *dev = phy->dev;
 
 	mt76_bss_dbg(vif, "remove link %u from %d MHz on band %u",
-		     link_id, conf->def.chan->center_freq, phy->band_idx);
+		     link_conf->link_id, conf->def.chan->center_freq, phy->band_idx);
 
 	if (dev->scan.vif == vif)
 		mt76_abort_scan(dev);
@@ -309,6 +309,9 @@ struct mt76_vif_link *mt76_get_vif_phy_link(struct mt76_phy *phy,
 		return ERR_PTR(-ENOMEM);
 
 	mlink->offchannel = true;
+
+	vif->bss_conf.link_id = ffs(GENMASK(14, 0) & ~mvif->valid_links) - 1;
+
 	ret = dev->drv->vif_link_add(phy, vif, &vif->bss_conf, mlink);
 	if (ret) {
 		kfree(mlink);
@@ -333,6 +336,8 @@ void mt76_put_vif_phy_link(struct mt76_phy *phy, struct ieee80211_vif *vif,
 	rcu_assign_pointer(mvif->offchannel_link, NULL);
 	dev->drv->vif_link_remove(phy, vif, &vif->bss_conf, mlink);
 	kfree_rcu(mlink, rcu_head);
+
+	vif->bss_conf.link_id = 0;
 }
 
 void mt76_roc_complete(struct mt76_phy *phy)

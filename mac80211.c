@@ -1294,7 +1294,7 @@ mt76_rx_convert(struct mt76_dev *dev, struct sk_buff *skb,
 	       sizeof(mstat.chain_signal));
 
 	wcid = __mt76_wcid_ptr(dev, mstat.wcid_idx);
-	if (wcid) {
+	if (wcid && !wcid->sta_disabled) {
 		status->link_valid = wcid->link_valid;
 		status->link_id = wcid->link_id;
 	}
