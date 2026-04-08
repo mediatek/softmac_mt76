@@ -989,6 +989,29 @@ struct mld_setup_link {
 	u8 __rsv;
 } __packed;
 
+struct mld_req_hdr {
+	u8 ver;
+	u8 mld_addr[ETH_ALEN];
+	u8 mld_idx;
+	u8 flag;
+	u8 rsv[3];
+	u8 buf[];
+} __packed;
+
+struct mld_reconf_stop_link {
+	__le16 tag;
+	__le16 len;
+	__le16 link_bitmap;
+	u8 rsv[2];
+	u8 bss_idx[IEEE80211_MLD_MAX_NUM_LINKS + 1];
+} __packed;
+
+enum {
+	UNI_MLD_ATTLM_RES_REQ = 0x02,
+	UNI_MLD_RECONF_AP_REM_TIMER,
+	UNI_MLD_RECONF_STOP_LINK,
+};
+
 struct hdr_trans_en {
 	__le16 tag;
 	__le16 len;
@@ -1447,15 +1470,6 @@ struct mt7999_mcu_mac_info_tsf_diff_resp {
 	__le32 tsf1_bit32_63;
 } __packed;
 
-struct mld_req_hdr {
-	u8 ver;
-	u8 mld_addr[ETH_ALEN];
-	u8 mld_idx;
-	u8 flag;
-	u8 rsv[3];
-	u8 buf[];
-} __packed;
-
 struct mld_attlm_req {
 	__le16 tag;
 	__le16 len;
@@ -1480,20 +1494,6 @@ struct mld_reconf_timer {
 	u8 bss_idx[__MT_MAX_BAND];
 	u8 rsv;
 } __packed;
-
-struct mld_reconf_stop_link {
-	__le16 tag;
-	__le16 len;
-	__le16 link_bitmap;
-	u8 rsv[2];
-	u8 bss_idx[IEEE80211_MLD_MAX_NUM_LINKS + 1];
-} __packed;
-
-enum {
-	UNI_MLD_ATTLM_RES_REQ = 0x02,
-	UNI_MLD_RECONF_AP_REM_TIMER,
-	UNI_MLD_RECONF_STOP_LINK,
-};
 
 struct mt7999_mcu_mld_event {
 	struct mt7999_mcu_rxd rxd;

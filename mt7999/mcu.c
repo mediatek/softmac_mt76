@@ -3569,6 +3569,71 @@ mt7999_mcu_sta_init_vow(struct mt7999_vif_link *mconf,
 }
 #endif
 
+int mt7999_mcu_mld_reconf_stop_link(struct mt7999_dev *dev,
+				    struct ieee80211_vif *vif,
+				    u16 removed_links)
+{
+	unsigned long rem_links = removed_links;
+	struct mld_reconf_stop_link *sl;
+	struct mld_req_hdr hdr = {};
+	unsigned int link_id;
+	struct sk_buff *skb;
+	struct tlv *tlv;
+
+	skb = mt76_mcu_msg_alloc(&dev->mt76, NULL, sizeof(hdr) + sizeof(*sl));
+	if (!skb)
+		return -ENOMEM;
+
+	memcpy(hdr.mld_addr, vif->addr, ETH_ALEN);
+	skb_put_data(skb, &hdr, sizeof(hdr));
+
+	tlv = mt7999_mcu_add_uni_tlv(skb, UNI_MLD_RECONF_STOP_LINK, sizeof(*sl));
+	sl = (struct mld_reconf_stop_link *)tlv;
+	sl->link_bitmap = cpu_to_le16(removed_links);
+
+	for_each_set_bit(link_id, &rem_links, IEEE80211_MLD_MAX_NUM_LINKS) {
+		struct mt7999_vif_link *link;
+
+		link = mt7999_vif_link(dev, vif, link_id);
+		if (!link)
+			continue;
+
+		sl->bss_idx[link_id] = link->mt76.idx;
+	}
+
+	return mt76_mcu_skb_send_msg(&dev->mt76, skb, MCU_WM_UNI_CMD(MLD),
+				     true);
+}
+
+int mt7999_mcu_mld_link_oper(struct mt7999_dev *dev,
+			     struct ieee80211_bss_conf *link_conf,
+			     struct mt7999_vif_link *link, bool add)
+{
+	struct ieee80211_vif *vif = link_conf->vif;
+	struct mt7999_vif *mvif = (struct mt7999_vif *)vif->drv_priv;
+	struct bss_mld_link_op_tlv *mld_op;
+	struct sk_buff *skb;
+	struct tlv *tlv;
+
+	skb = __mt7999_mcu_alloc_bss_req(&dev->mt76, &link->mt76,
+					 MT7999_BSS_UPDATE_MAX_SIZE);
+	if (IS_ERR(skb))
+		return PTR_ERR(skb);
+
+	tlv = mt7999_mcu_add_uni_tlv(skb, UNI_BSS_INFO_MLD_LINK_OP,
+				     sizeof(*mld_op));
+	mld_op = (struct bss_mld_link_op_tlv *)tlv;
+	mld_op->link_operation = add;
+	mld_op->own_mld_id = link->mld_idx;
+	mld_op->link_id = link_conf->link_id;
+	mld_op->group_mld_id = add ? mvif->mld_group_idx : 0xff;
+	mld_op->remap_idx = add ? mvif->mld_remap_idx : 0xff;
+	memcpy(mld_op->mac_addr, vif->addr, ETH_ALEN);
+
+	return mt76_mcu_skb_send_msg(&dev->mt76, skb,
+				     MCU_WMWA_UNI_CMD(BSS_INFO_UPDATE), true);
+}
+
 static void
 mt7999_mcu_sta_mld_setup_tlv(struct mt7999_dev *dev, struct sk_buff *skb,
 			     struct ieee80211_vif *vif,
@@ -3688,7 +3753,7 @@ mt7999_mcu_sta_mesh_tlv(struct mt7999_dev *dev, struct sk_buff *skb,
 	link_mesh->update_mask = cpu_to_le32(LWTBL_MESH);
 }
 
-int mt7999_mcu_add_sta(struct mt7999_dev *dev, struct ieee80211_vif *vif,
+int mt7999_mcu_add_sta(struct mt7999_dev *dev,
 		       struct ieee80211_bss_conf *link_conf,
 		       struct ieee80211_link_sta *link_sta,
 		       struct mt7999_vif_link *link,
@@ -3709,14 +3774,14 @@ int mt7999_mcu_add_sta(struct mt7999_dev *dev, struct ieee80211_vif *vif,
 	mt76_connac_mcu_sta_basic_tlv(&dev->mt76, skb, link_conf, link_sta,
 				      conn_state, newly);
 
-	mt76_sta_dbg(vif, "link=%u, wcid=%u, newly=%d, conn_state=%d",
+	mt76_sta_dbg(link_conf->vif, "link=%u, wcid=%u, newly=%d, conn_state=%d",
 		     wcid->link_id, wcid->idx, newly, conn_state);
 
 	if (conn_state == CONN_STATE_DISCONNECT)
 		goto out;
 
 	/* starec hdr trans */
-	mt7999_mcu_sta_hdr_trans_tlv(dev, skb, vif, wcid);
+	mt7999_mcu_sta_hdr_trans_tlv(dev, skb, link_conf->vif, wcid);
 	/* starec tx proc */
 	mt7999_mcu_sta_tx_proc_tlv(skb);
 
@@ -3955,12 +4020,10 @@ int mt7999_mcu_add_dev_info(struct mt7999_phy *phy, struct ieee80211_vif *vif,
 		},
 	};
 
-	if (link_conf) {
-		memcpy(data.tlv.omac_addr, link_conf->addr, ETH_ALEN);
-		mt76_bss_dbg(vif, "band=%u, omac=%u, addr=%pM, en=%d",
-			     data.hdr.band_idx, data.hdr.omac_idx,
-			     data.tlv.omac_addr, enable);
-	}
+	memcpy(data.tlv.omac_addr, link_conf->addr, ETH_ALEN);
+	mt76_bss_dbg(vif, "band=%u, omac=%u, addr=%pM, en=%d",
+		     data.hdr.band_idx, data.hdr.omac_idx,
+		     data.tlv.omac_addr, enable);
 
 	return mt76_mcu_send_msg(&dev->mt76, MCU_WMWA_UNI_CMD(DEV_INFO_UPDATE),
 				 &data, sizeof(data), true);
@@ -4007,75 +4070,6 @@ mt7999_mcu_mld_reconf(struct mt7999_dev *dev, struct ieee80211_vif *vif,
 	}
 
 	return mt76_mcu_skb_send_msg(&dev->mt76, skb, MCU_WM_UNI_CMD(MLD), true);
-}
-
-int mt7999_mcu_mld_reconf_stop_link(struct mt7999_dev *dev,
-				    struct ieee80211_vif *vif, u16 removed_links)
-{
-	struct mld_req_hdr hdr = { .mld_idx = 0 };
-	struct mld_reconf_stop_link *sl;
-	struct sk_buff *skb;
-	struct tlv *tlv;
-	unsigned long rem = removed_links;
-	int len = sizeof(hdr) + sizeof(*sl), link_id;
-
-	memcpy(hdr.mld_addr, vif->addr, ETH_ALEN);
-
-	skb = mt76_mcu_msg_alloc(&dev->mt76, NULL, len);
-	if (!skb)
-		return -ENOMEM;
-
-	skb_put_data(skb, &hdr, sizeof(hdr));
-
-	tlv = mt7999_mcu_add_uni_tlv(skb, UNI_MLD_RECONF_STOP_LINK, sizeof(*sl));
-	sl = (struct mld_reconf_stop_link *)tlv;
-	sl->link_bitmap = cpu_to_le16(removed_links);
-
-	for_each_set_bit(link_id, &rem, IEEE80211_MLD_MAX_NUM_LINKS) {
-		struct mt7999_vif_link *mconf =	mt7999_vif_link(dev, vif, link_id);
-
-		if (!mconf)
-			continue;
-
-		sl->bss_idx[link_id] = mconf->mt76.idx;
-	}
-
-	return mt76_mcu_skb_send_msg(&dev->mt76, skb, MCU_WM_UNI_CMD(MLD), true);
-}
-
-int mt7999_mcu_mld_link_oper(struct mt7999_phy *phy,
-			     struct ieee80211_bss_conf *conf,
-			     struct mt7999_vif_link *mconf, bool add)
-{
-	struct ieee80211_vif *vif = conf->vif;
-	struct mt7999_vif *mvif = (struct mt7999_vif *)vif->drv_priv;
-	struct mt7999_dev *dev = phy->dev;
-	struct bss_mld_link_op_tlv *mld_op;
-	struct sk_buff *skb;
-	struct tlv *tlv;
-
-	skb = __mt7999_mcu_alloc_bss_req(&dev->mt76, &mconf->mt76,
-					 MT7999_BSS_UPDATE_MAX_SIZE);
-	if (IS_ERR(skb))
-		return PTR_ERR(skb);
-
-	tlv = mt7999_mcu_add_uni_tlv(skb, UNI_BSS_INFO_MLD_LINK_OP, sizeof(*mld_op));
-	mld_op = (struct bss_mld_link_op_tlv *)tlv;
-	mld_op->link_operation = add;
-	mld_op->own_mld_id = mconf->mld_idx;
-	mld_op->link_id = conf->link_id;
-	memcpy(mld_op->mac_addr, vif->addr, ETH_ALEN);
-
-	if (add) {
-		mld_op->group_mld_id = mvif->mld_group_idx;
-		mld_op->remap_idx = mvif->mld_remap_idx;
-	} else {
-		mld_op->group_mld_id = 0xff;
-		mld_op->remap_idx = 0xff;
-	}
-
-	return mt76_mcu_skb_send_msg(&dev->mt76, skb,
-				     MCU_WMWA_UNI_CMD(BSS_INFO_UPDATE), true);
 }
 
 int mt7999_mcu_mld_set_attlm(struct mt7999_dev *dev, struct ieee80211_vif *vif,
@@ -4236,8 +4230,8 @@ int mt7999_mcu_set_peer_mld(struct mt7999_dev *dev, struct ieee80211_vif *vif,
 	struct peer_mld_cap_entry *cap_entry;
 	struct sk_buff *skb;
 	struct tlv *tlv;
-	unsigned long valid_links = msta->valid_links;
-	u8 link_num = hweight16(msta->valid_links);
+	unsigned long valid_links = sta->valid_links;
+	u8 link_num = hweight16(sta->valid_links);
 	int link_id, len, min_amsdu_size = INT_MAX;
 
 	msta_link = mt7999_sta_link_protected(dev, msta, msta->deflink_id);

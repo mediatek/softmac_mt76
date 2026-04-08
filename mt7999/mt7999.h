@@ -410,7 +410,7 @@ struct mt7999_sta {
 	struct mt7999_sta_link __rcu *link[IEEE80211_MLD_MAX_NUM_LINKS];
 	u8 deflink_id;
 	u8 seclink_id;
-	u16 valid_links;
+	u16 setup_links;
 
 	struct mt7999_vif *vif;
 
@@ -1254,7 +1254,7 @@ int mt7999_mcu_add_bss_info(struct mt7999_phy *phy, struct ieee80211_vif *vif,
 			    struct mt7999_sta_link *msta_link, int enable);
 int mt7999_mcu_update_bss_rfch(struct mt7999_phy *phy,
 			       struct mt7999_vif_link *link);
-int mt7999_mcu_add_sta(struct mt7999_dev *dev, struct ieee80211_vif *vif,
+int mt7999_mcu_add_sta(struct mt7999_dev *dev,
 		       struct ieee80211_bss_conf *link_conf,
 		       struct ieee80211_link_sta *link_sta,
 		       struct mt7999_vif_link *link,
@@ -1352,6 +1352,17 @@ int mt7999_mcu_get_per_sta_info(struct mt76_dev *dev, u16 tag,
 int mt7999_mcu_get_all_sta_info(struct mt76_dev *dev, u16 tag);
 int mt7999_mcu_get_bss_acq_pkt_cnt(struct mt7999_dev *dev);
 int mt7999_mcu_set_sniffer_mode(struct mt7999_phy *phy, bool enabled);
+int mt7999_mcu_mld_reconf_stop_link(struct mt7999_dev *dev,
+				    struct ieee80211_vif *vif,
+				    u16 removed_links);
+int mt7999_mcu_mld_link_oper(struct mt7999_dev *dev,
+			     struct ieee80211_bss_conf *link_conf,
+			     struct mt7999_vif_link *link, bool add);
+int mt7999_mcu_mld_set_attlm(struct mt7999_dev *dev, struct ieee80211_vif *vif,
+			     u16 disabled_links, u16 switch_time, u32 duration);
+int mt7999_mcu_peer_mld_ttlm_req(struct mt7999_dev *dev, struct ieee80211_vif *vif,
+				 struct ieee80211_sta *sta,
+				 struct ieee80211_neg_ttlm *neg_ttlm);
 int mt7999_mcu_set_tx_power_ctrl(struct mt7999_phy *phy, u8 power_ctrl_id, u8 data);
 int mt7999_mcu_get_tx_power_info(struct mt7999_phy *phy, u8 category, void *event);
 int mt7999_mcu_apply_group_cal(struct mt7999_dev *dev);
@@ -1369,16 +1380,6 @@ int mt7999_mcu_set_vow_drr_ctrl(struct mt7999_phy *phy,
 int mt7999_mcu_set_vow_feature_ctrl(struct mt7999_phy *phy, unsigned long flags);
 void mt7999_mcu_wmm_pbc_work(struct work_struct *work);
 int mt7999_mcu_ba_trigger_enable(struct mt7999_dev *dev, u8 enable);
-int mt7999_mcu_mld_reconf_stop_link(struct mt7999_dev *dev,
-				    struct ieee80211_vif *vif, u16 removed_links);
-int mt7999_mcu_mld_link_oper(struct mt7999_phy *phy,
-			     struct ieee80211_bss_conf *conf,
-			     struct mt7999_vif_link *mconf, bool add);
-int mt7999_mcu_mld_set_attlm(struct mt7999_dev *dev, struct ieee80211_vif *vif,
-			     u16 disabled_links, u16 switch_time, u32 duration);
-int mt7999_mcu_peer_mld_ttlm_req(struct mt7999_dev *dev, struct ieee80211_vif *vif,
-				 struct ieee80211_sta *sta,
-				 struct ieee80211_neg_ttlm *neg_ttlm);
 int mt7999_mcu_init_rx_airtime(struct mt7999_dev *dev);
 
 static inline bool mt7999_has_hwrro(struct mt7999_dev *dev)
@@ -1474,8 +1475,9 @@ int mt7999_mac_twt_teardown_flow(struct mt7999_dev *dev,
 				 struct mt7999_vif_link *link,
 				 struct mt7999_sta_link *msta_link,
 				 struct ieee80211_twt_teardown *td);
-void mt7999_mac_sta_deinit_link(struct mt7999_dev *dev,
-				struct mt7999_sta_link *msta_link);
+void mt7999_mac_sta_remove_link(struct mt7999_dev *dev,
+				struct ieee80211_sta *sta,
+				unsigned int link_id, bool flush);
 int mt7999_mac_add_twt_setup(struct ieee80211_hw *hw,
 			     struct ieee80211_sta *sta, u8 link_id,
 			     struct ieee80211_twt_setup *twt);
