@@ -3706,7 +3706,7 @@ int mt7999_mcu_add_sta(struct mt7999_dev *dev, struct ieee80211_vif *vif,
 		return PTR_ERR(skb);
 
 	/* starec basic */
-	mt76_connac_mcu_sta_basic_tlv(&dev->mt76, skb, vif, link_conf, link_sta,
+	mt76_connac_mcu_sta_basic_tlv(&dev->mt76, skb, link_conf, link_sta,
 				      conn_state, newly);
 
 	mt76_sta_dbg(vif, "link=%u, wcid=%u, newly=%d, conn_state=%d",
