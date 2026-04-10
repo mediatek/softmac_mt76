@@ -237,8 +237,17 @@ int mt76_switch_vif_chanctx(struct ieee80211_hw *hw,
 		old_phy->chanctx = NULL;
 
 	new_ctx->state = MT76_CHANCTX_STATE_SWITCH;
-	if (update_chan)
+	if (update_chan) {
+		for (i = 0; i < n_vifs; i++) {
+			new_ctx = (struct mt76_chanctx *)vifs[i].new_ctx->drv_priv;
+
+			if (vifs[i].vif->type == NL80211_IFTYPE_AP)
+				new_ctx->has_ap = true;
+			else if (vifs[i].vif->type == NL80211_IFTYPE_STATION)
+				new_ctx->has_sta = true;
+		}
 		ret = mt76_phy_update_channel(phy, vifs->new_ctx);
+	}
 
 	if (ret)
 		goto out;
@@ -263,14 +272,6 @@ int mt76_switch_vif_chanctx(struct ieee80211_hw *hw,
 
 skip_link_replace:
 	for (i = 0; i < n_vifs; i++) {
-		old_ctx = (struct mt76_chanctx *)vifs[i].old_ctx->drv_priv;
-		new_ctx = (struct mt76_chanctx *)vifs[i].new_ctx->drv_priv;
-
-		if (vifs[i].vif->type == NL80211_IFTYPE_AP)
-			new_ctx->has_ap = true;
-		else if (vifs[i].vif->type == NL80211_IFTYPE_STATION)
-			new_ctx->has_sta = true;
-
 		mt76_bss_dbg(vifs[i].vif,
 			     "chan=%d->%d, width=%d->%d, punct_bitmap=0x%04x->0x%04x, link=%u",
 			     vifs[i].old_ctx->def.chan->hw_value,
