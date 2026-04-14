@@ -1593,4 +1593,24 @@ int mt7996_mcu_sta_get_wtbl(struct mt7996_dev *dev, u16 idx,
 	dev_kfree_skb(rskb);
 	return ret;
 }
+
+int mt7996_mcu_get_sta_pause(struct mt7996_phy *phy, struct sk_buff **skb)
+{
+	struct {
+		u8 band_idx;
+		u8 _rsv[3];
+
+		__le16 tag;
+		__le16 len;
+		u8 _rsv2[4];
+	} __packed req = {
+		.band_idx = phy->mt76->band_idx,
+		.tag = cpu_to_le16(UNI_BAND_CONFIG_DUMP_STA_PAUSE),
+		.len = cpu_to_le16(sizeof(req) - 4),
+	};
+
+	return mt76_mcu_send_and_get_msg(&phy->dev->mt76,
+					 MCU_WM_UNI_CMD_QUERY(BAND_CONFIG),
+					 &req, sizeof(req), true, skb);
+}
 #endif

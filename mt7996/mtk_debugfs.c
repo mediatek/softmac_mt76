@@ -4583,13 +4583,6 @@ out:
 	return 0;
 }
 DEFINE_SHOW_ATTRIBUTE(mt7996_rx_drop);
-/* DRR */
-static int
-mt7996_drr_info(struct seq_file *s, void *data)
-{
-	/* TODO: Wait MIB counter API implement complete */
-	return 0;
-}
 
 static ssize_t mt7996_muru_dbg_info_set(struct file *file,
 					const char __user *user_buf,
@@ -5246,6 +5239,63 @@ mt7996_agg_table_show(struct seq_file *s, void *data)
 }
 DEFINE_SHOW_ATTRIBUTE(mt7996_agg_table);
 
+static int
+mt7996_drr_info_show(struct seq_file *s, void *data)
+{
+	struct mt7996_mcu_get_sta_pause_event *event;
+	struct mt7996_phy *phy = s->private;
+	struct mt7996_dev *dev = phy->dev;
+	struct sk_buff *skb;
+	u16 len, pause_bytes, ac_bytes, real_dw_size, ac_dw_size, ac_idx = 0;
+	u8 max_dw_per_ac;
+	int ret, i;
+
+	ret = mt7996_mcu_get_sta_pause(phy, &skb);
+	if (ret)
+		return ret;
+
+	skb_pull(skb, 4);
+	event = (void *)skb->data;
+	len = le16_to_cpu(event->len);
+	if (len % 4 != 0) {
+		ret = -EINVAL;
+		goto out;
+	}
+
+	pause_bytes = le16_to_cpu(event->pause_bytes);
+	ac_bytes = le16_to_cpu(event->ac_bytes);
+	real_dw_size = pause_bytes >> 2;
+	ac_dw_size = ac_bytes >> 2;
+
+	/* 4 ACs */
+	max_dw_per_ac = is_mt7996(&dev->mt76) ? 34 : 17;
+	for (i = 0; i < ac_dw_size; i++) {
+		if (i % max_dw_per_ac == 0)
+			seq_printf(s, "Band%u AC[%u]\n", phy->mt76->band_idx, ac_idx);
+
+		seq_printf(s, "DW%02d: %02x %02x %02x %02x\n", i % max_dw_per_ac,
+			   event->buf[i * 4 + 3], event->buf[i * 4 + 2],
+			   event->buf[i * 4 + 1], event->buf[i * 4]);
+
+		if (i % max_dw_per_ac == max_dw_per_ac - 1)
+			ac_idx++;
+	}
+
+	/* 4 TWT */
+	seq_printf(s, "Band%u [TWT]\n", phy->mt76->band_idx);
+	for (i = ac_dw_size; i < real_dw_size; i++) {
+		seq_printf(s, "DW%02d: %02x %02x %02x %02x\n", i % max_dw_per_ac,
+			   event->buf[i * 4 + 3], event->buf[i * 4 + 2],
+			   event->buf[i * 4 + 1], event->buf[i * 4]);
+	}
+
+out:
+	dev_kfree_skb(skb);
+
+	return ret;
+}
+DEFINE_SHOW_ATTRIBUTE(mt7996_drr_info);
+
 static ssize_t mt7996_mlo_agc_tx_set(struct file *file,
 				     const char __user *user_buf,
 				     size_t count, loff_t *ppos)
@@ -5896,6 +5946,7 @@ void mt7996_mtk_init_band_debugfs(struct mt7996_phy *phy, struct dentry *dir)
 
 	debugfs_create_file("rmac_table", 0400, dir, phy, &mt7996_rmac_table_fops);
 	debugfs_create_file("agg_table", 0400, dir, phy, &mt7996_agg_table_fops);
+	debugfs_create_file("drr_info", 0400, dir, phy, &mt7996_drr_info_fops);
 
 	if (!is_mt7996(&phy->dev->mt76))
 		debugfs_create_file("mru_probe_enable", 0600, dir, phy,
@@ -6003,9 +6054,6 @@ void mt7996_mtk_init_dev_debugfs(struct mt7996_dev *dev, struct dentry *dir)
 
 	debugfs_create_file("thermal_recal", 0200, dir, dev, &fops_thermal_recal);
 	debugfs_create_file("reset_counter", 0200, dir, dev, &fops_reset_counter);
-
-	debugfs_create_devm_seqfile(dev->mt76.dev, "drr_info", dir,
-				    mt7996_drr_info);
 
 	debugfs_create_u32("token_idx", 0600, dir, &dev->dbg.token_idx);
 	debugfs_create_devm_seqfile(dev->mt76.dev, "rx_token", dir,

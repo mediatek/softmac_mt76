@@ -1161,6 +1161,16 @@ struct mt7996_mcu_sta_rec_get_wtbl_event {
 	u8 buf[];
 } __packed;
 
+struct mt7996_mcu_get_sta_pause_event {
+	__le16 tag;
+	__le16 len;
+	__le16 pause_bytes;
+	__le16 ac_bytes;
+	__le16 twt_map_bytes;
+	u8 rsv[2];
+	u8 buf[];
+} __packed;
+
 #endif
 
 enum {

@@ -1661,6 +1661,7 @@ int mt7996_mcu_sta_get_wtbl(struct mt7996_dev *dev, u16 idx,
 			    enum mt7996_wtbl_type type,
 			    u16 start_dw, u16 len_in_dw, void *buf);
 void mt7996_packet_log_to_host(struct mt7996_dev *dev, const void *data, int len, int type, int des_len);
+int mt7996_mcu_get_sta_pause(struct mt7996_phy *phy, struct sk_buff **skb);
 #else
 static inline void
 mt7996_packet_log_to_host(struct mt7996_dev *dev, const void *data, int len, int type, int des_len)
