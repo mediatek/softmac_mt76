@@ -356,8 +356,8 @@ int mt7996_vif_link_add(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 	int mld_idx, idx, ret;
 
 	if ((mvif->mt76.valid_links & BIT(link_conf->link_id)) &&
-	    ieee80211_vif_is_mld(vif) && !mlink->offchannel) {
-		if (vif->type == NL80211_IFTYPE_AP)
+	    !mlink->offchannel) {
+		if (ieee80211_vif_is_mld(vif) && vif->type == NL80211_IFTYPE_AP)
 			return mt7996_mcu_mld_link_oper(dev, link_conf, link,
 							true);
 
