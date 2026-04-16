@@ -29,6 +29,7 @@ enum tm_changed {
 	TM_CHANGED_TX_RATE_IDX,
 	TM_CHANGED_RX_FILTER,
 	TM_CHANGED_TX_SYMBOL,
+	TM_CHANGED_TX_SPE_IDX,
 
 	/* must be last */
 	NUM_TM_CHANGED
@@ -53,6 +54,7 @@ static const u8 tm_change_map[] = {
 	[TM_CHANGED_TX_RATE_IDX] = MT76_TM_ATTR_TX_RATE_IDX,
 	[TM_CHANGED_RX_FILTER] = MT76_TM_ATTR_RX_FILTER,
 	[TM_CHANGED_TX_SYMBOL] = MT76_TM_ATTR_TX_SYMBOL_NUM,
+	[TM_CHANGED_TX_SPE_IDX] = MT76_TM_ATTR_TX_SPE_IDX,
 };
 
 static void mt7999_tm_ipi_work(struct work_struct *work);
@@ -178,9 +180,10 @@ mt7999_tm_set(struct mt7999_dev *dev, u32 func_idx, u32 data)
 			.op.rf.param.func_data = cpu_to_le32(data),
 		},
 	};
+	bool wait = (func_idx == SET_ID(COMMAND)) && (data == RF_CMD(START_TX));
 
 	return mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(TESTMODE_CTRL), &req,
-				 sizeof(req), false);
+				 sizeof(req), wait);
 }
 
 static int
@@ -226,9 +229,11 @@ mt7999_tm_set_antenna(struct mt7999_phy *phy, u32 func_idx)
 	    !mt76_testmode_param_present(td, MT76_TM_ATTR_TX_SPE_IDX))
 		return;
 
-	if (func_idx == SET_ID(TX_PATH))
-		antenna_mask = td->tx_spe_idx ? (SPE_INDEX_MASK | td->tx_spe_idx) :
-						td->tx_antenna_mask & TX_ANTENNA_MASK;
+	if (func_idx == SET_ID(TX_PATH) && td->tx_spe_idx &&
+	    mt76_testmode_param_present(td, MT76_TM_ATTR_TX_SPE_IDX))
+		antenna_mask = SPE_INDEX_MASK | td->tx_spe_idx;
+	else if (func_idx == SET_ID(TX_PATH))
+		antenna_mask = td->tx_antenna_mask & TX_ANTENNA_MASK;
 	else if (func_idx == SET_ID(RX_PATH))
 		antenna_mask = u32_encode_bits(td->tx_antenna_mask, RX_ANTENNA_MASK);
 	else
@@ -422,6 +427,8 @@ mt7999_tm_update_channel(struct mt7999_phy *phy)
 
 	/* trigger switch channel calibration */
 	mt7999_tm_set(dev, SET_ID(CHAN_FREQ), chandef->center_freq1 * 1000);
+
+	td->ch_update_required = false;
 }
 
 static void
@@ -478,7 +485,7 @@ mt7999_tm_set_tx_frames(struct mt7999_phy *phy, bool en)
 	mt7999_tm_set(dev, SET_ID(HW_TX_MODE), 0);
 	mt7999_tm_set(dev, SET_ID(UEQM), td->ueqm_pattern);
 
-	if (!td->bf_en && mt76_testmode_param_present(td, MT76_TM_ATTR_TX_ANTENNA))
+	if (!td->bf_en && td->ch_update_required)
 		mt7999_tm_update_channel(phy);
 
 	/* trigger firmware to start TX */
@@ -1383,8 +1390,6 @@ mt7999_tm_txbf_init(struct mt7999_phy *phy, u16 *val)
 	struct mt7999_dev *dev = phy->dev;
 	struct mt76_testmode_data *td = &phy->mt76->test;
 	struct ieee80211_vif *vif = phy->mt76->monitor_vif;
-	struct mt7999_vif *mvif = (struct mt7999_vif *)vif->drv_priv;
-	struct mt7999_vif_link *deflink = &mvif->deflink;
 	enum nl80211_chan_width width = NL80211_CHAN_WIDTH_20;
 	void *phase_cal, *pfmu_data, *pfmu_tag;
 	u8 nss, band_idx = phy->mt76->band_idx;
@@ -1451,10 +1456,6 @@ mt7999_tm_txbf_init(struct mt7999_phy *phy, u16 *val)
 	mt7999_tm_set_mac_addr(dev, td->addr[1], SET_ID(SA));
 	mt7999_tm_set_mac_addr(dev, td->addr[2], SET_ID(BSSID));
 
-	mt7999_mcu_add_dev_info(phy, phy->mt76->monitor_vif, &phy->mt76->monitor_vif->bss_conf, &mvif->deflink.mt76, true);
-	mt7999_mcu_add_bss_info(phy, vif, &vif->bss_conf, &deflink->mt76,
-				&deflink->msta_link, true);
-
 	if (td->ibf) {
 		if (td->is_txbf_dut) {
 			/* Enable ITxBF Capability */
@@ -1487,11 +1488,12 @@ mt7999_tm_txbf_init(struct mt7999_phy *phy, u16 *val)
 			td->tx_rate_nss = 4;
 		}
 	} else {
+		width = phy->mt76->chandef.width;
 		if (td->is_txbf_dut) {
 			/* Enable ETxBF Capability */
 			mt7999_mcu_set_txbf(dev, UNI_BF_HW_EN_UPDATE);
-			td->tx_antenna_mask = phy->mt76->chainmask;
-			td->tx_spe_idx = 24 + band_idx;
+			if (!mt76_testmode_param_present(td, MT76_TM_ATTR_TX_ANTENNA))
+				td->tx_antenna_mask = phy->mt76->chainmask;
 			if (td->tx_rate_mode == MT76_TM_TX_MODE_VHT ||
 			    td->tx_rate_mode == MT76_TM_TX_MODE_HE_SU)
 				mt7999_tm_set(dev, SET_ID(NSS), td->tx_rate_nss);
@@ -1504,9 +1506,8 @@ mt7999_tm_txbf_init(struct mt7999_phy *phy, u16 *val)
 			mt76_tm_dbg(&dev->mt76, "set BBP RX CR = %x",
 				    mt76_rr(dev, EBF_BBP_RX_OFFSET));
 
-			td->tx_antenna_mask = 1;
+			td->tx_antenna_mask = width == NL80211_CHAN_WIDTH_160 ? 5 : 1;
 		}
-		width = phy->mt76->chandef.width;
 
 		if (td->tx_rate_mode == MT76_TM_TX_MODE_EHT_MU)
 			td->tx_rate_mode = MT76_TM_TX_MODE_EHT_SU;
@@ -1523,6 +1524,13 @@ mt7999_tm_txbf_init(struct mt7999_phy *phy, u16 *val)
 		      mt7999_tm_bw_mapping(width, BW_MAP_NL_TO_FW));
 	mt7999_tm_set_antenna(phy, SET_ID(TX_PATH));
 	mt7999_tm_set_antenna(phy, SET_ID(RX_PATH));
+
+	if (!td->ibf && td->is_txbf_dut) {
+		td->tx_spe_idx = 24 + band_idx;
+		mt76_testmode_param_set(td, MT76_TM_ATTR_TX_SPE_IDX);
+		mt7999_tm_set_antenna(phy, SET_ID(TX_PATH));
+	}
+
 	mt7999_tm_set(dev, SET_ID(IPG), td->tx_ipg);
 	mt7999_tm_set(dev, SET_ID(TX_LEN), td->tx_mpdu_len);
 	mt7999_tm_set(dev, SET_ID(TX_TIME), 0);
@@ -1705,7 +1713,8 @@ mt7999_tm_txbf_profile_update(struct mt7999_phy *phy, u16 *val, bool ebf)
 		nr = 1;
 	else if (td->tx_antenna_mask == 7)
 		nr = 2;
-	else if (td->tx_antenna_mask == 31)
+	else if (td->tx_antenna_mask == 31 &&
+		 td->tx_rate_mode != MT76_TM_TX_MODE_HT)
 		nr = 4;
 	else
 		nr = 3;
@@ -2243,13 +2252,10 @@ mt7999_tm_update_params(struct mt7999_phy *phy, u32 changed)
 	}
 	if (changed & BIT(TM_CHANGED_CFG))
 		mt7999_tm_set_cfg(phy);
-	if (changed & BIT(TM_CHANGED_OFF_CHAN_CH)) {
-		if (changed & BIT(TM_CHANGED_OFF_CHAN_CENTER_CH))
-			mt76_testmode_param_set(td, MT76_TM_ATTR_OFF_CH_SCAN_CENTER_CH);
-		if (changed & BIT(TM_CHANGED_OFF_CHAN_BW))
-			mt76_testmode_param_set(td, MT76_TM_ATTR_OFF_CH_SCAN_BW);
+	if (changed & BIT(TM_CHANGED_OFF_CHAN_CH) ||
+	    changed & BIT(TM_CHANGED_OFF_CHAN_CENTER_CH) ||
+	    changed & BIT(TM_CHANGED_OFF_CHAN_BW))
 		mt7999_tm_set_offchan(phy);
-	}
 	if ((changed & BIT(TM_CHANGED_IPI_THRESHOLD)) &&
 	    (changed & BIT(TM_CHANGED_IPI_PERIOD)))
 		mt7999_tm_set_ipi(phy);
@@ -2258,12 +2264,18 @@ mt7999_tm_update_params(struct mt7999_phy *phy, u32 changed)
 	if (changed & BIT(TM_CHANGED_TXBF_ACT))
 		mt7999_tm_set_txbf(phy);
 	if (changed & BIT(TM_CHANGED_TX_ANTENNA)) {
-		mt76_testmode_param_set(td, MT76_TM_ATTR_TX_ANTENNA);
 		mt7999_tm_set_antenna(phy, SET_ID(TX_PATH));
 		mt7999_tm_set_antenna(phy, SET_ID(RX_PATH));
+		td->ch_update_required = true;
 	}
-	if (changed & BIT(TM_CHANGED_TX_RATE_NSS))
+	if (changed & BIT(TM_CHANGED_TX_SPE_IDX)) {
+		mt7999_tm_set_antenna(phy, SET_ID(TX_PATH));
+		td->ch_update_required = true;
+	}
+	if (changed & BIT(TM_CHANGED_TX_RATE_NSS)) {
 		mt7999_tm_set(dev, SET_ID(NSS), td->tx_rate_nss);
+		td->ch_update_required = true;
+	}
 	if (changed & BIT(TM_CHANGED_TX_RATE_IDX))
 		mt7999_tm_set(dev, SET_ID(TX_RATE), td->tx_rate_idx);
 	if (changed & BIT(TM_CHANGED_RX_FILTER)) {
