@@ -1628,6 +1628,14 @@ static inline struct mt76_dev *mt76_wed_to_dev(struct mtk_wed_device *wed)
 	return container_of(wed, struct mt76_dev, mmio.wed);
 }
 
+static inline int mt76_wed_get_ver(struct mtk_wed_device *wed)
+{
+#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+	return wed->version;
+#endif /* CONFIG_NET_MEDIATEK_SOC_WED */
+	return MTK_WED_DISABLE;
+}
+
 static inline struct mt76_wcid *
 __mt76_wcid_ptr(struct mt76_dev *dev, u16 idx)
 {

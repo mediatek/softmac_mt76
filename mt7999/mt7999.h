@@ -1594,6 +1594,16 @@ static inline void mt7999_set_pse_drop(struct mt7999_dev *dev, bool enable)
 #endif /* CONFIG_NET_MEDIATEK_SOC_WED */
 }
 
+static inline bool mt7999_check_token_range(struct mt7999_dev *dev, u32 msdu)
+{
+#ifdef CONFIG_NET_MEDIATEK_SOC_WED
+	return (!mtk_wed_device_active(&dev->mt76.mmio.wed) ||
+		!in_range(msdu, 0, dev->mt76.mmio.wed.wlan.nbuf));
+#else
+	return true;
+#endif /* CONFIG_NET_MEDIATEK_SOC_WED */
+}
+
 #ifdef CONFIG_MTK_VENDOR
 void mt7999_set_wireless_vif(void *data, u8 *mac, struct ieee80211_vif *vif);
 void mt7999_vendor_register(struct mt7999_phy *phy);

@@ -83,7 +83,7 @@ static void mt7999_dma_config(struct mt7999_dev *dev)
 	MCUQ_CONFIG(MT_MCUQ_WM_VIP, MT_INT_TX_DONE_MCU_WM_VIP, MT7999_TXQ_MCU_WM_VIP);
 
 	/* WED queues */
-	if (mtk_wed_device_active(wed) && wed->version == MTK_WED_HW_V3_1)
+	if (mtk_wed_device_active(wed) && mt76_wed_get_ver(wed) == MTK_WED_HW_V3_1)
 		RXQ_CONFIG(MT_RXQ_WED_RX_DATA, MT_INT_RX_DONE_WED_RX_DATA,
 			   MT7999_TXQ_WED_RX);
 
@@ -336,12 +336,12 @@ static void mt7999_dma_wed_config(struct mt7999_dev *dev)
 
 	/* wed to host rx data queue */
 	if (mtk_wed_device_active(wed)) {
-		u8 qid = (wed->version == MTK_WED_HW_V3_1) ? MT_RXQ_WED_RX_DATA:
-							     MT_RXQ_MAIN;
+		u8 qid = (mt76_wed_get_ver(wed) == MTK_WED_HW_V3_1) ?
+			 MT_RXQ_WED_RX_DATA : MT_RXQ_MAIN;
 
 		dev->mt76.q_rx[qid].flags = MT_WED_Q_RX(0);
 		dev->mt76.q_rx[qid].wed = wed;
-		if (wed->version == MTK_WED_HW_V3) {
+		if (mt76_wed_get_ver(wed) == MTK_WED_HW_V3) {
 			dev->mt76.q_rx[MT_RXQ_BAND2].flags = MT_WED_Q_RX(1);
 			dev->mt76.q_rx[MT_RXQ_BAND2].wed = wed;
 		}

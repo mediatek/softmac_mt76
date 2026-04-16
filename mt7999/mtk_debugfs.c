@@ -3625,7 +3625,7 @@ mt7999_rx_drop_show(struct seq_file *s, void *data)
 	int i = 0;
 
 	if (mtk_wed_device_active(&mdev->mmio.wed) &&
-	    mdev->mmio.wed.version == MTK_WED_HW_V3_1)
+	    mt76_wed_get_ver(&mdev->mmio.wed) == MTK_WED_HW_V3_1)
 		q[0] = &mdev->q_rx[MT_RXQ_WED_RX_DATA];
 	else
 		q[0] = &mdev->q_rx[MT_RXQ_MAIN];

@@ -1418,8 +1418,7 @@ next:
 			count++;
 			txwi = mt76_token_release(mdev, msdu, &wake);
 
-			if (!txwi && (!mtk_wed_device_active(&dev->mt76.mmio.wed) ||
-				      !in_range(msdu, 0, dev->mt76.mmio.wed.wlan.nbuf)))
+			if (!txwi && mt7999_check_token_range(dev, msdu))
 				trace_mt7999_mac_tx_free(dev, INVALID_MSDU_ID,
 							 data, len,
 							 wcid ? wcid->idx : 0,
