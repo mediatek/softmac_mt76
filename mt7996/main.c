@@ -560,7 +560,8 @@ void mt7996_vif_link_remove(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 	/* Hw requires to destroy active links tearing down the interface, so
 	 * postpone it removing the interface.
 	 */
-	if (!ieee80211_vif_is_mld(vif) || mlink->wcid->offchannel) {
+	if (!ieee80211_vif_is_mld(vif) || mlink->wcid->offchannel ||
+	    phy->dev->recovery.hw_full_reset) {
 		mt7996_vif_link_destroy(phy, link, vif, link_conf);
 	} else {
 		if (vif->type == NL80211_IFTYPE_AP) {
