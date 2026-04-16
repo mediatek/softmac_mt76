@@ -869,7 +869,7 @@ struct mt76_testmode_ops {
 	int (*dump_icap)(struct mt76_phy *phy);
 	int (*get_attr)(struct mt76_phy *phy, int attr, u32 *val);
 	int (*set_appdu_info)(struct mt76_phy *phy, u8 appdu_idx);
-	int (*set_chan_switch_mode)(struct mt76_phy *phy);
+	int (*set_uhr_ch_op_mode)(struct mt76_phy *phy);
 };
 
 #define MT_TM_FW_RX_COUNT	BIT(0)
@@ -1062,7 +1062,7 @@ struct mt76_testmode_data {
 		u8 mode;
 		u8 sub_pri_sel;
 		u16 sub_chan;
-	} chsw;
+	} uhr_ch_op;
 };
 
 enum {

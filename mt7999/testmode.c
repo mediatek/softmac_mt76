@@ -3098,7 +3098,7 @@ mt7999_tm_set_appdu_info(struct mt76_phy *mphy, u8 appdu_idx)
 }
 
 static int
-mt7999_tm_set_chan_switch_mode(struct mt76_phy *mphy)
+mt7999_tm_set_uhr_ch_op_mode(struct mt76_phy *mphy)
 {
 	struct cfg80211_chan_def *chandef = &mphy->chandef;
 	struct mt76_testmode_data *td = &mphy->test;
@@ -3107,10 +3107,10 @@ mt7999_tm_set_chan_switch_mode(struct mt76_phy *mphy)
 	u32 center, freq, width;
 
 	mt7999_tm_set(dev, SET_ID(BAND_IDX), mphy->band_idx);
-	mt7999_tm_set(dev, SET_ID(CHAN_SWITCH_MODE), td->chsw.mode);
+	mt7999_tm_set(dev, SET_ID(UHR_CH_OP_MODE), td->uhr_ch_op.mode);
 
 	center = chandef->center_freq1;
-	freq = ieee80211_channel_to_frequency(td->chsw.sub_chan, chandef->chan->band);
+	freq = ieee80211_channel_to_frequency(td->uhr_ch_op.sub_chan, chandef->chan->band);
 	width = nl80211_chan_width_to_mhz(chandef->width) / 2;
 	if (freq > center + width || freq < center - width) {
 		mt76_tm_dbg(&dev->mt76, "Invalid sub channel frequency %d\n", freq);
@@ -3118,7 +3118,7 @@ mt7999_tm_set_chan_switch_mode(struct mt76_phy *mphy)
 	}
 
 	mt7999_tm_set(dev, SET_ID(SUBCHAN_FREQ), freq * 1000);
-	mt7999_tm_set(dev, SET_ID(SUBCHAN_PRI_SEL), td->chsw.sub_pri_sel);
+	mt7999_tm_set(dev, SET_ID(SUBCHAN_PRI_SEL), td->uhr_ch_op.sub_pri_sel);
 
 	return 0;
 }
@@ -3137,5 +3137,5 @@ const struct mt76_testmode_ops mt7999_testmode_ops = {
 	.dump_icap = mt7999_tm_dump_icap,
 	.get_attr = mt7999_tm_get_attr,
 	.set_appdu_info = mt7999_tm_set_appdu_info,
-	.set_chan_switch_mode = mt7999_tm_set_chan_switch_mode,
+	.set_uhr_ch_op_mode = mt7999_tm_set_uhr_ch_op_mode,
 };

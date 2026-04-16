@@ -66,7 +66,7 @@ const struct nla_policy mt76_tm_policy[NUM_MT76_TM_ATTRS] = {
 	[MT76_TM_ATTR_APPDU_EN] = { .type = NLA_U8 },
 	[MT76_TM_ATTR_APPDU_IDX] = { .type = NLA_U8 },
 	[MT76_TM_ATTR_APPDU_SIG] = { .type = NLA_U8 },
-	[MT76_TM_ATTR_CHAN_SWITCH_MODE] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_UHR_CH_OP_MODE] = { .type = NLA_U8 },
 	[MT76_TM_ATTR_SUB_CHAN] = { .type = NLA_U16 },
 	[MT76_TM_ATTR_SUB_PRI_SEL] = { .type = NLA_U8 },
 };
@@ -583,7 +583,7 @@ mt76_testmode_init_defaults(struct mt76_phy *phy)
 	td->max_pkt_ext = MT76_TM_MAX_PKT_EXT_8US;
 
 	td->ueqm_pattern = MT76_TM_UEQM_PATTERN_INVALID;
-	td->chsw.mode = MT76_TM_CHAN_SWITCH_MODE_NONE;
+	td->uhr_ch_op.mode = MT76_TM_UHR_CH_OP_MODE_NONE;
 
 	memcpy(td->addr[0], addr, ETH_ALEN);
 	memcpy(td->addr[1], addr, ETH_ALEN);
@@ -960,34 +960,34 @@ out:
 }
 
 static int
-mt76_testmode_set_chan_switch_mode(struct mt76_phy *phy, struct nlattr **tb)
+mt76_testmode_set_uhr_ch_op_mode(struct mt76_phy *phy, struct nlattr **tb)
 {
 	struct mt76_testmode_data *td = &phy->test;
 	struct mt76_dev *dev = phy->dev;
 	int i, ret = -EINVAL;
 
-	if (!dev->test_ops->set_chan_switch_mode) {
+	if (!dev->test_ops->set_uhr_ch_op_mode) {
 		ret = -EOPNOTSUPP;
 		goto out;
 	}
 
-	if (mt76_tm_get_u8(tb[MT76_TM_ATTR_CHAN_SWITCH_MODE], &td->chsw.mode,
-			   MT76_TM_CHAN_SWITCH_MODE_NONE, MT76_TM_CHAN_SWITCH_MODE_MAX))
+	if (mt76_tm_get_u8(tb[MT76_TM_ATTR_UHR_CH_OP_MODE], &td->uhr_ch_op.mode,
+			   MT76_TM_UHR_CH_OP_MODE_NONE, MT76_TM_UHR_CH_OP_MODE_MAX))
 		goto out;
 
-	if (td->chsw.mode != MT76_TM_CHAN_SWITCH_MODE_NONE &&
+	if (td->uhr_ch_op.mode != MT76_TM_UHR_CH_OP_MODE_NONE &&
 	    (!tb[MT76_TM_ATTR_SUB_CHAN] || !tb[MT76_TM_ATTR_SUB_PRI_SEL]))
 		goto out;
 
-	if (mt76_tm_get_u8(tb[MT76_TM_ATTR_SUB_PRI_SEL], &td->chsw.sub_pri_sel, 0, 15) ||
-	    mt76_tm_get_u16(tb[MT76_TM_ATTR_SUB_CHAN], &td->chsw.sub_chan, 1, 257))
+	if (mt76_tm_get_u8(tb[MT76_TM_ATTR_SUB_PRI_SEL], &td->uhr_ch_op.sub_pri_sel, 0, 15) ||
+	    mt76_tm_get_u16(tb[MT76_TM_ATTR_SUB_CHAN], &td->uhr_ch_op.sub_chan, 1, 257))
 		goto out;
 
-	for (i = MT76_TM_ATTR_CHAN_SWITCH_MODE; i <= MT76_TM_ATTR_SUB_PRI_SEL; i++)
+	for (i = MT76_TM_ATTR_UHR_CH_OP_MODE; i <= MT76_TM_ATTR_SUB_PRI_SEL; i++)
 		if (tb[i])
 			mt76_testmode_param_set(td, i);
 
-	if (dev->test_ops->set_chan_switch_mode(phy))
+	if (dev->test_ops->set_uhr_ch_op_mode(phy))
 		goto out;
 
 	ret = 0;
@@ -1124,8 +1124,8 @@ int mt76_testmode_cmd(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 		goto out;
 	}
 
-	if (tb[MT76_TM_ATTR_CHAN_SWITCH_MODE]) {
-		err = mt76_testmode_set_chan_switch_mode(phy, tb);
+	if (tb[MT76_TM_ATTR_UHR_CH_OP_MODE]) {
+		err = mt76_testmode_set_uhr_ch_op_mode(phy, tb);
 		goto out;
 	}
 
@@ -1743,12 +1743,12 @@ int mt76_testmode_dump(struct ieee80211_hw *hw, struct sk_buff *msg,
 	     nla_put_u32(msg, MT76_TM_ATTR_TX_SYMBOL_NUM, td->tx_symbol_num)) ||
 	    (mt76_testmode_param_present(td, MT76_TM_ATTR_UEQM_PATTERN) &&
 	     nla_put_u8(msg, MT76_TM_ATTR_UEQM_PATTERN, td->ueqm_pattern)) ||
-	    (mt76_testmode_param_present(td, MT76_TM_ATTR_CHAN_SWITCH_MODE) &&
-	     nla_put_u8(msg, MT76_TM_ATTR_CHAN_SWITCH_MODE, td->chsw.mode)) ||
+	    (mt76_testmode_param_present(td, MT76_TM_ATTR_UHR_CH_OP_MODE) &&
+	     nla_put_u8(msg, MT76_TM_ATTR_UHR_CH_OP_MODE, td->uhr_ch_op.mode)) ||
 	    (mt76_testmode_param_present(td, MT76_TM_ATTR_SUB_CHAN) &&
-	     nla_put_u16(msg, MT76_TM_ATTR_SUB_CHAN, td->chsw.sub_chan)) ||
+	     nla_put_u16(msg, MT76_TM_ATTR_SUB_CHAN, td->uhr_ch_op.sub_chan)) ||
 	    (mt76_testmode_param_present(td, MT76_TM_ATTR_SUB_PRI_SEL) &&
-	     nla_put_u8(msg, MT76_TM_ATTR_SUB_PRI_SEL, td->chsw.sub_pri_sel)))
+	     nla_put_u8(msg, MT76_TM_ATTR_SUB_PRI_SEL, td->uhr_ch_op.sub_pri_sel)))
 		goto out;
 
 	if (mt76_testmode_param_present(td, MT76_TM_ATTR_TX_POWER) ||

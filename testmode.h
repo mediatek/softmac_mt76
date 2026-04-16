@@ -169,8 +169,8 @@ static int mt76_tm_get_##type(struct nlattr *attr, type *dest, type min, type ma
  * @MT76_TM_ATTR_APPDU_EN: enable aggregated PPDU (u8)
  * @MT76_TM_ATTR_APPDU_IDX: config the aggregated PPDU index (u8)
  * @MT76_TM_ATTR_APPDU_SIG: config the HE SIG-B or EHT SIG for the aggregated PPDU (u8)
- * @MT76_TM_ATTR_CHAN_SWITCH_MODE: config the channel switch mode
- *	(u8, see &enum mt76_testmode_chan_switch_mode)
+ * @MT76_TM_ATTR_UHR_CH_OP_MODE: config the UHR channel operating mode
+ *	(u8, see &enum mt76_testmode_uhr_ch_op_mode)
  * @MT76_TM_ATTR_SUB_CHAN: config the sub channel for DSO/NPCA (u16)
  * @MT76_TM_ATTR_SUB_PRI_SEL: config the primary channel selection index of
  *	the sub channel for DSO/NPCA (u8)
@@ -295,7 +295,7 @@ enum mt76_testmode_attr {
 	MT76_TM_ATTR_APPDU_EN,
 	MT76_TM_ATTR_APPDU_IDX,
 	MT76_TM_ATTR_APPDU_SIG,
-	MT76_TM_ATTR_CHAN_SWITCH_MODE,
+	MT76_TM_ATTR_UHR_CH_OP_MODE,
 	MT76_TM_ATTR_SUB_CHAN,
 	MT76_TM_ATTR_SUB_PRI_SEL,
 
@@ -765,21 +765,21 @@ enum mt76_testmode_dru_bw {
 };
 
 /**
- * enum mt76_testmode_chan_switch_mode - channel switch mode
+ * enum mt76_testmode_uhr_ch_op_mode - UHR channel operating mode
  *
- * @MT76_TM_CHAN_SWITCH_MODE_NONE: disable DSO/NPCA
- * @MT76_TM_CHAN_SWITCH_MODE_DSO: enable and trigger DSO based on ICF frame
- * @MT76_TM_CHAN_SWITCH_MODE_DSO_MANUAL: enable and trigger DSO manually
- * @MT76_TM_CHAN_SWITCH_MODE_NPCA: enable NPCA
+ * @MT76_TM_UHR_CH_OP_MODE_NONE: disable DSO/NPCA
+ * @MT76_TM_UHR_CH_OP_MODE_DSO: enable and trigger DSO based on ICF frame
+ * @MT76_TM_UHR_CH_OP_MODE_DSO_MANUAL: enable and trigger DSO manually
+ * @MT76_TM_UHR_CH_OP_MODE_NPCA: enable NPCA
  */
-enum mt76_testmode_chan_switch_mode {
-	MT76_TM_CHAN_SWITCH_MODE_NONE,
-	MT76_TM_CHAN_SWITCH_MODE_DSO,
-	MT76_TM_CHAN_SWITCH_MODE_DSO_MANUAL,
-	MT76_TM_CHAN_SWITCH_MODE_NPCA,
+enum mt76_testmode_uhr_ch_op_mode {
+	MT76_TM_UHR_CH_OP_MODE_NONE,
+	MT76_TM_UHR_CH_OP_MODE_DSO,
+	MT76_TM_UHR_CH_OP_MODE_DSO_MANUAL,
+	MT76_TM_UHR_CH_OP_MODE_NPCA,
 
 	/* keep last */
-	NUM_MT76_TM_CHAN_SWITCH_MODE,
-	MT76_TM_CHAN_SWITCH_MODE_MAX = NUM_MT76_TM_CHAN_SWITCH_MODE - 1,
+	NUM_MT76_TM_UHR_CH_OP_MODE,
+	MT76_TM_UHR_CH_OP_MODE_MAX = NUM_MT76_TM_UHR_CH_OP_MODE - 1,
 };
 #endif

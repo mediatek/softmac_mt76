@@ -138,11 +138,11 @@ static const char * const testmode_dru_bw[] = {
 	[MT76_TM_DRU_BW_80] = "80",
 };
 
-static const char * const testmode_chan_switch_mode[] = {
-	[MT76_TM_CHAN_SWITCH_MODE_NONE] = "none",
-	[MT76_TM_CHAN_SWITCH_MODE_DSO] = "dso",
-	[MT76_TM_CHAN_SWITCH_MODE_DSO_MANUAL] = "dso_manual",
-	[MT76_TM_CHAN_SWITCH_MODE_NPCA] = "npca",
+static const char * const testmode_uhr_ch_op_mode[] = {
+	[MT76_TM_UHR_CH_OP_MODE_NONE] = "none",
+	[MT76_TM_UHR_CH_OP_MODE_DSO] = "dso",
+	[MT76_TM_UHR_CH_OP_MODE_DSO_MANUAL] = "dso_manual",
+	[MT76_TM_UHR_CH_OP_MODE_NPCA] = "npca",
 };
 
 static void print_enum(const struct tm_field *field, struct nlattr *attr)
@@ -675,7 +675,7 @@ static const struct tm_field testdata_fields[NUM_MT76_TM_ATTRS] = {
 	FIELD(u8, APPDU_EN, "appdu_en"),
 	FIELD(u8, APPDU_IDX, "appdu_idx"),
 	FIELD(u8, APPDU_SIG, "appdu_sig"),
-	FIELD_ENUM(CHAN_SWITCH_MODE, "chan_switch_mode", testmode_chan_switch_mode),
+	FIELD_ENUM(UHR_CH_OP_MODE, "uhr_ch_op_mode", testmode_uhr_ch_op_mode),
 	FIELD(u16, SUB_CHAN, "sub_chan"),
 	FIELD(u8, SUB_PRI_SEL, "sub_pri_sel"),
 };
@@ -759,7 +759,7 @@ static struct nla_policy testdata_policy[NUM_MT76_TM_ATTRS] = {
 	[MT76_TM_ATTR_APPDU_EN] = { .type = NLA_U8 },
 	[MT76_TM_ATTR_APPDU_IDX] = { .type = NLA_U8 },
 	[MT76_TM_ATTR_APPDU_SIG] = { .type = NLA_U8 },
-	[MT76_TM_ATTR_CHAN_SWITCH_MODE] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_UHR_CH_OP_MODE] = { .type = NLA_U8 },
 	[MT76_TM_ATTR_SUB_CHAN] = { .type = NLA_U16 },
 	[MT76_TM_ATTR_SUB_PRI_SEL] = { .type = NLA_U8 },
 };
