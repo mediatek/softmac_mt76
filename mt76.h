@@ -930,6 +930,7 @@ struct mt76_testmode_data {
 	enum mt76_testmode_state state;
 
 	u32 param_set[DIV_ROUND_UP(NUM_MT76_TM_ATTRS, 32)];
+	bool ch_update_required;
 	struct sk_buff *tx_skb;
 
 	u8 sku_en;

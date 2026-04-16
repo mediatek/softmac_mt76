@@ -8,7 +8,6 @@
 #define MT76_TM_TIMEOUT			10
 #define MT76_TM_EEPROM_BLOCK_SIZE	16
 
-#define MT76_TM_MIN_IPG			34
 #define MT76_TM_MAX_IPG			591981
 #define MT76_TM_MAX_MU_AID		0xf100
 

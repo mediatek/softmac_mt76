@@ -829,8 +829,7 @@ mt76_testmode_set_list_mode(struct mt76_phy *phy, struct nlattr **tb)
 		return -EINVAL;
 
 	if (mt76_tm_get_u32(tb[MT76_TM_ATTR_TX_COUNT], &list->tx_count, 1, UINT_MAX) ||
-	    mt76_tm_get_u32(tb[MT76_TM_ATTR_TX_IPG], &list->tx_ipg,
-			    MT76_TM_MIN_IPG, MT76_TM_MAX_IPG) ||
+	    mt76_tm_get_u32(tb[MT76_TM_ATTR_TX_IPG], &list->tx_ipg, 0, MT76_TM_MAX_IPG) ||
 	    mt76_tm_get_u32(tb[MT76_TM_ATTR_LM_SEG_TIMEOUT], &list->seg_timeout, 0, UINT_MAX) ||
 	    mt76_tm_get_u32(tb[MT76_TM_ATTR_LM_STA_IDX], &list->sta_idx, 0, 16))
 		return -EINVAL;
@@ -1133,8 +1132,7 @@ int mt76_testmode_cmd(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 		goto out;
 
 	if (mt76_tm_get_u32(tb[MT76_TM_ATTR_TX_COUNT], &td->tx_count, 1, UINT_MAX) ||
-	    mt76_tm_get_u32(tb[MT76_TM_ATTR_TX_IPG], &td->tx_ipg,
-			    MT76_TM_MIN_IPG, MT76_TM_MAX_IPG) ||
+	    mt76_tm_get_u32(tb[MT76_TM_ATTR_TX_IPG], &td->tx_ipg, 0, MT76_TM_MAX_IPG) ||
 	    mt76_tm_get_u32(tb[MT76_TM_ATTR_FREQ_OFFSET], &td->freq_offset, 0, 127) ||
 	    mt76_tm_get_u32(tb[MT76_TM_ATTR_IPI_PERIOD], &td->ipi_period, 0, 10000) ||
 	    mt76_tm_get_u32(tb[MT76_TM_ATTR_TX_TIME], &td->tx_time,
@@ -1262,15 +1260,15 @@ int mt76_testmode_cmd(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 		}
 	}
 
+	for (i = MT76_TM_ATTR_STATE; i < ARRAY_SIZE(tb); i++)
+		if (tb[i])
+			mt76_testmode_param_set(td, i);
+
 	if (dev->test_ops->set_params) {
 		err = dev->test_ops->set_params(phy, tb, state);
 		if (err)
 			goto out;
 	}
-
-	for (i = MT76_TM_ATTR_STATE; i < ARRAY_SIZE(tb); i++)
-		if (tb[i])
-			mt76_testmode_param_set(td, i);
 
 	err = 0;
 	if (tb[MT76_TM_ATTR_STATE])
