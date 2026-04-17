@@ -966,7 +966,6 @@ void mt7999_init_work_reset(struct mt7999_dev *dev)
 	mt7999_low_power_config(dev);
 	mt7999_set_pcie_l1ss(dev, lp_ctrl & BIT(LOW_POWER_PCIE_L1SS));
 	mt7999_mcu_ba_trigger_enable(dev, true);
-	mt7999_mcu_fw_log_2_host(dev, MCU_FW_LOG_TO_UART);
 	mt7999_mcu_init_rx_airtime(dev);
 	mt7999_mcu_red_config(dev, true);
 }
