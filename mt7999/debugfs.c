@@ -955,7 +955,8 @@ mt7999_rf_regval_get(void *data, u64 *val)
 	u32 regval;
 	int ret;
 
-	ret = mt7999_mcu_rf_regval(dev, dev->mt76.debugfs_reg, &regval, false);
+	ret = mt7999_mcu_rf_regval(dev, dev->mt76.debugfs_reg,
+				   &regval, false, false);
 	if (ret)
 		return ret;
 
@@ -970,11 +971,42 @@ mt7999_rf_regval_set(void *data, u64 val)
 	struct mt7999_dev *dev = data;
 	u32 val32 = val;
 
-	return mt7999_mcu_rf_regval(dev, dev->mt76.debugfs_reg, &val32, true);
+	return mt7999_mcu_rf_regval(dev, dev->mt76.debugfs_reg,
+				    &val32, true, false);
 }
 
 DEFINE_DEBUGFS_ATTRIBUTE(fops_rf_regval, mt7999_rf_regval_get,
 			 mt7999_rf_regval_set, "0x%08llx\n");
+
+static int
+mt7999_efem_regval_get(void *data, u64 *val)
+{
+	struct mt7999_dev *dev = data;
+	u32 regval;
+	int ret;
+
+	ret = mt7999_mcu_rf_regval(dev, dev->mt76.debugfs_reg,
+				   &regval, false, true);
+	if (ret)
+		return ret;
+
+	*val = regval;
+
+	return 0;
+}
+
+static int
+mt7999_efem_regval_set(void *data, u64 val)
+{
+	struct mt7999_dev *dev = data;
+	u32 val32 = val;
+
+	return mt7999_mcu_rf_regval(dev, dev->mt76.debugfs_reg,
+				    &val32, true, true);
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(fops_efem_regval, mt7999_efem_regval_get,
+			 mt7999_efem_regval_set, "0x%08llx\n");
 
 static int
 mt7999_fw_debug_muru_disable_set(void *data, u64 val)
@@ -1448,6 +1480,7 @@ int mt7999_init_dev_debugfs(struct mt7999_phy *phy)
 	debugfs_create_devm_seqfile(dev->mt76.dev, "twt_stats", dir,
 				    mt7999_twt_stats);
 	debugfs_create_file("rf_regval", 0600, dir, dev, &fops_rf_regval);
+	debugfs_create_file("efem_regval", 0600, dir, dev, &fops_efem_regval);
 	debugfs_create_file("otp", 0400, dir, dev, &mt7999_efuse_ops);
 	debugfs_create_devm_seqfile(dev->mt76.dev, "efuse_free_block", dir,
 				    mt7999_efuse_get_free_block);

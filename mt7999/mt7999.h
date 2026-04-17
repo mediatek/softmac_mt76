@@ -1336,7 +1336,8 @@ int mt7999_mcu_rdd_background_enable(struct mt7999_phy *phy,
 				     struct cfg80211_chan_def *chandef);
 int mt7999_mcu_set_fixed_rate_table(struct mt7999_phy *phy, u8 table_idx,
 				    u16 rate_idx, bool beacon);
-int mt7999_mcu_rf_regval(struct mt7999_dev *dev, u32 regidx, u32 *val, bool set);
+int mt7999_mcu_rf_regval(struct mt7999_dev *dev, u32 regidx,
+			 u32 *val, bool set, bool efem);
 int mt7999_mcu_set_hdr_trans(struct mt7999_dev *dev, bool hdr_trans);
 int mt7999_mcu_set_rro(struct mt7999_dev *dev, u16 tag, u16 val);
 int mt7999_mcu_set_rro_flush_timeout(struct mt7999_dev *dev);

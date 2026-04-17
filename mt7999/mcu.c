@@ -7358,7 +7358,8 @@ int mt7999_mcu_set_fixed_rate_table(struct mt7999_phy *phy, u8 table_idx,
 				 &req, sizeof(req), false);
 }
 
-int mt7999_mcu_rf_regval(struct mt7999_dev *dev, u32 regidx, u32 *val, bool set)
+int mt7999_mcu_rf_regval(struct mt7999_dev *dev, u32 regidx,
+			 u32 *val, bool set, bool efem)
 {
 	struct {
 		u8 __rsv1[4];
@@ -7370,7 +7371,6 @@ int mt7999_mcu_rf_regval(struct mt7999_dev *dev, u32 regidx, u32 *val, bool set)
 		__le32 ofs;
 		__le32 data;
 	} __packed *res, req = {
-		.tag = cpu_to_le16(UNI_ACCESS_RF_REG_BASIC),
 		.len = cpu_to_le16(sizeof(req) - 4),
 
 		.idx = cpu_to_le16(u32_get_bits(regidx, GENMASK(31, 24))),
@@ -7379,6 +7379,8 @@ int mt7999_mcu_rf_regval(struct mt7999_dev *dev, u32 regidx, u32 *val, bool set)
 	};
 	struct sk_buff *skb;
 	int ret;
+
+	req.tag = cpu_to_le16(efem ? UNI_ACCESS_EFEM_REG_BASIC : UNI_ACCESS_RF_REG_BASIC);
 
 	if (set)
 		return mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(REG_ACCESS),

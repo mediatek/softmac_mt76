@@ -352,7 +352,8 @@ static int mt7999_dump_version(struct seq_file *s, void *data)
 		   dev->fw_build_date,
 		   dev->testmode_enable ? "Testmode" : "Normal mode");
 	for (adie_idx = 0; adie_idx < MAX_ADIE_NUM; adie_idx++) {
-		mt7999_mcu_rf_regval(dev, MT_ADIE_CHIP_ID(adie_idx), &regval, false);
+		mt7999_mcu_rf_regval(dev, MT_ADIE_CHIP_ID(adie_idx),
+				     &regval, false, false);
 		adie_chip_id = FIELD_GET(MT_ADIE_CHIP_ID_MASK, regval);
 		adie_chip_ver = FIELD_GET(MT_ADIE_VERSION_MASK, regval);
 		if (adie_chip_id)

@@ -1849,6 +1849,7 @@ static inline int mt7999_get_bw_power_table_idx(int bw, int *mcs, int *ru, int *
 enum {
 	UNI_ACCESS_REG_BASIC = 0x0,
 	UNI_ACCESS_RF_REG_BASIC,
+	UNI_ACCESS_EFEM_REG_BASIC,
 };
 
 enum ser_action {

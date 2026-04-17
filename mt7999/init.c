@@ -1376,7 +1376,8 @@ static int mt7999_variant_fem_init(struct mt7999_dev *dev)
 	u16 adie_id;
 	int ret;
 
-	ret = mt7999_mcu_rf_regval(dev, MT_ADIE_CHIP_ID(MT_BAND0), &regval, false);
+	ret = mt7999_mcu_rf_regval(dev, MT_ADIE_CHIP_ID(MT_BAND0),
+				   &regval, false, false);
 	if (ret)
 		return ret;
 
