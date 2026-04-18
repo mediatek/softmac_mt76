@@ -644,10 +644,6 @@ mt7999_mcu_update_trx_rates(struct mt7999_dev *dev, struct mt76_wcid *wcid,
 		mcu_rate->tx_mcs = mt76_get_rate(&dev->mt76, sband, mcu_rate->tx_mcs,
 						 mcu_rate->tx_mode == MT_PHY_TYPE_CCK);
 		break;
-	case MT_PHY_TYPE_HT:
-	case MT_PHY_TYPE_HT_GF:
-		mcu_rate->tx_mcs += ((mcu_rate->tx_nss - 1) << 3);
-		break;
 	default:
 		break;
 	}
