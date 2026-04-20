@@ -1887,8 +1887,13 @@ mt7999_init_uhr_caps(struct mt7999_phy *phy, enum nl80211_band band,
 		return;
 
 	uhr_cap->has_uhr = true;
+	uhr_cap->phy.cap = IEEE80211_UHR_PHY_CAP_ELR_RX |
+			   IEEE80211_UHR_PHY_CAP_ELR_TX;
 
 	/* TODO: add default uhr mac & phy cap */
+	/* Note that mac80211 currently supports D1.2, some data structure
+	 * may need to be extended to support D1.4
+	 */
 }
 
 static void

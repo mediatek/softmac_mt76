@@ -344,9 +344,6 @@ static int mt7999_eeprom_parse_efuse_hw_cap(struct mt7999_phy *phy,
 		dev->wtbl_size_group = 6;
 	}
 
-	/* FIXME: remove it when uhr is supported */
-	dev->has_uhr = false;
-
 	return 0;
 }
 
