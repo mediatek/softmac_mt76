@@ -1903,9 +1903,19 @@ mt7999_link_sta_fixed_rate_opt_param_set(struct file *file,
 		return -EINVAL;
 	}
 
-	ret = mt7999_validate_rate_params(dev, rate.params.phy_mode, &rate.params.mcs);
-	if (ret)
-		return ret;
+	if (!!(opt_param_bitmap & RA_OPT_PARAM_MCS) !=
+	    !!(opt_param_bitmap & RA_OPT_PARAM_PHYMODE)) {
+		dev_err(dev->mt76.dev,
+			"MCS and phy mode must be configured at the same time\n");
+		return -EINVAL;
+	}
+
+	if (opt_param_bitmap & RA_OPT_PARAM_PHYMODE) {
+		ret = mt7999_validate_rate_params(dev, rate.params.phy_mode,
+						  &rate.params.mcs);
+		if (ret)
+			return ret;
+	}
 
 	rate.opt_param_bitmap = cpu_to_le16(opt_param_bitmap);
 
