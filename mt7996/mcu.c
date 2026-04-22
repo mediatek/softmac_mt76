@@ -5328,15 +5328,8 @@ int mt7996_mcu_init_firmware(struct mt7996_dev *dev)
 		return ret;
 
 	set_bit(MT76_STATE_MCU_RUNNING, &dev->mphy.state);
-	ret = mt7996_mcu_fw_log_2_host(dev, MCU_FW_LOG_WM, 1);
-	if (ret)
-		return ret;
 
 	if (mt7996_has_wa(dev)) {
-		ret = mt7996_mcu_fw_log_2_host(dev, MCU_FW_LOG_WA, 1);
-		if (ret)
-			return ret;
-
 		ret = mt7996_mcu_set_mwds(dev, 1);
 		if (ret)
 			return ret;
