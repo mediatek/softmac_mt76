@@ -4712,7 +4712,7 @@ static ssize_t mt7999_tpt_option_set(struct file *file,
 	else
 		buf[count] = '\0';
 
-	if (sscanf(buf, "%hhu %hhu", &type, &val) != 2 || type > 4 || val > 7) {
+	if (sscanf(buf, "%hhu %hhu", &type, &val) != 2 || type > 6 || val > 60) {
 		dev_warn(dev->mt76.dev, "format: type val\n");
 		goto out;
 	}

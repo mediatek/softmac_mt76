@@ -15,7 +15,7 @@
 #include "coredump.h"
 #include "eeprom.h"
 
-static int lp_ctrl = 0x3f;
+static int lp_ctrl = 0x37;
 module_param(lp_ctrl, int, 0644);
 MODULE_PARM_DESC(lp_ctrl, "Low power control."
 			  "Bit0: PCIe L1ss."
