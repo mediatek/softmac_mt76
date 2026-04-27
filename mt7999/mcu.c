@@ -7210,6 +7210,27 @@ int mt7999_mcu_set_band_confg(struct mt7999_phy *phy, u16 option, bool enable)
 				 &req, sizeof(req), true);
 }
 
+int mt7999_mcu_set_radio_ultra_save_en(struct mt7999_phy *phy, bool enable)
+{
+	struct {
+		u8 band_idx;
+		u8 _rsv[3];
+
+		__le16 tag;
+		__le16 len;
+		u8 enable;
+		u8 _rsv2[3];
+	} __packed req = {
+		.band_idx = phy->mt76->band_idx,
+		.tag = cpu_to_le16(UNI_BAND_CONFIG_ULTRA_SAVE),
+		.len = cpu_to_le16(sizeof(req) - 4),
+		.enable = enable,
+	};
+
+	return mt76_mcu_send_msg(&phy->dev->mt76, MCU_WM_UNI_CMD(BAND_CONFIG),
+				 &req, sizeof(req), true);
+}
+
 int mt7999_mcu_set_radio_en(struct mt7999_phy *phy, bool enable)
 {
 	struct {

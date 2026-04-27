@@ -4846,6 +4846,9 @@ mt7999_low_power_info_read(struct seq_file *s, void *data)
 		   dev->dbg.lp.pst & BIT(MT_BAND1) ? "enable" : "disable");
 	seq_printf(s, "PST band 2: %s\n",
 		   dev->dbg.lp.pst & BIT(MT_BAND2) ? "enable" : "disable");
+
+	seq_printf(s, "Radio Ultra Save: %s\n",
+		   dev->radio_ultra_save ? "enable" : "disable");
 #undef _pr
 
 	return 0;

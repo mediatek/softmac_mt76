@@ -354,6 +354,7 @@ enum {
 	LOW_POWER_TX_TPO_ANTENNA_REDUCE,	/* Min Tx TPO */
 	LOW_POWER_RX_ULTRA_SAVE,
 	LOW_POWER_TX_PST,
+	LOW_POWER_RADIO_ULTRA_SAVE,
 };
 #define LOW_POWER_TPO (LOW_POWER_TX_TPO_POWER_BOOST | \
 		       LOW_POWER_TX_TPO_POWER_REDUCE | \
@@ -939,6 +940,7 @@ struct mt7999_dev {
 	} var;
 
 	struct mt7999_vow_ctrl vow;
+	bool radio_ultra_save;
 
 	bool wmm_pbc_enable;
 	struct work_struct wmm_pbc_work;
@@ -1312,6 +1314,7 @@ int mt7999_mcu_set_pulse_th(struct mt7999_dev *dev,
 			    const struct mt7999_dfs_pulse *pulse);
 int mt7999_mcu_set_radar_th(struct mt7999_dev *dev, int index,
 			    const struct mt7999_dfs_pattern *pattern);
+int mt7999_mcu_set_radio_ultra_save_en(struct mt7999_phy *phy, bool enable);
 int mt7999_mcu_set_radio_en(struct mt7999_phy *phy, bool enable);
 int mt7999_mcu_set_rts_thresh(struct mt7999_phy *phy, u32 val);
 int mt7999_mcu_set_protection(struct mt7999_phy *phy, struct mt7999_vif_link *link,

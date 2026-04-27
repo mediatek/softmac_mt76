@@ -21,6 +21,12 @@ int mt7999_run(struct mt7999_phy *phy)
 
 	mt7999_mac_enable_nf(dev, phy->mt76->band_idx);
 
+	if (dev->radio_ultra_save) {
+		ret = mt7999_mcu_set_radio_ultra_save_en(phy, true);
+		if (ret)
+			return ret;
+	}
+
 	ret = mt7999_mcu_set_rts_thresh(phy, 0x92b);
 	if (ret)
 		return ret;
@@ -116,6 +122,8 @@ static void mt7999_stop_phy(struct mt7999_phy *phy)
 
 	mt7999_mcu_rdd_resume_tx(phy);
 	mt7999_mcu_set_radio_en(phy, false);
+	if (dev->radio_ultra_save)
+		mt7999_mcu_set_radio_ultra_save_en(phy, false);
 
 	clear_bit(MT76_STATE_RUNNING, &phy->mt76->state);
 

@@ -15,7 +15,7 @@
 #include "coredump.h"
 #include "eeprom.h"
 
-static int lp_ctrl = 0x37;
+static int lp_ctrl = 0x77;
 module_param(lp_ctrl, int, 0644);
 MODULE_PARM_DESC(lp_ctrl, "Low power control."
 			  "Bit0: PCIe L1ss."
@@ -23,7 +23,8 @@ MODULE_PARM_DESC(lp_ctrl, "Low power control."
 			  "Bit2: Tx Power Reduction (LP-TPO)."
 			  "Bit3: Tx Antenna Reduction (MinTx-TPO)."
 			  "Bit4: Ultra Save."
-			  "Bit5: PST.");
+			  "Bit5: PST."
+			  "Bit6: Radio Ultra Save.");
 
 static const struct ieee80211_iface_limit if_limits_global = {
 	.max = MT7999_MAX_INTERFACES * MT7999_MAX_RADIOS,
@@ -948,6 +949,7 @@ static void mt7999_low_power_config(struct mt7999_dev *dev)
 	/* Power Saving Transceiver */
 	mt7999_mcu_set_pst(dev, 0xff, MURU_PST_CMD_ALGO_MODE,
 			   !!(lp_ctrl & BIT(LOW_POWER_TX_PST)));
+	dev->radio_ultra_save = !!(lp_ctrl & BIT(LOW_POWER_RADIO_ULTRA_SAVE));
 }
 
 void mt7999_init_work_reset(struct mt7999_dev *dev)
