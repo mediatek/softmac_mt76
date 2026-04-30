@@ -1388,7 +1388,7 @@ static int mt7999_variant_fem_init(struct mt7999_dev *dev)
 	return 0;
 }
 
-int mt7999_wed_init(struct mt7999_dev *dev)
+static int mt7999_wed_init(struct mt7999_dev *dev)
 {
 	struct mt76_dev *mdev = &dev->mt76;
 	struct pci_dev *pdev, *pdev_hif2;
@@ -1399,37 +1399,39 @@ int mt7999_wed_init(struct mt7999_dev *dev)
 	if (ret < 0)
 		return ret;
 	else if (ret) {
-		/* WED is enable, change irq */
-		devm_free_irq(mdev->dev, dev->irq, dev);
-		dev->irq = 0;
-		pci_free_irq_vectors(pdev);
-		dev->alloc_irq_vectors = false;
-		ret = devm_request_irq(mdev->dev, irq, mt7999_irq_handler,
-				       IRQF_SHARED, KBUILD_MODNAME, dev);
+		dev->wed_irq = irq;
+		ret = devm_request_irq(mdev->dev, dev->wed_irq, mt7999_irq_handler,
+				       IRQF_SHARED, KBUILD_MODNAME "-wed", dev);
 		if (ret)
-			return ret;
-		dev->irq = irq;
+			goto free_wed;
 	}
 
 	if (dev->hif2) {
 		pdev_hif2 = container_of(dev->hif2->dev, struct pci_dev, dev);
 		ret = mt7999_mmio_wed_init(dev, pdev_hif2, true, &irq);
 		if (ret < 0)
-			return ret;
+			goto free_wed_hif;
 		else if (ret) {
-			/* WED is enable, change irq */
-			devm_free_irq(mdev->dev, dev->hif2->irq, dev);
-			dev->hif2->irq = 0;
-			pci_free_irq_vectors(pdev_hif2);
-			dev->hif2->alloc_irq_vectors = false;
-			ret = devm_request_irq(mdev->dev, irq,
+			dev->hif2->wed_irq = irq;
+			ret = devm_request_irq(mdev->dev, dev->hif2->wed_irq,
 					       mt7999_irq_handler, IRQF_SHARED,
-					       KBUILD_MODNAME "-hif", dev);
+					       KBUILD_MODNAME "-wed-hif", dev);
 			if (ret)
-				return ret;
-			dev->hif2->irq = irq;
+				goto free_wed_hif;
 		}
 	}
+
+	return 0;
+
+free_wed_hif:
+	devm_free_irq(mdev->dev, dev->wed_irq, dev);
+	dev->hif2->wed_irq = 0;
+	if (mtk_wed_device_active(&dev->mt76.mmio.wed_hif2))
+		mtk_wed_device_detach(&dev->mt76.mmio.wed_hif2);
+free_wed:
+	dev->wed_irq = 0;
+	if (mtk_wed_device_active(&dev->mt76.mmio.wed))
+		mtk_wed_device_detach(&dev->mt76.mmio.wed);
 
 	return ret;
 }

@@ -633,6 +633,9 @@ enum offs_rev {
 						 MT_INT_RRO_RX_DONE |		\
 						 MT_INT_RX_DONE_ICS)
 
+#define MT_INT_RRO_RX_SKIP			(MT_INT_RX(MT_RXQ_RRO_IND) |	\
+						 MT_INT_RX(MT_RXQ_RRO_RXDMAD_C))
+
 #define MT_INT_TX_DONE_FWDL			BIT(26)
 #define MT_INT_TX_DONE_MCU_WM			BIT(27)
 #define MT_INT_TX_DONE_MCU_WM_VIP		BIT(20)

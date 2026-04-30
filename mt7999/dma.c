@@ -159,9 +159,13 @@ void mt7999_dma_start(struct mt7999_dev *dev, bool reset, bool wed_reset)
 
 	/* enable WFDMA Tx/Rx */
 	if (!reset) {
-		mt76_set(dev, MT_WFDMA0_GLO_CFG,
-			 MT_WFDMA0_GLO_CFG_TX_DMA_EN |
-			 MT_WFDMA0_GLO_CFG_RX_DMA_EN);
+		if (mtk_wed_device_active(wed) && mtk_wed_get_rx_capa(wed))
+			mt76_set(dev, MT_WFDMA0_GLO_CFG,
+				 MT_WFDMA0_GLO_CFG_TX_DMA_EN);
+		else
+			mt76_set(dev, MT_WFDMA0_GLO_CFG,
+				 MT_WFDMA0_GLO_CFG_TX_DMA_EN |
+				 MT_WFDMA0_GLO_CFG_RX_DMA_EN);
 
 		if (dev->hif2)
 			mt76_set(dev, MT_WFDMA0_GLO_CFG + hif1_ofs,
@@ -170,7 +174,7 @@ void mt7999_dma_start(struct mt7999_dev *dev, bool reset, bool wed_reset)
 	}
 
 	for (i = 0; i < MT7999_MAX_QUEUE; i++) {
-		if (!dev->q_valid[i] || (dev->q_int_mask[i] & MT_INT_RRO_RX_DONE))
+		if (!dev->q_valid[i] || (dev->q_int_mask[i] & MT_INT_RRO_RX_SKIP))
 			continue;
 
 		irq_mask |= dev->q_int_mask[i];

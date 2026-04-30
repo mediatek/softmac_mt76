@@ -149,10 +149,10 @@ static int mt7999_pci_probe(struct pci_dev *pdev,
 		      pdev->bus && pci_domain_nr(pdev->bus) ? 3 : 2);
 
 	/* Get IRQ and set handler */
-	ret = pci_alloc_irq_vectors(pdev, 1, 1, PCI_IRQ_ALL_TYPES);
+	ret = pci_alloc_irq_vectors(pdev, 1, 1, PCI_IRQ_INTX);
 	if (ret < 0)
 		goto free_device;
-	dev->alloc_irq_vectors = true;
+
 	dev->irq = pci_irq_vector(pdev, 0);
 	ret = devm_request_irq(mdev->dev, dev->irq, mt7999_irq_handler,
 			       IRQF_SHARED, KBUILD_MODNAME, dev);
@@ -167,10 +167,10 @@ static int mt7999_pci_probe(struct pci_dev *pdev,
 	if (dev->hif2) {
 		pdev_hif2 = container_of(dev->hif2->dev, struct pci_dev, dev);
 		/* Get IRQ and set handler */
-		ret = pci_alloc_irq_vectors(pdev_hif2, 1, 1, PCI_IRQ_ALL_TYPES);
+		ret = pci_alloc_irq_vectors(pdev_hif2, 1, 1, PCI_IRQ_INTX);
 		if (ret < 0)
 			goto free_irq;
-		dev->hif2->alloc_irq_vectors = true;
+
 		dev->hif2->irq = pci_irq_vector(pdev_hif2, 0);
 		ret = devm_request_irq(mdev->dev, dev->hif2->irq,
 				       mt7999_irq_handler, IRQF_SHARED,
@@ -193,15 +193,14 @@ free_hif2_irq:
 	if (dev->hif2)
 		devm_free_irq(mdev->dev, dev->hif2->irq, dev);
 free_hif2_irq_vector:
-	if (dev->hif2 && dev->hif2->alloc_irq_vectors)
+	if (dev->hif2)
 		pci_free_irq_vectors(pdev_hif2);
 free_irq:
 	if (dev->hif2)
 		put_device(dev->hif2->dev);
 	devm_free_irq(mdev->dev, dev->irq, dev);
 free_irq_vector:
-	if (dev->alloc_irq_vectors)
-		pci_free_irq_vectors(pdev);
+	pci_free_irq_vectors(pdev);
 free_device:
 	mt76_free_device(&dev->mt76);
 
@@ -229,13 +228,15 @@ static void mt7999_pci_remove(struct pci_dev *pdev)
 			container_of(dev->hif2->dev, struct pci_dev, dev);
 
 		devm_free_irq(mdev->dev, dev->hif2->irq, dev);
-		if (dev->hif2->alloc_irq_vectors)
-			pci_free_irq_vectors(pdev_hif2);
+		pci_free_irq_vectors(pdev_hif2);
+		if (dev->hif2->wed_irq)
+			devm_free_irq(mdev->dev, dev->hif2->wed_irq, dev);
 		mt7999_put_hif2(dev->hif2);
 	}
 	devm_free_irq(mdev->dev, dev->irq, dev);
-	if (dev->alloc_irq_vectors)
-		pci_free_irq_vectors(pdev);
+	pci_free_irq_vectors(pdev);
+	if (dev->wed_irq)
+		devm_free_irq(mdev->dev, dev->wed_irq, dev);
 	mt76_free_device(&dev->mt76);
 }
 

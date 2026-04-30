@@ -355,11 +355,6 @@ int mt7999_mmio_wed_init(struct mt7999_dev *dev, void *pdev_ptr,
 	if (hif2)
 		wed = &dev->mt76.mmio.wed_hif2;
 
-	if (mtk_wed_device_active(wed)) {
-		*irq = wed->irq;
-		return 1;
-	}
-
 	wed_hw_ver = mtk_wed_device_get_hw_version();
 	tx_token_size = MT7999_WED_TOKEN_SIZE;
 
@@ -383,6 +378,7 @@ int mt7999_mmio_wed_init(struct mt7999_dev *dev, void *pdev_ptr,
 
 	wed->wlan.pci_dev = pci_dev;
 	wed->wlan.bus_type = MTK_WED_BUS_PCIE;
+	wed->wlan.intr_mode = true;
 
 	wed->wlan.base = devm_ioremap(dev->mt76.dev,
 				      pci_resource_start(pci_dev, 0),
@@ -492,6 +488,8 @@ int mt7999_mmio_wed_init(struct mt7999_dev *dev, void *pdev_ptr,
 	}
 
 	if (mtk_wed_device_attach(wed)) {
+		devm_iounmap(dev->mt76.dev, wed->wlan.base);
+		wed->wlan.base = NULL;
 		dev->mt76.hwrro_mode = MT76_HWRRO_OFF;
 		wed_enable = false;
 		return 0;

@@ -487,8 +487,8 @@ struct mt7999_hif {
 
 	struct device *dev;
 	void __iomem *regs;
-	bool alloc_irq_vectors;
 	int irq;
+	int wed_irq;
 
 	enum pci_bus_speed speed;
 	enum pcie_link_width width;
@@ -806,7 +806,7 @@ struct mt7999_dev {
 	struct wiphy_radio_freq_range radio_freqs[MT7999_MAX_RADIOS];
 
 	int irq;
-	bool alloc_irq_vectors;
+	int wed_irq;
 	struct mt7999_hif *hif2;
 	struct mt7999_reg_desc reg;
 	u8 q_id[MT7999_MAX_QUEUE];
@@ -1558,7 +1558,6 @@ void mt7999_mac_ba_trigger(struct mt7999_dev *dev, u16 wlan_idx, u8 tid);
 
 int mt7999_dma_rro_init(struct mt7999_dev *dev);
 void mt7999_dma_rro_start(struct mt7999_dev *dev);
-int mt7999_wed_init(struct mt7999_dev *dev);
 int mt7999_vow_init(struct mt7999_phy *phy);
 
 #ifdef CONFIG_MT7999_NPU

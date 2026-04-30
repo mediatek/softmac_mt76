@@ -2421,57 +2421,9 @@ void mt7999_tx_token_put(struct mt7999_dev *dev)
 }
 
 static int
-mt7999_setup_irq(struct device *dev_ctx, struct mt7999_dev *dev, struct pci_dev *pdev)
-{
-	bool is_hif2 = (pdev != container_of(dev_ctx, struct pci_dev, dev));
-	int ret, irq = is_hif2 ? dev->hif2->irq : dev->irq;
-	bool alloc_irq_vectors = is_hif2 ? dev->hif2->alloc_irq_vectors :
-					   dev->alloc_irq_vectors;
-
-	if (irq) {
-		devm_free_irq(dev_ctx, irq, dev);
-		if (is_hif2)
-			dev->hif2->irq = 0;
-		else
-			dev->irq = 0;
-	}
-
-	if (alloc_irq_vectors) {
-		pci_free_irq_vectors(pdev);
-		if (is_hif2)
-			dev->hif2->alloc_irq_vectors = false;
-		else
-			dev->alloc_irq_vectors = false;
-	}
-
-	ret = pci_alloc_irq_vectors(pdev, 1, 1, PCI_IRQ_ALL_TYPES);
-	if (ret < 0)
-		return ret;
-
-	if (is_hif2)
-		dev->hif2->alloc_irq_vectors = true;
-	else
-		dev->alloc_irq_vectors = true;
-
-	irq = pci_irq_vector(pdev, 0);
-	ret = devm_request_irq(dev_ctx, irq, mt7999_irq_handler, IRQF_SHARED,
-			       is_hif2 ? KBUILD_MODNAME "-hif" : KBUILD_MODNAME, dev);
-	if (ret)
-		return ret;
-
-	if (is_hif2)
-		dev->hif2->irq = irq;
-	else
-		dev->irq = irq;
-
-	return 0;
-}
-
-static int
 mt7999_mac_restart(struct mt7999_dev *dev)
 {
 	struct mt76_dev *mdev = &dev->mt76;
-	struct pci_dev *pdev, *pdev_hif2;
 	struct mt7999_phy *phy;
 	int i, ret;
 	u32 hif1_ofs = MT_WFDMA0_PCIE1(0) - MT_WFDMA0(0);
@@ -2523,23 +2475,18 @@ mt7999_mac_restart(struct mt7999_dev *dev)
 			   MT_WFDMA0_GLO_CFG_TX_DMA_EN |
 			   MT_WFDMA0_GLO_CFG_RX_DMA_EN);
 
+	/* change intr from trigger wed to trigger cpu */
+	if (mtk_wed_device_active(&dev->mt76.mmio.wed_hif2))
+		mtk_wed_device_set_pcie_mask(&dev->mt76.mmio.wed_hif2, false);
+
+	if (mtk_wed_device_active(&dev->mt76.mmio.wed))
+		mtk_wed_device_set_pcie_mask(&dev->mt76.mmio.wed, false);
+
+	/* wait for intr transfer and traffic done in wed */
+	msleep(3000);
+
 	clear_bit(MT76_MCU_RESET, &dev->mphy.state);
 	clear_bit(MT76_STATE_MCU_RUNNING, &dev->mphy.state);
-
-	pdev = container_of(mdev->dev, struct pci_dev, dev);
-	if (mtk_wed_device_active(&dev->mt76.mmio.wed)) {
-		ret = mt7999_setup_irq(mdev->dev, dev, pdev);
-		if (ret)
-			goto out;
-	}
-	if (dev->hif2) {
-		pdev_hif2 = container_of(dev->hif2->dev, struct pci_dev, dev);
-		if (mtk_wed_device_active(&dev->mt76.mmio.wed_hif2)) {
-			ret = mt7999_setup_irq(mdev->dev, dev, pdev_hif2);
-			if (ret)
-				goto out;
-		}
-	}
 
 	if (dev_is_pci(mdev->dev)) {
 		mt76_wr(dev, MT_PCIE_MAC_INT_ENABLE, 0xff);
@@ -2551,10 +2498,6 @@ mt7999_mac_restart(struct mt7999_dev *dev)
 
 	/* load firmware */
 	ret = mt7999_mcu_init_firmware(dev);
-	if (ret)
-		goto out;
-
-	ret = mt7999_wed_init(dev);
 	if (ret)
 		goto out;
 
