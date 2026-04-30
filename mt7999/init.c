@@ -482,7 +482,6 @@ mt7999_init_wiphy_band(struct ieee80211_hw *hw, struct mt7999_phy *phy)
 
 	phy->slottime = 9;
 	phy->beacon_rate = -1;
-	phy->rxfilter = MT_WF_RFCR_DROP_OTHER_UC;
 	phy->muru_onoff = OFDMA_UL | OFDMA_DL | MUMIMO_DL | MUMIMO_UL;
 
 	if (phy->mt76->cap.has_2ghz) {
@@ -627,26 +626,10 @@ mt7999_mac_init_band(struct mt7999_dev *dev, u8 band)
 	if (!mt7999_band_valid(dev, band))
 		return;
 
-	/* clear estimated value of EIFS for Rx duration & OBSS time */
-	mt76_wr(dev, MT_WF_RMAC_RSVD0(band), MT_WF_RMAC_RSVD0_EIFS_CLR);
-
-	/* clear backoff time for Rx duration  */
-	mt76_clear(dev, MT_WF_RMAC_MIB_AIRTIME1(band),
-		   MT_WF_RMAC_MIB_NONQOSD_BACKOFF);
-	mt76_clear(dev, MT_WF_RMAC_MIB_AIRTIME3(band),
-		   MT_WF_RMAC_MIB_QOS01_BACKOFF);
-	mt76_clear(dev, MT_WF_RMAC_MIB_AIRTIME4(band),
-		   MT_WF_RMAC_MIB_QOS23_BACKOFF);
-
+	/* Todo: change to mcu command, need fw support */
 	/* clear backoff time for Tx duration */
 	mt76_clear(dev, MT_WTBLOFF_ACR(band),
 		   MT_WTBLOFF_ADM_BACKOFFTIME);
-
-	/* clear backoff time and set software compensation for OBSS time */
-	mask = MT_WF_RMAC_MIB_OBSS_BACKOFF | MT_WF_RMAC_MIB_ED_OFFSET;
-	set = FIELD_PREP(MT_WF_RMAC_MIB_OBSS_BACKOFF, 0) |
-	      FIELD_PREP(MT_WF_RMAC_MIB_ED_OFFSET, 4);
-	mt76_rmw(dev, MT_WF_RMAC_MIB_AIRTIME0(band), mask, set);
 
 	/* filter out non-resp frames and get instanstaeous signal reporting */
 	mask = MT_WTBLOFF_RSCR_RCPI_MODE | MT_WTBLOFF_RSCR_RCPI_PARAM;
@@ -677,6 +660,8 @@ void mt7999_mac_init(struct mt7999_dev *dev)
 #define HIF_TXD_V2_1	0x21
 	int i, rx_path_type, rro_bypass;
 
+	/* Required to receive 4 addr null func by 802.11 mode */
+	/* Todo: change to mcu command, need fw support */
 	mt76_clear(dev, MT_MDP_DCR2, MT_MDP_DCR2_RX_TRANS_SHORT);
 
 	if (IS_ENABLED(CONFIG_MT76_LEDS)) {

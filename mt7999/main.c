@@ -410,9 +410,6 @@ int mt7999_vif_link_add(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 
 	msta_link->sta = &mvif->sta;
 
-	mt7999_mac_wtbl_update(dev, idx,
-			       MT_WTBL_UPDATE_ADM_COUNT_CLEAR);
-
 	if (vif->type != NL80211_IFTYPE_AP &&
 	    (!mlink->omac_idx || mlink->omac_idx > 3))
 		vif->offload_flags = 0;
@@ -584,30 +581,6 @@ void mt7999_vif_link_remove(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 	}
 }
 
-static void mt7999_phy_set_rxfilter(struct mt7999_phy *phy)
-{
-	struct mt7999_dev *dev = phy->dev;
-	u32 ctl_flags = MT_WF_RFCR1_DROP_ACK |
-			MT_WF_RFCR1_DROP_BF_POLL |
-			MT_WF_RFCR1_DROP_BA |
-			MT_WF_RFCR1_DROP_CFEND |
-			MT_WF_RFCR1_DROP_CFACK;
-	u32 filter = phy->rxfilter;
-
-	if (filter & MT_WF_RFCR_DROP_OTHER_UC) {
-		filter |= MT_WF_RFCR_DROP_CTS |
-			  MT_WF_RFCR_DROP_RTS |
-			  MT_WF_RFCR_DROP_CTL_RSV |
-			  MT_WF_RFCR_DROP_FCSFAIL;
-	}
-
-	mt76_wr(dev, MT_WF_RFCR(phy->mt76->band_idx), filter);
-	if (filter & MT_WF_RFCR_DROP_CTL_RSV)
-		mt76_set(dev, MT_WF_RFCR1(phy->mt76->band_idx), ctl_flags);
-	else
-		mt76_clear(dev, MT_WF_RFCR1(phy->mt76->band_idx), ctl_flags);
-}
-
 static void mt7999_set_monitor(struct mt7999_phy *phy, bool enabled)
 {
 	struct mt7999_dev *dev;
@@ -617,19 +590,7 @@ static void mt7999_set_monitor(struct mt7999_phy *phy, bool enabled)
 
 	dev = phy->dev;
 
-	if (enabled == !(phy->rxfilter & MT_WF_RFCR_DROP_OTHER_UC))
-		return;
-
-	if (!enabled)
-		phy->rxfilter |= MT_WF_RFCR_DROP_OTHER_UC;
-	else
-		phy->rxfilter &= ~MT_WF_RFCR_DROP_OTHER_UC;
-
-	mt76_rmw_field(dev, MT_DMA_DCR0(phy->mt76->band_idx),
-		       MT_DMA_DCR0_RXD_G5_EN, enabled);
-	mt76_rmw_field(dev, MT_MDP_DCR0,
-		       MT_MDP_DCR0_RX_HDR_TRANS_EN, !enabled);
-	mt7999_phy_set_rxfilter(phy);
+	mt7999_mcu_set_hdr_trans(dev, !enabled);
 	mt7999_mcu_set_sniffer_mode(phy, enabled);
 }
 
@@ -846,7 +807,6 @@ int mt7999_set_channel(struct mt76_phy *mphy)
 		goto out;
 
 	ret = mt7999_dfs_init_radar_detector(phy);
-	mt7999_mac_cca_stats_reset(phy);
 
 	mt7999_mac_reset_counters(phy);
 #ifdef CONFIG_MTK_VENDOR
@@ -959,49 +919,7 @@ static void mt7999_configure_filter(struct ieee80211_hw *hw,
 				    unsigned int *total_flags,
 				    u64 multicast)
 {
-	struct mt7999_dev *dev = mt7999_hw_dev(hw);
-	struct mt7999_phy *phy;
-	u32 filter_mask = 0, filter_set = 0;
-	u32 flags = 0;
-
-#define MT76_FILTER(_flag, _hw) do {				\
-		flags |= *total_flags & FIF_##_flag;		\
-		filter_mask |= (_hw);				\
-		filter_set |= !(flags & FIF_##_flag) * (_hw);	\
-	} while (0)
-
-	mutex_lock(&dev->mt76.mutex);
-
-	MT76_FILTER(OTHER_BSS, MT_WF_RFCR_DROP_OTHER_TIM |
-			       MT_WF_RFCR_DROP_A3_MAC |
-			       MT_WF_RFCR_DROP_A3_BSSID);
-
-	MT76_FILTER(FCSFAIL, MT_WF_RFCR_DROP_FCSFAIL);
-
-	MT76_FILTER(CONTROL, MT_WF_RFCR_DROP_CTS |
-			     MT_WF_RFCR_DROP_RTS |
-			     MT_WF_RFCR_DROP_CTL_RSV);
-
-	*total_flags = flags;
-
-	mt7999_for_each_phy(dev, phy) {
-		phy->rxfilter &= ~(MT_WF_RFCR_DROP_OTHER_BSS |
-				   MT_WF_RFCR_DROP_OTHER_BEACON |
-				   MT_WF_RFCR_DROP_FRAME_REPORT |
-				   MT_WF_RFCR_DROP_PROBEREQ |
-				   MT_WF_RFCR_DROP_MCAST_FILTERED |
-				   MT_WF_RFCR_DROP_MCAST |
-				   MT_WF_RFCR_DROP_BCAST |
-				   MT_WF_RFCR_DROP_DUPLICATE |
-				   MT_WF_RFCR_DROP_A2_BSSID |
-				   MT_WF_RFCR_DROP_UNWANTED_CTL |
-				   MT_WF_RFCR_DROP_STBC_MULTI |
-				   filter_mask);
-		phy->rxfilter |= filter_set;
-		mt7999_phy_set_rxfilter(phy);
-	}
-
-	mutex_unlock(&dev->mt76.mutex);
+	*total_flags = 0;
 }
 
 static u8
@@ -1040,25 +958,6 @@ mt7999_get_rates_table(struct mt7999_phy *phy, struct ieee80211_bss_conf *conf,
 			return MT7999_BASIC_RATES_TBL + 2 * i;
 
 	return mvif->basic_rates_idx;
-}
-
-static void
-mt7999_update_mu_group(struct ieee80211_hw *hw, struct mt7999_vif_link *link,
-		       struct ieee80211_bss_conf *info)
-{
-	struct mt7999_dev *dev = mt7999_hw_dev(hw);
-	u8 band = link->mt76.band_idx;
-	u32 *mu;
-
-	mu = (u32 *)info->mu_group.membership;
-	mt76_wr(dev, MT_WF_PHYRX_BAND_GID_TAB_VLD0(band), mu[0]);
-	mt76_wr(dev, MT_WF_PHYRX_BAND_GID_TAB_VLD1(band), mu[1]);
-
-	mu = (u32 *)info->mu_group.position;
-	mt76_wr(dev, MT_WF_PHYRX_BAND_GID_TAB_POS0(band), mu[0]);
-	mt76_wr(dev, MT_WF_PHYRX_BAND_GID_TAB_POS1(band), mu[1]);
-	mt76_wr(dev, MT_WF_PHYRX_BAND_GID_TAB_POS2(band), mu[2]);
-	mt76_wr(dev, MT_WF_PHYRX_BAND_GID_TAB_POS3(band), mu[3]);
 }
 
 static void
@@ -1211,9 +1110,6 @@ mt7999_link_info_changed(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	if (changed & (BSS_CHANGED_UNSOL_BCAST_PROBE_RESP |
 		       BSS_CHANGED_FILS_DISCOVERY))
 		mt7999_mcu_beacon_inband_discov(dev, info, link, changed);
-
-	if (changed & BSS_CHANGED_MU_GROUPS)
-		mt7999_update_mu_group(hw, link, info);
 
 	if (changed & BSS_CHANGED_TXPOWER &&
 	    info->txpower != phy->txpower) {
@@ -1415,8 +1311,6 @@ mt7999_mac_sta_init_link(struct mt7999_dev *dev,
 
 	rcu_assign_pointer(msta->link[link_id], msta_link);
 
-	mt7999_mac_wtbl_update(dev, idx, MT_WTBL_UPDATE_ADM_COUNT_CLEAR);
-
 	rcu_assign_pointer(dev->mt76.wcid[idx], &msta_link->wcid);
 	mt76_wcid_init(&msta_link->wcid, phy->mt76->band_idx);
 
@@ -1453,9 +1347,6 @@ void mt7999_mac_sta_remove_link(struct mt7999_dev *dev,
 
 	if (msta_link->wcid.link_valid || !sta->valid_links) {
 		struct mt7999_phy *phy;
-
-		mt7999_mac_wtbl_update(dev, msta_link->wcid.idx,
-				       MT_WTBL_UPDATE_ADM_COUNT_CLEAR);
 
 		phy = __mt7999_phy(dev, msta_link->wcid.phy_idx);
 		if (phy)

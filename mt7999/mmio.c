@@ -75,7 +75,6 @@ static const u32 mt7999_offs[] = {
 	[HIF_REMAP_L2]		= 0x1b4,
 	[HIF_REMAP_BASE_L2]	= 0x1000,
 	[WTBLON_WDUCR]		= 0x400,
-	[WTBL_UPDATE]		= 0x380,
 	[WTBL_ITCR]		= 0x3b0,
 	[WTBL_ITCR0]		= 0x3b8,
 	[WTBL_ITCR1]		= 0x3bc,

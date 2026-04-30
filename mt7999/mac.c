@@ -90,23 +90,6 @@ static struct mt76_wcid *mt7999_get_active_link_wcid(struct mt7999_dev *dev,
 	return old_wcid;
 }
 
-bool mt7999_mac_wtbl_update(struct mt7999_dev *dev, int idx, u32 mask)
-{
-	mt76_rmw(dev, MT_WTBL_UPDATE, MT_WTBL_UPDATE_WLAN_IDX,
-		 FIELD_PREP(MT_WTBL_UPDATE_WLAN_IDX, idx) | mask);
-
-	return mt76_poll(dev, MT_WTBL_UPDATE, MT_WTBL_UPDATE_BUSY,
-			 0, 5000);
-}
-
-u32 mt7999_mac_wtbl_lmac_addr(struct mt7999_dev *dev, u16 wcid, u8 dw)
-{
-	mt76_wr(dev, MT_WTBLON_TOP_WDUCR,
-		FIELD_PREP(MT_WTBLON_TOP_WDUCR_GROUP, (wcid >> 7)));
-
-	return MT_WTBL_LMAC_OFFS(wcid, dw);
-}
-
 /* The HW does not translate the mac header to 802.3 for mesh point */
 static int mt7999_reverse_frag0_hdr_trans(struct sk_buff *skb, u16 hdr_gap)
 {
@@ -2215,15 +2198,6 @@ update_ack_seq_num:
 		mt76_wr(dev, MT_RRO_ACK_SN_CTRL,
 			FIELD_PREP(MT_RRO_ACK_SN_CTRL_SESSION_MASK, seq_id) |
 			FIELD_PREP(MT_RRO_ACK_SN_CTRL_SN_MASK, seq_num));
-}
-
-void mt7999_mac_cca_stats_reset(struct mt7999_phy *phy)
-{
-	struct mt7999_dev *dev = phy->dev;
-	u32 reg = MT_WF_PHYRX_BAND_RX_CTRL1(phy->mt76->band_idx);
-
-	mt76_clear(dev, reg, MT_WF_PHYRX_BAND_RX_CTRL1_STSCNT_EN);
-	mt76_set(dev, reg, BIT(11) | BIT(9));
 }
 
 void mt7999_mac_reset_counters(struct mt7999_phy *phy)

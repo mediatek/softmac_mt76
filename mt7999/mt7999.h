@@ -683,7 +683,6 @@ struct mt7999_phy {
 	u32 throttle_temp[2]; /* 0: critical high, 1: maximum */
 	u8 throttle_level[4];
 
-	u32 rxfilter;
 	u64 omac_mask;
 
 	u16 noise;
@@ -1459,10 +1458,7 @@ mt7999_vow_should_enable(struct mt7999_dev *dev)
 
 void mt7999_set_pcie_l1ss(struct mt7999_dev *dev, bool en);
 void mt7999_mac_init(struct mt7999_dev *dev);
-u32 mt7999_mac_wtbl_lmac_addr(struct mt7999_dev *dev, u16 wcid, u8 dw);
-bool mt7999_mac_wtbl_update(struct mt7999_dev *dev, int idx, u32 mask);
 void mt7999_mac_reset_counters(struct mt7999_phy *phy);
-void mt7999_mac_cca_stats_reset(struct mt7999_phy *phy);
 void mt7999_mac_enable_nf(struct mt7999_dev *dev, u8 band);
 void mt7999_mac_write_txwi(struct mt7999_dev *dev, __le32 *txwi,
 			   struct sk_buff *skb, struct mt76_wcid *wcid,
