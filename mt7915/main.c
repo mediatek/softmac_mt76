@@ -1132,6 +1132,41 @@ mt7915_ampdu_action(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 }
 
 static int
+mt7915_wds_sta_add(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+		   struct ieee80211_sta *sta)
+{
+	int ret;
+
+	ret = mt76_sta_state(hw, vif, sta, IEEE80211_STA_NOTEXIST,
+			     IEEE80211_STA_NONE);
+	if (ret)
+		return ret;
+
+	ret = mt76_sta_state(hw, vif, sta, IEEE80211_STA_AUTH,
+			     IEEE80211_STA_ASSOC);
+	if (ret)
+		return ret;
+
+	return mt76_sta_state(hw, vif, sta, IEEE80211_STA_ASSOC,
+			     IEEE80211_STA_AUTHORIZED);
+}
+
+static int
+mt7915_wds_sta_remove(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+		      struct ieee80211_sta *sta)
+{
+	int ret;
+
+	ret = mt76_sta_state(hw, vif, sta, IEEE80211_STA_ASSOC,
+			     IEEE80211_STA_AUTH);
+	if (ret)
+		return ret;
+
+	return mt76_sta_state(hw, vif, sta, IEEE80211_STA_NONE,
+			      IEEE80211_STA_NOTEXIST);
+}
+
+static int
 mt7915_get_stats(struct ieee80211_hw *hw,
 		 struct ieee80211_low_level_stats *stats)
 {
@@ -1424,40 +1459,6 @@ mt7915_set_bitrate_mask(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	return 0;
 }
 
-static void mt7915_sta_wed_set_4addr(struct mt7915_dev *dev, struct ieee80211_vif *vif,
-				     struct ieee80211_sta *sta)
-{
-	struct mt7915_sta *msta = (struct mt7915_sta *)sta->drv_priv;
-	int min = MT76_WED_WDS_MIN, max = MT76_WED_WDS_MAX;
-	int idx, prev_idx = msta->wcid.idx;
-	struct mt76_wcid wcid = msta->wcid;
-	int state;
-
-	if (!is_mt7915(&dev->mt76))
-	       return;
-
-	if (msta->wcid.idx >= min && msta->wcid.idx < max)
-		return;
-
-	idx = __mt76_wcid_alloc(dev->mt76.wcid_mask, min, max);
-	if (idx < 0)
-		return;
-
-	wcid.idx = idx;
-	state = msta->wcid.sta ? CONN_STATE_PORT_SECURE : CONN_STATE_DISCONNECT;
-	__mt7915_mcu_add_sta(dev, vif, sta, &wcid, state, true);
-	mt7915_mcu_add_rate_ctrl(dev, vif, sta, &wcid, false);
-	rcu_assign_pointer(dev->mt76.wcid[idx], &msta->wcid);
-	msta->wcid.idx = idx;
-
-	synchronize_rcu();
-
-	rcu_assign_pointer(dev->mt76.wcid[prev_idx], NULL);
-	mt76_wcid_mask_clear(dev->mt76.wcid_mask, prev_idx);
-	wcid.idx = prev_idx;
-	__mt7915_mcu_add_sta(dev, vif, sta, &wcid, CONN_STATE_DISCONNECT, false);
-}
-
 static void mt7915_sta_set_4addr(struct ieee80211_hw *hw,
 				 struct ieee80211_vif *vif,
 				 struct ieee80211_sta *sta,
@@ -1468,11 +1469,32 @@ static void mt7915_sta_set_4addr(struct ieee80211_hw *hw,
 
 	if (enabled)
 		set_bit(MT_WCID_FLAG_4ADDR, &msta->wcid.flags);
-	else
+	else {
 		clear_bit(MT_WCID_FLAG_4ADDR, &msta->wcid.flags);
 
-	if (mtk_wed_device_active(&dev->mt76.mmio.wed) && enabled)
-		mt7915_sta_wed_set_4addr(dev, vif, sta);
+		if (msta->wcid.idx >= MT76_WED_WDS_MIN &&
+		    msta->wcid.idx < MT76_WED_WDS_MAX)
+			dev_err(dev->mt76.dev,
+				"Disable a 4-addr entry unexpectedly\n");
+	}
+
+	if (mtk_wed_device_active(&dev->mt76.mmio.wed) && enabled &&
+	    !is_mt7915(&dev->mt76) &&
+	    (msta->wcid.idx < MT76_WED_WDS_MIN ||
+	     msta->wcid.idx >= MT76_WED_WDS_MAX)) {
+		/* When WDS is enabled, WED and firmware agree to use special
+		 * WCID for peer STA. Hence, remove originally created STA, and
+		 * add another STA with 4-address flag, so that special WCID
+		 * will be assigned.
+		 */
+		if (mt7915_wds_sta_remove(hw, vif, sta))
+			dev_err(dev->mt76.dev,
+				"Failed to remove original STA for WDS peer\n");
+		mt76_sta_pre_rcu_remove(hw, vif, sta);
+		if (mt7915_wds_sta_add(hw, vif, sta))
+			dev_err(dev->mt76.dev,
+				"Failed to add STA with special WCID for WDS peer\n");
+	}
 
 	if (!msta->wcid.sta)
 		return;
