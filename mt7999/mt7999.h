@@ -1315,6 +1315,7 @@ int mt7999_mcu_set_radar_th(struct mt7999_dev *dev, int index,
 			    const struct mt7999_dfs_pattern *pattern);
 int mt7999_mcu_set_radio_ultra_save_en(struct mt7999_phy *phy, bool enable);
 int mt7999_mcu_set_radio_en(struct mt7999_phy *phy, bool enable);
+int mt7999_mcu_set_ack_timeout(struct mt7999_phy *phy, u8 type, u32 timeout);
 int mt7999_mcu_set_rts_thresh(struct mt7999_phy *phy, u32 val);
 int mt7999_mcu_set_protection(struct mt7999_phy *phy, struct mt7999_vif_link *link,
 			      u8 ht_mode, bool use_cts_prot);
@@ -1465,7 +1466,7 @@ void mt7999_mac_write_txwi(struct mt7999_dev *dev, __le32 *txwi,
 			   struct ieee80211_key_conf *key, int pid,
 			   enum mt76_txq_id qid, u32 changed);
 void mt7999_mac_update_beacons(struct mt7999_phy *phy);
-void mt7999_mac_set_coverage_class(struct mt7999_phy *phy);
+int mt7999_mac_set_coverage_class(struct mt7999_phy *phy);
 void mt7999_mac_work(struct work_struct *work);
 void mt7999_mac_reset_work(struct work_struct *work);
 void mt7999_mac_dump_work(struct work_struct *work);

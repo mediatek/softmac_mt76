@@ -2220,37 +2220,27 @@ void mt7999_mac_reset_counters(struct mt7999_phy *phy)
 	mt7999_mcu_get_chan_mib_info(phy, true);
 }
 
-void mt7999_mac_set_coverage_class(struct mt7999_phy *phy)
+int mt7999_mac_set_coverage_class(struct mt7999_phy *phy)
 {
-	s16 coverage_class = phy->coverage_class;
-	struct mt7999_dev *dev = phy->dev;
-	struct mt7999_phy *phy2 = mt7999_phy2(dev);
-	struct mt7999_phy *phy3 = mt7999_phy3(dev);
-	u32 reg_offset;
-	u32 cck = FIELD_PREP(MT_TIMEOUT_VAL_PLCP, 231) |
-		  FIELD_PREP(MT_TIMEOUT_VAL_CCA, 48);
-	u32 ofdm = FIELD_PREP(MT_TIMEOUT_VAL_PLCP, 60) |
-		   FIELD_PREP(MT_TIMEOUT_VAL_CCA, 28);
-	u8 band_idx = phy->mt76->band_idx;
-	int offset;
+	int ret, offset = 3 * phy->coverage_class;
 
 	if (!test_bit(MT76_STATE_RUNNING, &phy->mt76->state))
-		return;
+		return 0;
 
-	if (phy2)
-		coverage_class = max_t(s16, dev->phy.coverage_class,
-				       phy2->coverage_class);
+#define SET_TIMEOUT(cmd, val)					\
+	ret = mt7999_mcu_set_ack_timeout(phy, cmd, val);	\
+	if (ret)						\
+		return ret;
 
-	if (phy3)
-		coverage_class = max_t(s16, coverage_class,
-				       phy3->coverage_class);
+	SET_TIMEOUT(UNI_BAND_CONFIG_TIMEOUT_CCK_MDRDY, 231 + offset);
+	SET_TIMEOUT(UNI_BAND_CONFIG_TIMEOUT_OFDM_MDRDY, 60 + offset);
+	SET_TIMEOUT(UNI_BAND_CONFIG_TIMEOUT_OFDMA_MDRDY, 208 + offset);
+	SET_TIMEOUT(UNI_BAND_CONFIG_TIMEOUT_CCK_CCA, 48 + offset);
+	SET_TIMEOUT(UNI_BAND_CONFIG_TIMEOUT_OFDM_CCA, 28 + offset);
+	SET_TIMEOUT(UNI_BAND_CONFIG_TIMEOUT_OFDMA_CCA, 28 + offset);
 
-	offset = 3 * coverage_class;
-	reg_offset = FIELD_PREP(MT_TIMEOUT_VAL_PLCP, offset) |
-		     FIELD_PREP(MT_TIMEOUT_VAL_CCA, offset);
-
-	mt76_wr(dev, MT_TMAC_CDTR(band_idx), cck + reg_offset);
-	mt76_wr(dev, MT_TMAC_ODTR(band_idx), ofdm + reg_offset);
+#undef SET_TIMEOUT
+	return 0;
 }
 
 void mt7999_mac_enable_nf(struct mt7999_dev *dev, u8 band)

@@ -2024,11 +2024,19 @@ mt7999_set_coverage_class(struct ieee80211_hw *hw, int radio_idx,
 {
 	struct mt7999_dev *dev = mt7999_hw_dev(hw);
 	struct mt7999_phy *phy;
+	int ret;
+
+	if (dev->testmode_enable)
+		return;
 
 	mutex_lock(&dev->mt76.mutex);
 	mt7999_for_each_phy(dev, phy) {
 		phy->coverage_class = max_t(s16, coverage_class, 0);
-		mt7999_mac_set_coverage_class(phy);
+		ret = mt7999_mac_set_coverage_class(phy);
+		if (ret)
+			dev_err(dev->mt76.dev,
+				"Set band%d coverage class failed, ret=%pe\n",
+				phy->mt76->band_idx, ERR_PTR(ret));
 	}
 	mutex_unlock(&dev->mt76.mutex);
 }

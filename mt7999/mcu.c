@@ -7281,6 +7281,29 @@ int mt7999_mcu_rdd_resume_tx(struct mt7999_phy *phy)
 	return ret;
 }
 
+int mt7999_mcu_set_ack_timeout(struct mt7999_phy *phy, u8 type, u32 timeout)
+{
+	struct {
+		u8 band_idx;
+		u8 _rsv[3];
+
+		__le16 tag;
+		__le16 len;
+		u8 type;
+		u8 _rsv2[3];
+		__le32 timeout;
+	} __packed req = {
+		.band_idx = phy->mt76->band_idx,
+		.tag = cpu_to_le16(UNI_BAND_CONFIG_ACK_TIMEOUT),
+		.len = cpu_to_le16(sizeof(req) - 4),
+		.type = type,
+		.timeout = cpu_to_le32(timeout),
+	};
+
+	return mt76_mcu_send_msg(&phy->dev->mt76, MCU_WM_UNI_CMD(BAND_CONFIG),
+				 &req, sizeof(req), true);
+}
+
 int mt7999_mcu_rdd_cmd(struct mt7999_dev *dev, int cmd, u8 rdd_idx, u8 val)
 {
 	struct mt7999_rdd_ctrl req = {
