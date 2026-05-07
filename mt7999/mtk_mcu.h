@@ -836,17 +836,17 @@ struct uni_muru_mum_set_group_tbl_entry {
 	__le16 wlan_idx2;
 	__le16 wlan_idx3;
 
-	u8 dl_mcs_user0:4;
-	u8 dl_mcs_user1:4;
-	u8 dl_mcs_user2:4;
-	u8 dl_mcs_user3:4;
-	u8 ul_mcs_user0:4;
-	u8 ul_mcs_user1:4;
-	u8 ul_mcs_user2:4;
-	u8 ul_mcs_user3:4;
+	u8 dl_mcs_user0;
+	u8 dl_mcs_user1;
+	u8 dl_mcs_user2;
+	u8 dl_mcs_user3;
+	u8 ul_mcs_user0;
+	u8 ul_mcs_user1;
+	u8 ul_mcs_user2;
+	u8 ul_mcs_user3;
 
 	u8 num_user:2;
-	u8 rsv:6;
+	u8 _rsv:6;
 	u8 nss0:2;
 	u8 nss1:2;
 	u8 nss2:2;
@@ -860,11 +860,16 @@ struct uni_muru_mum_set_group_tbl_entry {
 	u8 _rsv2;
 };
 
+#define MURU_VER_UHR			3
+
 enum {
-	MURU_VER_LEGACY = 0,
-	MURU_VER_HE,
-	MURU_VER_EHT,
+	UNI_MAX_MCS_SUPPORT_HE	= 11,
+	UNI_MAX_MCS_SUPPORT_EHT	= 13,
+	UNI_MAX_MCS_SUPPORT_UHR	= 23,
 };
+
+#define MCS_DISALLOWED_UHR(_mcs)	\
+	((_mcs) == 16 || (_mcs) == 18 || (_mcs) == 21 || (_mcs) == 22)
 
 enum {
 	RUALLOC_BW20 = 122,
@@ -875,9 +880,13 @@ enum {
 };
 
 enum {
-	MAX_MODBF_VHT = 0,
-	MAX_MODBF_HE = 2,
-	MAX_MODBF_EHT = 4,
+	MURU_PHY_BW_VHT,
+	MURU_PHY_BW_HE_FULL,
+	MURU_PHY_BW_HE_PARTIAL,
+	MURU_PHY_BW_EHT_FULL,
+	MURU_PHY_BW_EHT_PARTIAL,
+	MURU_PHY_BW_UHR_FULL,
+	MURU_PHY_BW_UHR_PARTIAL,
 };
 
 enum {

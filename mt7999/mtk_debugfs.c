@@ -2133,7 +2133,7 @@ mt7999_muru_fixed_rate_parameter_set(struct file *file,
 				     size_t count, loff_t *ppos)
 {
 	struct mt7999_dev *dev = file->private_data;
-	char buf[40];
+	char buf[64];
 	int ret;
 
 	if (count >= sizeof(buf))

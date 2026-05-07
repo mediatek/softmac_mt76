@@ -863,13 +863,26 @@ int mt7999_mcu_set_muru_fixed_rate_enable(struct mt7999_dev *dev, u8 action, int
 				 false);
 }
 
-int mt7999_mcu_set_muru_fixed_rate_parameter(struct mt7999_dev *dev, u8 action, void *para)
+int mt7999_mcu_set_muru_fixed_rate_parameter(struct mt7999_dev *dev, u8 action,
+					     void *para)
 {
-/* TODO: add UHR support, logan is not ready yet [20251212] */
-	char *buf = (char *)para;
-	u8 num_user = 0, recv_arg = 0, max_mcs = 0, usr_mcs[4] = {0};
-	__le16 bw;
-	int i;
+	/* Input format (space-separated decimal):
+	 *   <num_user> <ru_alloc> <gi> <phy_full_bw> <dl_ul>
+	 *   <wcid0> <mcs0> [<wcid1> <mcs1> [<wcid2> <mcs2> [<wcid3> <mcs3>]]]
+	 *
+	 *   num_user     : 1..4
+	 *   ru_alloc     : BW20=122, BW40=130, BW80=134, BW160=137, BW320=395
+	 *   gi          : VHT      - SGI=0, LGI=1
+	 *                 HE/EHT/UHR - 4xLTF+3.2us=0, 4xLTF+0.8us=1, 2xLTF+0.8us=2
+	 *   phy_full_bw : VHT=0, HEFullBw=1, HEPartialBw=2,
+	 *                 EHTFullBw=3, EHTPartialBw=4,
+	 *                 UHRFullBw=5, UHRPartialBw=6
+	 *   dl_ul       : DL=0, UL=1, DL_UL=2
+	 *   mcs         : VHT/HE - 0..11=1SS MCS0..11, 12..23=2SS MCS0..11
+	 *                 EHT    - 0..13=1SS MCS0..13, 14..27=2SS MCS0..13
+	 *                 UHR    - 0..23=1SS MCS0..23, 24..47=2SS MCS0..23
+	 *                          (MCS 16/18/21/22 are not allowed)
+	 */
 	struct {
 		u8 _rsv[4];
 
@@ -878,118 +891,127 @@ int mt7999_mcu_set_muru_fixed_rate_parameter(struct mt7999_dev *dev, u8 action, 
 
 		u8 cmd_version;
 		u8 cmd_revision;
-		__le16 rsv;
+		__le16 _rsv2;
 
 		struct uni_muru_mum_set_group_tbl_entry entry;
 	} __packed data = {
 		.tag = cpu_to_le16(action),
 		.len = cpu_to_le16(sizeof(data) - 4),
+		.cmd_version = MURU_VER_UHR,
 	};
+	u8 *const dl_mcs[] = {
+		&data.entry.dl_mcs_user0, &data.entry.dl_mcs_user1,
+		&data.entry.dl_mcs_user2, &data.entry.dl_mcs_user3,
+	};
+	u8 *const ul_mcs[] = {
+		&data.entry.ul_mcs_user0, &data.entry.ul_mcs_user1,
+		&data.entry.ul_mcs_user2, &data.entry.ul_mcs_user3,
+	};
+	u8 num_user = 0, max_mcs, usr_mcs[4] = {}, nss[4] = {};
+	u16 wtbl_size = mt7999_wtbl_size(dev);
+	u16 ru_alloc, wlan_idx[4] = {};
+	int recv_arg, i;
 
-#define __RUALLOC_TYPE_CHECK_HE(BW) ((BW == RUALLOC_BW20) || (BW == RUALLOC_BW40) || (BW == RUALLOC_BW80) || (BW == RUALLOC_BW160))
-#define __RUALLOC_TYPE_CHECK_EHT(BW) (__RUALLOC_TYPE_CHECK_HE(BW) || (BW == RUALLOC_BW320))
-	/* [Num of user] - 1~4
-	 * [RUAlloc] - BW320: 395, BW160: 137, BW80: 134, BW40: 130, BW20: 122
-	 * [LTF/GI] - For VHT, short GI: 0, Long GI: 1; 	 *
-	 * For HE/EHT, 4xLTF+3.2us: 0, 4xLTF+0.8us: 1, 2xLTF+0.8us:2
-	 * [Phy/FullBW] - VHT: 0 / HEFullBw: 1 / HEPartialBw: 2 / EHTFullBW: 3, EHTPartialBW: 4
-	 * [DL/UL] DL: 0, UL: 1, DL_UL: 2
-	 * [Wcid User0] - WCID 0
-	 * [MCS of WCID0] - For HE/VHT, 0-11: 1ss MCS0-MCS11, 12-23: 2SS MCS0-MCS11
-	 * For EHT, 0-13: 1ss MCS0-MCS13, 14-27: 2SS MCS0-MCS13
-	 * [WCID 1]
-	 * [MCS of WCID1]
-	 * [WCID 2]
-	 * [MCS of WCID2]
-	 * [WCID 3]
-	 * [MCS of WCID3]
-	 */
+	recv_arg = sscanf(para,
+			  "%hhu %hu %hhu %hhu %hhu %hu %hhu %hu %hhu %hu %hhu %hu %hhu",
+			  &num_user, &ru_alloc, &data.entry.gi, &data.entry.capa,
+			  &data.entry.dl_ul,
+			  &wlan_idx[0], &usr_mcs[0],
+			  &wlan_idx[1], &usr_mcs[1],
+			  &wlan_idx[2], &usr_mcs[2],
+			  &wlan_idx[3], &usr_mcs[3]);
 
-	recv_arg = sscanf(buf, "%hhu %hu %hhu %hhu %hhu %hu %hhu %hu %hhu %hu %hhu %hu %hhu",
-			  &num_user, &bw, &data.entry.gi, &data.entry.capa, &data.entry.dl_ul,
-			  &data.entry.wlan_idx0, &usr_mcs[0],
-			  &data.entry.wlan_idx1, &usr_mcs[1],
-			  &data.entry.wlan_idx2, &usr_mcs[2],
-			  &data.entry.wlan_idx3, &usr_mcs[3]);
-
-	if (recv_arg != (5 + (2 * num_user))) {
-		dev_err(dev->mt76.dev, "The number of argument is invalid\n");
-		goto error;
+	if (!num_user || num_user > ARRAY_SIZE(usr_mcs) ||
+	    recv_arg != 5 + 2 * num_user) {
+		dev_err(dev->mt76.dev, "Invalid argument count\n");
+		return -EINVAL;
 	}
 
-	if (!num_user || num_user > ARRAY_SIZE(usr_mcs)) {
-		dev_err(dev->mt76.dev, "The number of user count is invalid\n");
-		goto error;
+	for (i = 0; i < num_user; i++) {
+		if (wlan_idx[i] >= wtbl_size) {
+			dev_err(dev->mt76.dev,
+				"Invalid wlan_idx %hu for user %d\n",
+				wlan_idx[i], i);
+			return -EINVAL;
+		}
 	}
 
-	if (data.entry.capa <= MAX_MODBF_HE && bw == RUALLOC_BW320)
-		goto error;
+	data.entry.wlan_idx0 = cpu_to_le16(wlan_idx[0]);
+	data.entry.wlan_idx1 = cpu_to_le16(wlan_idx[1]);
+	data.entry.wlan_idx2 = cpu_to_le16(wlan_idx[2]);
+	data.entry.wlan_idx3 = cpu_to_le16(wlan_idx[3]);
 
-	if (__RUALLOC_TYPE_CHECK_EHT(bw)) {
-		data.entry.ru_alloc = (u8)(bw & 0xFF);
-		if (bw == RUALLOC_BW320)
-			data.entry.ru_alloc_ext = (u8)(bw >> 8);
-	} else {
-		dev_err(dev->mt76.dev, "RU_ALLOC argument is invalid\n");
-		goto error;
+	if (data.entry.capa > MURU_PHY_BW_UHR_PARTIAL) {
+		dev_err(dev->mt76.dev, "Invalid Phy/FullBW: %hhu\n",
+			data.entry.capa);
+		return -EINVAL;
 	}
 
-	if ((data.entry.gi > 2) ||
-	    ((data.entry.gi > 1) && (data.entry.capa == MAX_MODBF_VHT))) {
-		dev_err(dev->mt76.dev, "GI argument is invalid\n");
-		goto error;
+	switch (ru_alloc) {
+	case RUALLOC_BW20:
+	case RUALLOC_BW40:
+	case RUALLOC_BW80:
+	case RUALLOC_BW160:
+		break;
+	case RUALLOC_BW320:
+		if (data.entry.capa <= MURU_PHY_BW_HE_PARTIAL) {
+			dev_err(dev->mt76.dev,
+				"BW320 requires EHT or newer Phy/FullBW\n");
+			return -EINVAL;
+		}
+		data.entry.ru_alloc_ext = (ru_alloc >> 8) & 0xff;
+		break;
+	default:
+		dev_err(dev->mt76.dev, "Invalid RU_ALLOC: %hu\n", ru_alloc);
+		return -EINVAL;
+	}
+	data.entry.ru_alloc = ru_alloc & 0xff;
+
+	if (data.entry.gi > 2 ||
+	    (data.entry.gi > 1 && data.entry.capa == MURU_PHY_BW_VHT)) {
+		dev_err(dev->mt76.dev, "Invalid GI: %hhu\n", data.entry.gi);
+		return -EINVAL;
 	}
 
 	if (data.entry.dl_ul > 2) {
-		dev_err(dev->mt76.dev, "DL_UL argument is invalid\n");
-		goto error;
+		dev_err(dev->mt76.dev, "Invalid DL_UL: %hhu\n", data.entry.dl_ul);
+		return -EINVAL;
 	}
 
 	data.entry.num_user = num_user - 1;
-	data.cmd_version = MURU_VER_EHT;
-	max_mcs = data.entry.capa <= MAX_MODBF_HE ? 11 : 13;
+	max_mcs = data.entry.capa <= MURU_PHY_BW_HE_PARTIAL  ? UNI_MAX_MCS_SUPPORT_HE  :
+		  data.entry.capa <= MURU_PHY_BW_EHT_PARTIAL ? UNI_MAX_MCS_SUPPORT_EHT :
+							       UNI_MAX_MCS_SUPPORT_UHR;
 
-#define __mcs_handler(_n)							\
-	do {									\
-		if (usr_mcs[_n] > max_mcs) {					\
-			usr_mcs[_n] -= (max_mcs + 1);				\
-			data.entry.nss##_n = 1;					\
-			if (usr_mcs[_n] > max_mcs)				\
-				usr_mcs[_n] = max_mcs;				\
-		}								\
-		if ((data.entry.dl_ul & 0x1) == 0)				\
-			data.entry.dl_mcs_user##_n = usr_mcs[_n];		\
-		if ((data.entry.dl_ul & 0x3) > 0)				\
-			data.entry.ul_mcs_user##_n = usr_mcs[_n];		\
-	}									\
-	while (0)
+	for (i = 0; i < num_user; i++) {
+		u8 mcs = usr_mcs[i];
 
-	for (i = 0; i <= data.entry.num_user; i++) {
-		switch (i) {
-			case 0:
-				__mcs_handler(0);
-				break;
-			case 1:
-				__mcs_handler(1);
-				break;
-			case 2:
-				__mcs_handler(2);
-				break;
-			case 3:
-				__mcs_handler(3);
-				break;
-			default:
-				break;
+		if (mcs > max_mcs) {
+			mcs -= max_mcs + 1;
+			nss[i] = 1;
+			if (mcs > max_mcs)
+				mcs = max_mcs;
 		}
+
+		if (data.entry.capa > MURU_PHY_BW_EHT_PARTIAL && MCS_DISALLOWED_UHR(mcs)) {
+			dev_err(dev->mt76.dev,
+				"UHR-disallowed MCS %hhu for user %d\n", mcs, i);
+			return -EINVAL;
+		}
+
+		if (!(data.entry.dl_ul & BIT(0)))
+			*dl_mcs[i] = mcs;
+		if (data.entry.dl_ul)
+			*ul_mcs[i] = mcs;
 	}
-#undef __mcs_handler
+
+	data.entry.nss0 = nss[0];
+	data.entry.nss1 = nss[1];
+	data.entry.nss2 = nss[2];
+	data.entry.nss3 = nss[3];
 
 	return mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(MURU), &data,
 				 sizeof(data), false);
-
-error:
-	dev_err(dev->mt76.dev, "Command failed!\n");
-	return -EINVAL;
 }
 
 /**
@@ -1150,7 +1172,7 @@ int mt7999_mcu_set_muru_cfg(struct mt7999_dev *dev, void *data)
 	} __packed req = {
 		.tag = cpu_to_le16(UNI_MURU_MUNUAL_CONFIG),
 		.len = cpu_to_le16(sizeof(req) - 4),
-		.version = MURU_VER_EHT,
+		.version = MURU_VER_UHR,
 	};
 
 	muru = (struct mt7999_muru *) data;
