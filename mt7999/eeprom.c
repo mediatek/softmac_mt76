@@ -276,17 +276,19 @@ static int mt7999_eeprom_load(struct mt7999_dev *dev)
 
 	mt7999_eeprom_check_or_use_default(dev);
 
-	if (!apply_cal)
-		return 0;
-
 	/* check if any calibrated data in efuse */
 	ret = mt7999_mcu_get_eeprom(dev, MT_EE_WIFI_CONF_BASE, buf,
 				    MT7999_EEPROM_BLOCK_SIZE, EEPROM_MODE_EFUSE);
 	if (ret || !is_valid_ether_addr(buf + offset))
 		return 0;
 
-	/* load the calibrated data in efuse */
 	eeprom = dev->mt76.eeprom.data;
+	if (!apply_cal) {
+		dev->apply_cal = !memcmp(buf + offset, eeprom + MT_EE_MAC_ADDR_BASE, ETH_ALEN);
+		return 0;
+	}
+
+	/* load the calibrated data in efuse */
 	block_num = DIV_ROUND_UP(MT7999_EEPROM_CAL_DATA_SIZE, MT7999_EEPROM_BLOCK_SIZE);
 	for (i = 0; i < block_num; i++) {
 		u32 efuse_offset = i * MT7999_EEPROM_BLOCK_SIZE;
