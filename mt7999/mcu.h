@@ -1061,6 +1061,32 @@ struct vow_rx_airtime {
 	u8 __rsv[2];
 } __packed;
 
+struct vow_rx_airtime_clr {
+	__le16 tag;
+	__le16 len;
+
+	u8 enable;
+	u8 band;
+	u8 __rsv[2];
+} __packed;
+
+struct vow_rx_early_end {
+	__le16 tag;
+	__le16 len;
+
+	u8 enable;
+	u8 __rsv[3];
+} __packed;
+
+struct vow_rx_ed_offs {
+	__le16 tag;
+	__le16 len;
+
+	u8 compensation; /* Unit: us */
+	u8 band;
+	u8 __rsv[2];
+} __packed;
+
 struct bf_sounding_on {
 	__le16 tag;
 	__le16 len;
@@ -1398,7 +1424,9 @@ enum {
 	UNI_VOW_DRR_CTRL,
 	UNI_VOW_FEATURE_CTRL,
 	UNI_VOW_RX_AT_AIRTIME_EN = 0x0b,
+	UNI_VOW_RX_AT_EARLY_END_EN = 0x0d,
 	UNI_VOW_RX_AT_AIRTIME_CLR_EN = 0x0e,
+	UNI_VOW_RX_AT_ED_OFFS = 0x11,
 	UNI_VOW_RED_ENABLE = 0x18,
 };
 

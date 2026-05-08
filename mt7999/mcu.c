@@ -5472,29 +5472,48 @@ int mt7999_mcu_fw_time_sync(struct mt76_dev *dev)
 
 static void mt7999_add_rx_airtime_tlv(struct sk_buff *skb, u8 band_idx)
 {
-	struct vow_rx_airtime *req;
+	struct vow_rx_airtime_clr *req_airtime_clr;
+	struct vow_rx_early_end *req_early_end;
+	struct vow_rx_airtime *req_airtime;
+	struct vow_rx_ed_offs *req_ed_offs;
 	struct tlv *tlv;
 
-	tlv = mt7999_mcu_add_uni_tlv(skb, UNI_VOW_RX_AT_AIRTIME_CLR_EN, sizeof(*req));
-	req = (struct vow_rx_airtime *)tlv;
-	req->enable = true;
-	req->band = band_idx;
+	tlv = mt7999_mcu_add_uni_tlv(skb, UNI_VOW_RX_AT_AIRTIME_CLR_EN,
+				     sizeof(*req_airtime_clr));
+	req_airtime_clr = (struct vow_rx_airtime_clr *)tlv;
+	req_airtime_clr->enable = true;
+	req_airtime_clr->band = band_idx;
 
-	tlv = mt7999_mcu_add_uni_tlv(skb, UNI_VOW_RX_AT_AIRTIME_EN, sizeof(*req));
-	req = (struct vow_rx_airtime *)tlv;
-	req->enable = true;
-	req->band = band_idx;
+	tlv = mt7999_mcu_add_uni_tlv(skb, UNI_VOW_RX_AT_AIRTIME_EN,
+				     sizeof(*req_airtime));
+	req_airtime = (struct vow_rx_airtime *)tlv;
+	req_airtime->enable = true;
+	req_airtime->band = band_idx;
+
+	tlv = mt7999_mcu_add_uni_tlv(skb, UNI_VOW_RX_AT_EARLY_END_EN,
+				     sizeof(*req_early_end));
+	req_early_end = (struct vow_rx_early_end *)tlv;
+	req_early_end->enable = true;
+
+	tlv = mt7999_mcu_add_uni_tlv(skb, UNI_VOW_RX_AT_ED_OFFS,
+				     sizeof(*req_ed_offs));
+	req_ed_offs = (struct vow_rx_ed_offs *)tlv;
+	req_ed_offs->compensation = 4;
+	req_ed_offs->band = band_idx;
 }
 
 int mt7999_mcu_init_rx_airtime(struct mt7999_dev *dev)
 {
 	struct uni_header hdr = {};
 	struct sk_buff *skb;
-	int len, num, i;
+	int len, n_bands, i;
 
-	num = 2 * (1 + mt7999_band_valid(dev, MT_BAND1) +
-		   mt7999_band_valid(dev, MT_BAND2));
-	len = sizeof(hdr) + num * sizeof(struct vow_rx_airtime);
+	n_bands = 1 + mt7999_band_valid(dev, MT_BAND1) +
+		  mt7999_band_valid(dev, MT_BAND2);
+	len = sizeof(hdr) + n_bands * (sizeof(struct vow_rx_airtime) +
+				       sizeof(struct vow_rx_airtime_clr) +
+				       sizeof(struct vow_rx_early_end) +
+				       sizeof(struct vow_rx_ed_offs));
 	skb = mt76_mcu_msg_alloc(&dev->mt76, NULL, len);
 	if (!skb)
 		return -ENOMEM;
