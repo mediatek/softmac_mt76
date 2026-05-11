@@ -779,7 +779,12 @@ struct mt7996_phy {
 #ifdef CONFIG_MTK_DEBUG
 	bool thermal_protection_enable:1;
 	bool mru_probe_enable:1;
+
+	bool rdd_log_en;
 #endif
+
+	bool rdd_emulate;
+
 	u8 user_edcca_threshold[EDCCA_MAX_BW_NUM];
 	/* Index 0 (TxBSS) is not used */
 	struct mt7996_vif_link __rcu *mbssid_conf[MT7996_MAX_MBSSID];
@@ -1659,6 +1664,8 @@ int mt7996_mcu_sta_get_wtbl(struct mt7996_dev *dev, u16 idx,
 			    u16 start_dw, u16 len_in_dw, void *buf);
 void mt7996_packet_log_to_host(struct mt7996_dev *dev, const void *data, int len, int type, int des_len);
 int mt7996_mcu_get_sta_pause(struct mt7996_phy *phy, struct sk_buff **skb);
+int mt7996_mcu_set_rdd_log_config(struct mt7996_dev *dev, u8 val);
+void mt7996_mcu_dump_radar_pulse(struct mt7996_phy *phy, void *rdd_report);
 #else
 static inline void
 mt7996_packet_log_to_host(struct mt7996_dev *dev, const void *data, int len, int type, int des_len)
