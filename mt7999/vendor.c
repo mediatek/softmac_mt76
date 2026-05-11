@@ -1605,7 +1605,7 @@ static int mt7999_vendor_txpower_ctrl(struct wiphy *wiphy,
 	struct mt7999_vif *mvif = (struct mt7999_vif *)vif->drv_priv;
 	struct mt7999_vif_link *mconf;
 	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_TXPOWER_CTRL], *table;
-	int err, current_txpower, delta;
+	int err, delta;
 	u8 val, link_id = 0, idx;
 	s8 new_power_limit = 127;
 
@@ -1634,7 +1634,6 @@ static int mt7999_vendor_txpower_ctrl(struct wiphy *wiphy,
 
 	mphy = phy->mt76;
 	dev = phy->dev;
-	delta = mt76_tx_power_path_delta(hweight16(mphy->chainmask));
 
 	if (mphy->cap.has_6ghz &&
 	    tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_AFC_LPI]) {
@@ -1658,11 +1657,15 @@ static int mt7999_vendor_txpower_ctrl(struct wiphy *wiphy,
 				  SKU_FILENAME_MAX);
 
 		if (err > 0 && mphy->sku_filename[0]) {
+			struct ieee80211_channel *chan = mphy->main_chandef.chan;
+
 			mt7999_init_txpower(phy);
 			phy->sku_limit_en = true;
 			phy->sku_path_en = true;
+			new_power_limit = chan->max_power;
 		} else {
 			mphy->sku_filename[0] = '\0';
+			mt7999_init_txpower(phy);
 			phy->sku_limit_en = false;
 			phy->sku_path_en = false;
 		}
@@ -1682,7 +1685,9 @@ static int mt7999_vendor_txpower_ctrl(struct wiphy *wiphy,
 		phy->sku_limit_en = true;
 		phy->sku_path_en = true;
 	} else {
+		mphy->sku_idx = 0;
 		mphy->sku_filename[0] = '\0';
+		mt7999_init_txpower(phy);
 		phy->sku_limit_en = false;
 		phy->sku_path_en = false;
 	}
@@ -1710,6 +1715,7 @@ static int mt7999_vendor_txpower_ctrl(struct wiphy *wiphy,
 
 	if (mphy->cap.has_6ghz) {
 		table = tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_AFC_TABLE];
+		delta = mt76_tx_power_path_delta(hweight16(mphy->chainmask));
 		if (table) {
 			err = mt7999_parse_afc_table(dev, table, delta);
 			if (err)
@@ -1718,9 +1724,7 @@ static int mt7999_vendor_txpower_ctrl(struct wiphy *wiphy,
 			mt7999_free_afc_table(dev);
 	}
 
-	current_txpower = DIV_ROUND_UP(mphy->txpower_cur + delta, 2);
-	new_power_limit = min_t(s8, current_txpower, new_power_limit);
-
+	new_power_limit = min_t(s8, phy->txpower, new_power_limit);
 	err = mt7999_mcu_set_txpower_sku(phy, new_power_limit);
 
 	return err;

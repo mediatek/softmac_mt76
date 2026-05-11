@@ -1512,13 +1512,15 @@ static int mt7915_vendor_txpower_ctrl(struct wiphy *wiphy,
 	}
 
 	if (tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_IDX]) {
+		s8 txpower = 127;
+
 		mphy->sku_idx = nla_get_u8(tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_IDX]);
 
 		if (mt76_find_power_limits_node(mphy) == NULL)
 			mphy->sku_idx = 0;
 
 		phy->sku_path_en = true;
-		mt76_get_rate_power_limits(mphy, mphy->chandef.chan, &limits, 127);
+		mt76_get_rate_power_limits(mphy, mphy->chandef.chan, &limits, &txpower);
 		if (!limits.path.ofdm[0])
 			phy->sku_path_en = false;
 

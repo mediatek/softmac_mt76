@@ -7810,7 +7810,7 @@ mt7999_update_max_txpower_cur(struct mt7999_phy *phy, int tx_power)
 static int mt7999_afc_update_power_limit(struct mt7999_dev *dev,
 					 struct ieee80211_channel *chan,
 					 struct mt76_power_limits *la,
-					 int *tx_power,
+					 s8 *tx_power,
 					 struct cfg80211_chan_def *chandef)
 {
 	s8 *power_list, bw320_offset, target_power;
@@ -7963,7 +7963,8 @@ int mt7999_mcu_set_txpower_sku(struct mt7999_phy *phy,
 	struct mt76_power_limits *la;
 	struct sk_buff *skb;
 	struct ieee80211_channel *chan = mphy->main_chandef.chan;
-	int i, ret, txpower_limit;
+	int i, ret;
+	s8 txpower_limit;
 
 	if (txpower_setting == INT_MIN || txpower_setting > 127)
 		txpower_setting = 127;
@@ -7978,12 +7979,7 @@ int mt7999_mcu_set_txpower_sku(struct mt7999_phy *phy,
 	if (!la)
 		return -ENOMEM;
 
-	if (mphy->sku_filename[0])
-		txpower_limit =
-			mt76_get_rate_power_limits_file(mphy, chan, la, txpower_limit);
-	else
-		txpower_limit =
-			mt76_get_rate_power_limits(mphy, chan, la, txpower_limit);
+	mt76_get_rate_power_limits(mphy, chan, la, &txpower_limit);
 
 	if (!la->path.ofdm[0])
 		phy->sku_path_en = false;

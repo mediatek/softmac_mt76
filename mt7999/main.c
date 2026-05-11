@@ -788,12 +788,7 @@ int mt7999_set_channel(struct mt76_phy *mphy)
 		if (ret)
 			goto out;
 	} else if (mphy->chanctx && mphy->chanctx->state == MT76_CHANCTX_STATE_SWITCH) {
-		u8 delta;
-		int current_txpower;
-
-		delta = mt76_tx_power_path_delta(hweight16(mphy->chainmask));
-		current_txpower = DIV_ROUND_UP(mphy->txpower_cur + delta, 2);
-		ret = mt7999_mcu_set_txpower_sku(phy, current_txpower);
+		ret = mt7999_mcu_set_txpower_sku(phy, phy->txpower);
 		if (ret)
 			goto out;
 	}

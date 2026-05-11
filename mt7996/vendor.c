@@ -1658,9 +1658,12 @@ static int mt7996_vendor_txpower_ctrl(struct wiphy *wiphy,
 				  SKU_FILENAME_MAX);
 
 		if (err > 0 && mphy->sku_filename[0]) {
+			struct ieee80211_channel *chan = mphy->main_chandef.chan;
+
 			mt7996_init_txpower(phy);
 			phy->sku_limit_en = true;
 			phy->sku_path_en = true;
+			new_power_limit = chan->max_power;
 		} else {
 			mphy->sku_filename[0] = '\0';
 			phy->sku_limit_en = false;
