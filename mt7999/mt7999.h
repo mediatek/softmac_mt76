@@ -745,6 +745,12 @@ struct mt7999_phy {
 	u8 user_edcca_threshold[EDCCA_MAX_BW_NUM];
 	/* Index 0 (TxBSS) is not used */
 	struct mt7999_vif_link __rcu *mbssid_conf[MT7999_MAX_MBSSID];
+
+	u32 tx_bytes[MT7999_MAX_WMM_SETS];
+	u32 tx_packets[MT7999_MAX_WMM_SETS];
+	u32 rx_bytes[MT7999_MAX_WMM_SETS];
+	u32 rx_packets[MT7999_MAX_WMM_SETS];
+	u16 txop[MT7999_MAX_WMM_SETS];
 };
 
 enum {
@@ -945,6 +951,7 @@ struct mt7999_dev {
 	struct work_struct wmm_pbc_work;
 	u16 pbc_lower_bound[WMM_PBC_QUEUE_NUM];
 	u16 pbc_upper_bound[WMM_PBC_QUEUE_NUM];
+	bool disable_dynamic_txop;
 #ifdef CONFIG_MTK_DEBUG
 	u16 wlan_idx;
 	bool wtbl_query_cr;

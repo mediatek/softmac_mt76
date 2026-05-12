@@ -3250,6 +3250,98 @@ static int mt7999_flush_pending_token(struct mt7999_dev *dev)
 	return 0;
 }
 
+static bool mt7999_mac_prefer_ul(struct mt7999_phy *phy, u8 wmm_idx)
+{
+	u32 tx_bytes = phy->tx_bytes[wmm_idx];
+	u32 tx_packets = phy->tx_packets[wmm_idx];
+	u32 rx_bytes = phy->rx_bytes[wmm_idx];
+	u32 rx_packets = phy->rx_packets[wmm_idx];
+	bool ret = false;
+
+	/* Adjust txop only if tput is greater than 500 Mbps */
+	if ((((u64)tx_bytes + rx_bytes) << 3 >> 20 ) < 500)
+		ret = false;
+	else if (rx_packets > tx_packets * 10)
+		ret = true;
+	else if (rx_packets > 100 && rx_bytes / rx_packets > 1000)
+		ret = true;
+
+	trace_mt7999_mac_prefer_ul(phy, wmm_idx, ret);
+
+	return ret;
+}
+
+static void
+mt7999_update_vif_txop(void *priv, u8 *mac, struct ieee80211_vif *vif)
+{
+	struct mt7999_vif *mvif = (struct mt7999_vif *)vif->drv_priv;
+	struct ieee80211_bss_conf *link_conf;
+	struct mt7999_dev *dev = priv;
+	unsigned int link_id;
+
+	for_each_vif_active_link(vif, link_conf, link_id) {
+		struct mt7999_vif_link_info *link_info = &mvif->link_info[link_id];
+		struct mt7999_vif_link *link;
+		struct mt7999_phy *link_phy;
+		u8 wmm_idx;
+
+		link = mt7999_vif_link(dev, vif, link_id);
+		if (!link)
+			continue;
+
+		link_phy = mt7999_vif_link_phy(link);
+		if (!link_phy)
+			continue;
+
+		wmm_idx = link->mt76.wmm_idx;
+		if (link_info->queue_params[0].txop != link_phy->txop[wmm_idx]) {
+			link_info->queue_params[0].txop = link_phy->txop[wmm_idx];
+			mt7999_mcu_set_tx(dev, vif, link_conf);
+		}
+	}
+}
+
+static void mt7999_mac_dynamic_txop(struct mt7999_dev *dev)
+{
+#define MT7999_TXOP_PREFER_DL	0xbb
+#define MT7999_TXOP_PREFER_UL	0x0
+	struct mt7999_phy *phy;
+	bool update_txop = false;
+	u8 i;
+
+	if (dev->disable_dynamic_txop)
+		return;
+
+	mt7999_for_each_phy(dev, phy) {
+		for (i = 0; i < MT7999_MAX_WMM_SETS; i++) {
+			if (i == 1 || i == 2)
+				continue;
+
+			if (mt7999_mac_prefer_ul(phy, i)) {
+				if (phy->txop[i] != MT7999_TXOP_PREFER_UL)
+					update_txop = true;
+				phy->txop[i] = MT7999_TXOP_PREFER_UL;
+			} else {
+				if (phy->txop[i] != MT7999_TXOP_PREFER_DL)
+					update_txop = true;
+				phy->txop[i] = MT7999_TXOP_PREFER_DL;
+			}
+
+			phy->tx_bytes[i] = 0;
+			phy->tx_packets[i] = 0;
+			phy->rx_bytes[i] = 0;
+			phy->rx_packets[i] = 0;
+		}
+		if (update_txop)
+			trace_mt7999_mac_dynamic_txop(phy);
+	}
+
+	if (update_txop)
+		ieee80211_iterate_active_interfaces(dev->mt76.hw,
+						    IEEE80211_IFACE_ITER_RESUME_ALL,
+						    mt7999_update_vif_txop, dev);
+}
+
 void mt7999_mac_work(struct work_struct *work)
 {
 	struct mt7999_phy *phy;
@@ -3294,6 +3386,9 @@ void mt7999_mac_work(struct work_struct *work)
 					mphy->mac_work_count = 0;
 					mt7999_flush_pending_token(phy->dev);
 				}
+
+				if (mphy->mac_work_count % 10 == 0)
+					mt7999_mac_dynamic_txop(phy->dev);
 			} else if (mt7999_band_valid(phy->dev, i) &&
 			           test_bit(MT76_STATE_RUNNING, &mdev->phys[i]->state))
 				break;

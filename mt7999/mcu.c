@@ -703,6 +703,49 @@ static inline void __mt7999_stat_to_netdev(struct mt76_phy *mphy,
 		__dev_sw_netstats_rx_add(wdev->netdev, rx_packets, rx_bytes);
 	}
 }
+#define TRX_PACKETS 0
+#define TRX_BYTES 1
+static void mt7999_update_txop_stats(struct mt7999_dev *dev, u8 type,
+				     struct mt76_wcid *wcid, u32 tx, u32 rx)
+{
+	struct mt7999_sta_link *msta_link = container_of(wcid, struct mt7999_sta_link, wcid);
+	struct ieee80211_sta *sta = wcid_to_sta(wcid);
+	struct ieee80211_vif *vif;
+	unsigned long valid_links;
+	struct mt7999_sta *msta;
+	unsigned int link_id;
+	u8 wmm_idx;
+
+	if (!sta || !msta_link->sta || !msta_link->sta->vif)
+		return;
+
+	msta = (struct mt7999_sta *)sta->drv_priv;
+	vif = container_of((void *)msta_link->sta->vif, struct ieee80211_vif, drv_priv);
+	wmm_idx = vif->type == NL80211_IFTYPE_AP ? 0 : 3;
+	valid_links = sta->valid_links ?: BIT(0);
+
+	for_each_set_bit(link_id, &valid_links, IEEE80211_MLD_MAX_NUM_LINKS) {
+		struct mt7999_sta_link *msta_link_temp;
+		struct mt7999_phy *phy;
+
+		msta_link_temp = mt7999_sta_link(msta, link_id);
+		if (!msta_link_temp)
+			continue;
+
+		phy = __mt7999_phy(dev, msta_link_temp->wcid.phy_idx);
+
+		if (!phy)
+			continue;
+
+		if (type == TRX_BYTES) {
+			phy->tx_bytes[wmm_idx] += tx;
+			phy->rx_bytes[wmm_idx] += rx;
+		} else if (type == TRX_PACKETS) {
+			phy->tx_packets[wmm_idx] += tx;
+			phy->rx_packets[wmm_idx] += rx;
+		}
+	}
+}
 
 static void
 mt7999_mcu_rx_all_sta_info_event(struct mt7999_dev *dev, struct sk_buff *skb)
@@ -767,6 +810,8 @@ mt7999_mcu_rx_all_sta_info_event(struct mt7999_dev *dev, struct sk_buff *skb)
 
 				__mt7999_stat_to_netdev(mphy, wcid,
 							tx_bytes, rx_bytes, 0, 0);
+				mt7999_update_txop_stats(dev, TRX_BYTES, wcid,
+							 tx_bytes, rx_bytes);
 
 				ieee80211_tpt_led_trig_tx(mphy->hw, tx_bytes);
 				ieee80211_tpt_led_trig_rx(mphy->hw, rx_bytes);
@@ -815,6 +860,8 @@ mt7999_mcu_rx_all_sta_info_event(struct mt7999_dev *dev, struct sk_buff *skb)
 
 			__mt7999_stat_to_netdev(mphy, wcid, 0, 0,
 						tx_packets, rx_packets);
+			mt7999_update_txop_stats(dev, TRX_PACKETS, wcid,
+						 tx_packets, rx_packets);
 			break;
 		case UNI_ALL_STA_RX_MPDU_COUNT:
 			wlan_idx = le16_to_cpu(res->rx_mpdu_cnt[i].wlan_idx);
@@ -5630,6 +5677,8 @@ int mt7999_mcu_set_tx(struct mt7999_dev *dev, struct ieee80211_vif *vif,
 		e->queue = ac;
 		e->aifs = q->aifs;
 		e->txop = cpu_to_le16(q->txop);
+		if (!ac)
+			link->phy->txop[link->mt76.wmm_idx] = q->txop;
 
 		if (q->cw_min)
 			e->cw_min = fls(q->cw_min);

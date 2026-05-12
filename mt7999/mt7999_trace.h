@@ -159,6 +159,66 @@ TRACE_EVENT(mt7999_mac_tx_free,
 	)
 );
 
+TRACE_EVENT(mt7999_mac_prefer_ul,
+	TP_PROTO(struct mt7999_phy *phy, u8 wmm_idx, bool ret),
+	TP_ARGS(phy, wmm_idx, ret),
+
+	TP_STRUCT__entry(
+		DEV_ENTRY
+		__field(u8, band_idx)
+		__field(u8, wmm_idx)
+		__field(bool, ret)
+		__field(u32, tx_bytes)
+		__field(u32, rx_bytes)
+		__field(u32, tx_packets)
+		__field(u32, rx_packets)
+	),
+
+	TP_fast_assign(
+		DEV_ASSIGN(phy->mt76->hw->wiphy);
+		__entry->band_idx = phy->mt76->band_idx;
+		__entry->wmm_idx = wmm_idx;
+		__entry->ret = ret;
+		__entry->tx_bytes = phy->tx_bytes[wmm_idx];
+		__entry->tx_packets = phy->tx_packets[wmm_idx];
+		__entry->rx_bytes = phy->rx_bytes[wmm_idx];
+		__entry->rx_packets = phy->rx_packets[wmm_idx];
+	),
+
+	TP_printk(
+		DEV_PR_FMT " band%u wmm_idx = %hhu, ret = %d, tx_bytes = %u, "
+		"tx_packets = %u, rx_bytes = %u, rx_packets = %u, tpt = %llu (Mbps)",
+		DEV_PR_ARG, __entry->band_idx, __entry->wmm_idx, __entry->ret,
+		__entry->tx_bytes, __entry->tx_packets,
+		__entry->rx_bytes, __entry->rx_packets,
+		(((u64)__entry->tx_bytes + __entry->rx_bytes) << 3 >> 20)
+	)
+);
+
+TRACE_EVENT(mt7999_mac_dynamic_txop,
+	TP_PROTO(struct mt7999_phy *phy),
+	TP_ARGS(phy),
+
+	TP_STRUCT__entry(
+		DEV_ENTRY
+		__field(u8, band_idx)
+		__array(u16, txop, 4)
+	),
+
+	TP_fast_assign(
+		DEV_ASSIGN(phy->mt76->hw->wiphy);
+		__entry->band_idx = phy->mt76->band_idx;
+		memcpy(__entry->txop, phy->txop, sizeof(__entry->txop));
+	),
+
+	TP_printk(
+		DEV_PR_FMT " band%u txop = 0x%02x, 0x%02x, 0x%02x, 0x%02x",
+		DEV_PR_ARG, __entry->band_idx,
+		__entry->txop[0], __entry->txop[1],
+		__entry->txop[2], __entry->txop[3]
+	)
+);
+
 #endif
 
 #undef TRACE_INCLUDE_PATH
