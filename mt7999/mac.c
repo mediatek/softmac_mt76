@@ -3339,6 +3339,31 @@ static void mt7999_mac_dynamic_txop(struct mt7999_dev *dev)
 						    mt7999_update_vif_txop, dev);
 }
 
+static void mt7999_check_sta_rssi(void *data, struct ieee80211_sta *sta)
+{
+	struct mt7999_sta *msta = (struct mt7999_sta *)sta->drv_priv;
+	struct mt7999_sta_link *msta_link;
+	unsigned long valid_links;
+	bool *enable_1rpd = data;
+	unsigned int link_id;
+
+	if (!(*enable_1rpd))
+		return;
+
+	valid_links = sta->valid_links ?: BIT(0);
+
+	for_each_set_bit(link_id, &valid_links, IEEE80211_MLD_MAX_NUM_LINKS) {
+		msta_link = mt7999_sta_link(msta, link_id);
+		if (!msta_link)
+			continue;
+
+		if (-(s8)ewma_avg_signal_read(&msta_link->signal_avg) < -80) {
+			*enable_1rpd = false;
+			break;
+		}
+	}
+}
+
 void mt7999_mac_work(struct work_struct *work)
 {
 	struct mt7999_phy *phy;
@@ -3373,6 +3398,18 @@ void mt7999_mac_work(struct work_struct *work)
 				mt7999_mcu_get_all_sta_info(mdev, UNI_ALL_STA_DATA_TX_RETRY_COUNT);
 
 				mt7999_mcu_get_bss_acq_pkt_cnt(phy->dev);
+
+				if (mphy->mac_work_count % 10 == 0 &&
+				    phy->dev->ultra_save &&
+				    !phy->dev->disable_dynamic_1rpd) {
+					bool enable_1rpd = true;
+
+					ieee80211_iterate_stations_atomic(
+						mdev->hw, mt7999_check_sta_rssi,
+						&enable_1rpd);
+
+					mt7999_mcu_enable_1rpd(phy->dev, enable_1rpd);
+				}
 
 				if (mphy->mac_work_count % 100 == 0) {
 					if (phy->dev->idxlog_enable && mt7999_mcu_fw_time_sync(mdev))

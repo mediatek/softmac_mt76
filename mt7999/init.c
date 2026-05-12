@@ -884,9 +884,6 @@ void mt7999_set_pcie_l1ss(struct mt7999_dev *dev, bool en)
 static void mt7999_low_power_config(struct mt7999_dev *dev)
 {
 #define MT7999_ULTRA_SAVE_CONFIG_ALL		2
-#define MT7999_ULTRA_SAVE_CONFIG_FEATURES	1
-#define MT7999_ULTRA_SAVE_1RPD			4
-#define MT7999_ULTRA_SAVE_DISABLE		0
 	bool pb_en = lp_ctrl & BIT(LOW_POWER_TX_TPO_POWER_BOOST);
 	bool pr_en = lp_ctrl & BIT(LOW_POWER_TX_TPO_POWER_REDUCE);
 	bool min_tx_en = lp_ctrl & BIT(LOW_POWER_TX_TPO_ANTENNA_REDUCE);
@@ -907,16 +904,12 @@ static void mt7999_low_power_config(struct mt7999_dev *dev)
 	mt7999_mcu_set_tpo(dev, MT7999_LP_TPO_MIN_TX, min_tx_en ? band_enable : 0);
 
 	/* Ultra save */
+	dev->ultra_save = !!(lp_ctrl & BIT(LOW_POWER_RX_ULTRA_SAVE));
 	memset(arg, 0, sizeof(arg));
 	arg[0] = MT7999_ULTRA_SAVE_CONFIG_ALL;
-	arg[1] = !!(lp_ctrl & BIT(LOW_POWER_RX_ULTRA_SAVE));
+	arg[1] = dev->ultra_save;
 	mt7999_mcu_set_lp_option(dev, arg);
-	/* Disable 1-Rx Packet Detection by default */
-	memset(arg, 0, sizeof(arg));
-	arg[0] = MT7999_ULTRA_SAVE_CONFIG_FEATURES;
-	arg[1] = MT7999_ULTRA_SAVE_1RPD;
-	arg[2] = MT7999_ULTRA_SAVE_DISABLE;
-	mt7999_mcu_set_lp_option(dev, arg);
+	mt7999_mcu_enable_1rpd(dev, dev->ultra_save);
 
 	/* Power Saving Transceiver */
 	mt7999_mcu_set_pst(dev, 0xff, MURU_PST_CMD_ALGO_MODE,
