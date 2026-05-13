@@ -1458,12 +1458,32 @@ enum {
 };
 
 enum {
+	UNI_MAC_INFO_TSF = 0,
 	UNI_MAC_INFO_TSF_DIFF = 2,
 };
 
 enum {
+	UNI_EVENT_MAC_INFO_TSF = 0,
 	UNI_EVENT_MAC_INFO_TSF_DIFF = 2,
 };
+
+struct mt7999_mcu_mac_info_tsf {
+	__le16 tag;
+	__le16 len;
+	u8 band_idx;
+	u8 bss_idx;
+	u8 rsv[2];
+} __packed;
+
+struct mt7999_mcu_mac_info_tsf_resp {
+	__le16 tag;
+	__le16 len;
+	u8 band_idx;
+	u8 bss_idx;
+	u8 rsv[2];
+	__le32 tsf_bit0_31;
+	__le32 tsf_bit32_63;
+} __packed;
 
 struct mt7999_mcu_mac_info_tsf_diff {
 	__le16 tag;

@@ -2143,6 +2143,51 @@ int mt7999_mcu_set_emlsr_mode(struct mt7999_dev *dev,
 				     MCU_WMWA_UNI_CMD(STA_REC_UPDATE), true);
 }
 
+int mt7999_mcu_get_tsf(struct mt7999_phy *phy, struct mt7999_vif_link *link,
+		       u64 *tsf)
+{
+	struct mt7999_mcu_mac_info_tsf_resp *resp;
+	struct mt7999_mcu_mac_info_tsf *req;
+	struct mt7999_dev *dev = phy->dev;
+	struct sk_buff *skb, *rskb;
+	struct uni_header hdr;
+	struct tlv *tlv;
+	int len = sizeof(hdr) + sizeof(*req), ret;
+
+	skb = mt76_mcu_msg_alloc(&dev->mt76, NULL, len);
+	if (!skb)
+		return -ENOMEM;
+
+	skb_put_data(skb, &hdr, sizeof(hdr));
+	tlv = mt7999_mcu_add_uni_tlv(skb, UNI_MAC_INFO_TSF, sizeof(*req));
+
+	req = (struct mt7999_mcu_mac_info_tsf *)tlv;
+	req->band_idx = phy->mt76->band_idx;
+	req->bss_idx = link->mt76.omac_idx;
+
+	ret = mt76_mcu_skb_send_and_get_msg(&dev->mt76, skb,
+					    MCU_WM_UNI_CMD(GET_MAC_INFO),
+					    true, &rskb);
+	if (ret)
+		return ret;
+
+	skb_pull(rskb, sizeof(hdr));
+	resp = (struct mt7999_mcu_mac_info_tsf_resp *)rskb->data;
+
+	switch (le16_to_cpu(resp->tag)) {
+	case UNI_EVENT_MAC_INFO_TSF:
+		*tsf = (u64)le32_to_cpu(resp->tsf_bit32_63) << 32 |
+		       le32_to_cpu(resp->tsf_bit0_31);
+		break;
+	default:
+		ret = -ENODATA;
+		break;
+	}
+
+	dev_kfree_skb(rskb);
+	return ret;
+}
+
 int mt7999_mcu_get_tsf_offset(struct mt7999_phy *phy,
 			      struct mt7999_vif *mvif,
 			      int rpting_link_id,

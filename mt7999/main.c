@@ -1899,27 +1899,14 @@ mt7999_get_stats(struct ieee80211_hw *hw,
 u64 __mt7999_get_tsf(struct ieee80211_hw *hw, struct mt7999_vif_link *link)
 {
 	struct mt7999_phy *phy = mt7999_vif_link_phy(link);
-	struct mt7999_dev *dev = mt7999_hw_dev(hw);
-	union {
-		u64 t64;
-		u32 t32[2];
-	} tsf;
-	u16 n;
+	u64 tsf = 0;
 
 	if (!phy)
 		return 0;
 
-	lockdep_assert_held(&dev->mt76.mutex);
+	mt7999_mcu_get_tsf(phy, link, &tsf);
 
-	n = link->mt76.omac_idx > HW_BSSID_MAX ? HW_BSSID_0
-					       : link->mt76.omac_idx;
-	/* TSF software read */
-	mt76_rmw(dev, MT_LPON_TCR(phy->mt76->band_idx, n), MT_LPON_TCR_SW_MODE,
-		 MT_LPON_TCR_SW_READ);
-	tsf.t32[0] = mt76_rr(dev, MT_LPON_UTTR0(phy->mt76->band_idx));
-	tsf.t32[1] = mt76_rr(dev, MT_LPON_UTTR1(phy->mt76->band_idx));
-
-	return tsf.t64;
+	return tsf;
 }
 
 static u64

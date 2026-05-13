@@ -1539,6 +1539,8 @@ int mt7999_mcu_set_pp_alg_ctrl(struct mt7999_phy *phy, u8 action);
 int mt7999_mcu_epcs_ctrl(struct mt7999_dev *dev, struct ieee80211_sta *sta,
 			 u8 link_id, bool enable, u16 wmm_idx,
 			 struct mt7999_wmm_params *params);
+int mt7999_mcu_get_tsf(struct mt7999_phy *phy, struct mt7999_vif_link *link,
+		       u64 *tsf);
 int mt7999_mcu_get_tsf_offset(struct mt7999_phy *phy, struct mt7999_vif *mvif,
 			      int rpting_link_id, int rpted_link_id);
 int mt7999_mcu_set_qos_map(struct mt7999_dev *dev, struct ieee80211_vif *vif,
