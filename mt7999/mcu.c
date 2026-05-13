@@ -556,7 +556,8 @@ mt7999_mcu_update_rate(struct rate_info *rate, struct ieee80211_supported_band *
 			tmp_rate.flags |= RATE_INFO_FLAGS_SHORT_GI;
 		break;
 	case MT_PHY_TYPE_VHT:
-		if (mcs > 9)
+		/* FW will use VHT 1024-QAM if the peer can receive */
+		if (mcs > 11)
 			return -EINVAL;
 
 		tmp_rate.flags |= RATE_INFO_FLAGS_VHT_MCS;
@@ -652,8 +653,10 @@ mt7999_mcu_update_trx_rates(struct mt7999_dev *dev, struct mt76_wcid *wcid,
 				     mcu_rate->tx_bw, mcu_rate->tx_mcs,
 				     mcu_rate->tx_nss, mcu_rate->tx_stbc,
 				     mcu_rate->tx_gi);
-	if (ret)
+	if (ret) {
+		dev_err(dev->mt76.dev, "Failed to update TX rate.\n");
 		return ret;
+	}
 
 	/* RX rate */
 	switch (mcu_rate->rx_mode) {
@@ -677,6 +680,9 @@ mt7999_mcu_update_trx_rates(struct mt7999_dev *dev, struct mt76_wcid *wcid,
 				     mcu_rate->rx_bw, mcu_rate->rx_rate,
 				     mcu_rate->rx_nsts + 1, mcu_rate->rx_stbc,
 				     mcu_rate->rx_gi);
+	if (ret)
+		dev_err(dev->mt76.dev, "Failed to update RX rate.\n");
+
 	return ret;
 }
 
@@ -773,8 +779,7 @@ mt7999_mcu_rx_all_sta_info_event(struct mt7999_dev *dev, struct sk_buff *skb)
 			if (!wcid)
 				break;
 
-			if (mt7999_mcu_update_trx_rates(dev, wcid, &res->rate[i]))
-				dev_err(dev->mt76.dev, "Failed to update TX/RX rates.\n");
+			mt7999_mcu_update_trx_rates(dev, wcid, &res->rate[i]);
 			break;
 		case UNI_ALL_STA_TX_STAT:
 			wlan_idx = le16_to_cpu(res->tx_mpdu_stat[i].wlan_idx);
