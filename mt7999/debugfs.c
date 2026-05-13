@@ -1493,6 +1493,8 @@ int mt7999_init_dev_debugfs(struct mt7999_phy *phy)
 	debugfs_create_devm_seqfile(dev->mt76.dev, "airtime", dir,
 				    mt7999_airtime_read);
 
+	/* do not include MURU debug in fwlog by default */
+	dev->fw_debug_muru_disable = true;
 	debugfs_create_file("fw_debug_muru_disable", 0600, dir, dev,
 			    &fops_fw_debug_muru_disable);
 
