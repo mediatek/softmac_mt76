@@ -1462,6 +1462,7 @@ struct mt76_power_limits {
 	s8 mcs[4][10];
 	s8 ru[7][12];
 	s8 eht[16][16];
+	s8 uhr[16][20];
 
 	struct {
 		s8 cck[5];

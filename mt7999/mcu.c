@@ -7814,7 +7814,7 @@ static int mt7999_afc_update_power_limit(struct mt7999_dev *dev,
 					 struct cfg80211_chan_def *chandef)
 {
 	s8 *power_list, bw320_offset, target_power;
-	int table_idx, i, bw, mcs, ru, eht, path;
+	int table_idx, i, bw, mcs, ru, wide_bw, path;
 	s8 bf_offset_ofdm[] = {6, 10, 12, 14};
 	s8 bf_offset[] = {0, 6, 10, 12, 14, 0, 4, 6, 8, 0, 3, 5, 0, 2, 0};
 
@@ -7892,7 +7892,7 @@ static int mt7999_afc_update_power_limit(struct mt7999_dev *dev,
 			continue;
 
 		/* Negative index means doesn't need to update powers of the type. */
-		if (mt7999_get_bw_power_table_idx(bw, &mcs, &ru, &eht, &path))
+		if (mt7999_get_bw_power_table_idx(bw, &mcs, &ru, &wide_bw, &path))
 			return -EINVAL;
 
 		if (mcs >= 0) {
@@ -7906,10 +7906,13 @@ static int mt7999_afc_update_power_limit(struct mt7999_dev *dev,
 				la->ru[ru][i] = min_t(s8, la->ru[ru][i], power_list[bw]);
 		}
 
-		if (eht >= 0) {
+		if (wide_bw >= 0) {
 			for (i = 0; i < sizeof(la->eht[0]); i++)
-				la->eht[eht][i] =
-					min_t(s8, la->eht[eht][i], power_list[bw]);
+				la->eht[wide_bw][i] =
+					min_t(s8, la->eht[wide_bw][i], power_list[bw]);
+			for (i = 0; i < sizeof(la->uhr[0]); i++)
+				la->uhr[wide_bw][i] =
+					min_t(s8, la->uhr[wide_bw][i], power_list[bw]);
 		}
 
 		if (path >= 0) {
@@ -8041,13 +8044,12 @@ int mt7999_mcu_set_txpower_sku(struct mt7999_phy *phy,
 	}
 
 	/* HE RU26, RU52, RU106, RU242, RU484, RU996, and RU2x996 */
-	skb_put_data(skb, &la->ru[0], 84);
-	/* EHT RU26, RU52, RU78, RU106, RU132, RU242, RU484, RU726, RU996, RU1480,
+	skb_put_data(skb, &la->ru[0], sizeof(la->ru));
+	/* EHT/UHR RU26, RU52, RU78, RU106, RU132, RU242, RU484, RU726, RU996, RU1480,
 	 * RU1722, RU1922, RU2476, RU2988, RU3472, and RU3984
 	 */
-	skb_put_data(skb, &la->eht[0], 256);
-
-	/* TODO: add uhr support */
+	skb_put_data(skb, &la->eht[0], sizeof(la->eht));
+	skb_put_data(skb, &la->uhr[0], sizeof(la->uhr));
 
 	ret = mt76_mcu_skb_send_msg(&dev->mt76, skb,
 				    MCU_WM_UNI_CMD(TXPOWER), true);

@@ -605,6 +605,12 @@ s8 mt76_get_rate_power_limits_dts(struct mt76_phy *phy,
 				     ARRAY_SIZE(dest->eht), val, len, target_power,
 				     txs_delta, &max_power, n_chains, MT76_SKU_RATE);
 
+	val = mt76_get_of_array_s8(np, "rates-uhr", &len,
+				   ARRAY_SIZE(dest->uhr[0]) + 1);
+	mt76_apply_multi_array_limit(dev, dest->uhr[0], ARRAY_SIZE(dest->uhr[0]),
+				     ARRAY_SIZE(dest->uhr), val, len, target_power,
+				     txs_delta, &max_power, n_chains, MT76_SKU_RATE);
+
 	val = mt76_get_of_array_s8(np, "paths-cck", &len, ARRAY_SIZE(dest->path.cck));
 	mt76_apply_array_limit(dev, dest->path.cck, ARRAY_SIZE(dest->path.cck), val,
 			       target_power, txs_delta, &max_power, n_chains, MT76_SKU_BACKOFF);
@@ -874,7 +880,7 @@ mt76_apply_file_multi_limit(struct mt76_dev *dev, s8 *pwr, size_t pwr_len, size_
 			type = MT76_SKU_BACKOFF_BF_OFFSET;
 
 		mt76_apply_file_limit(dev, pwr + pwr_len * i, pwr_len, target_power,
-				nss_delta, max_power, n_chains, type);
+				      nss_delta, max_power, n_chains, type);
 	}
 }
 
@@ -915,6 +921,7 @@ mt76_parse_file_chan_power(const char *section, size_t section_len,
 		parse_power_2d("rates-mcs=", dest->mcs)
 		parse_power_2d("rates-ru=", dest->ru)
 		parse_power_2d("rates-eht=", dest->eht)
+		parse_power_2d("rates-uhr=", dest->uhr)
 
 		/* parse backoff table */
 		parse_power("paths-cck=", dest->path.cck)
@@ -1047,6 +1054,7 @@ s8 mt76_get_rate_power_limits_file(struct mt76_phy *phy,
 		__apply_multi_array_limit(dest->mcs, MT76_SKU_RATE);
 		__apply_multi_array_limit(dest->ru, MT76_SKU_RATE);
 		__apply_multi_array_limit(dest->eht, MT76_SKU_RATE);
+		__apply_multi_array_limit(dest->uhr, MT76_SKU_RATE);
 
 		__apply_array_limit(dest->path.cck, MT76_SKU_BACKOFF);
 		__apply_array_limit(dest->path.ofdm, MT76_SKU_BACKOFF);
