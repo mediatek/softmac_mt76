@@ -45,9 +45,9 @@ EXPORT_SYMBOL_GPL(____mt76_poll_msec);
 int __mt76_wcid_alloc(u32 *mask, int min, int size)
 {
 	u32 min_mask = ~0;
-	int i, idx = 0, cur;
+	int i, idx = 0, cur, shift = min / 32;
 
-	mask += min / 32;
+	mask += shift;
 	min %= 32;
 	if (min > 0)
 		min_mask = ~((1 << min) - 1);
@@ -64,7 +64,7 @@ int __mt76_wcid_alloc(u32 *mask, int min, int size)
 			break;
 
 		mask[i] |= BIT(idx);
-		return cur;
+		return shift * 32 + cur;
 	}
 
 	return -1;

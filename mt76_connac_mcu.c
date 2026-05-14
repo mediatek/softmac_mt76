@@ -3041,6 +3041,9 @@ int mt76_connac2_load_ram(struct mt76_dev *dev, const char *fw_wm,
 		goto out;
 	}
 
+	dev->wm_hdr = devm_kzalloc(dev->dev, sizeof(*hdr), GFP_KERNEL);
+	memcpy(dev->wm_hdr, hdr, sizeof(*hdr));
+
 	snprintf(dev->hw->wiphy->fw_version,
 		 sizeof(dev->hw->wiphy->fw_version),
 		 "%.10s-%.15s", hdr->fw_ver, hdr->build_date);
@@ -3069,6 +3072,9 @@ int mt76_connac2_load_ram(struct mt76_dev *dev, const char *fw_wm,
 		dev_err(dev->dev, "Failed to start WA firmware\n");
 		goto out;
 	}
+
+	dev->wa_hdr = devm_kzalloc(dev->dev, sizeof(*hdr), GFP_KERNEL);
+	memcpy(dev->wa_hdr, hdr, sizeof(*hdr));
 
 	snprintf(dev->hw->wiphy->fw_version,
 		 sizeof(dev->hw->wiphy->fw_version),
@@ -3139,6 +3145,9 @@ int mt76_connac2_load_patch(struct mt76_dev *dev, const char *fw_name)
 	hdr = (const void *)fw->data;
 	dev_info(dev->dev, "HW/SW Version: 0x%x, Build Time: %.16s",
 		 be32_to_cpu(hdr->hw_sw_ver), hdr->build_date);
+
+	dev->patch_hdr = devm_kzalloc(dev->dev, sizeof(*hdr), GFP_KERNEL);
+	memcpy(dev->patch_hdr, hdr, sizeof(*hdr));
 
 	for (i = 0; i < be32_to_cpu(hdr->desc.n_region); i++) {
 		struct mt76_connac2_patch_sec *sec;
@@ -3257,7 +3266,9 @@ int mt76_connac2_mcu_fill_message(struct mt76_dev *dev, struct sk_buff *skb,
 		mcu_txd->set_query = MCU_Q_NA;
 	}
 
-	if (cmd & __MCU_CMD_FIELD_WA)
+	if (cmd == MCU_EXT_CMD(PS_CTRL))
+		mcu_txd->s2d_index = MCU_S2D_H2CN;
+	else if (cmd & __MCU_CMD_FIELD_WA)
 		mcu_txd->s2d_index = MCU_S2D_H2C;
 	else
 		mcu_txd->s2d_index = MCU_S2D_H2N;

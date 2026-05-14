@@ -61,7 +61,7 @@
 #define MT76_TOKEN_FREE_THR	64
 
 #define MT76_WED_WDS_MIN	256
-#define MT76_WED_WDS_MAX	272
+#define MT76_WED_WDS_SIZE	16
 
 #define MT_QFLAG_WED_RING	GENMASK(1, 0)
 #define MT_QFLAG_WED_TYPE	GENMASK(4, 2)
@@ -373,6 +373,7 @@ enum mt76_phy_type {
 	MT_PHY_TYPE_HT_GF,
 	MT_PHY_TYPE_VHT,
 	MT_PHY_TYPE_PLR, /* Proprietary Long Range */
+	MT_PHY_TYPE_HE_REMAP = MT_PHY_TYPE_PLR,
 	MT_PHY_TYPE_HE_SU = 8,
 	MT_PHY_TYPE_HE_EXT_SU,
 	MT_PHY_TYPE_HE_TB,
@@ -393,6 +394,7 @@ struct mt76_sta_stats {
 	u64 tx_bytes_per_ac[IEEE80211_NUM_ACS];
 	u64 tx_bytes_failed;
 	u64 tx_bytes_failed_per_ac[IEEE80211_NUM_ACS];
+	u64 last_tx_bytes;
 	/* WED TX */
 	u32 tx_packets;		/* unit: MSDU */
 	u32 tx_packets_retried;
@@ -401,6 +403,8 @@ struct mt76_sta_stats {
 	u32 tx_retries;
 	u32 tx_failed;
 	u64 tx_airtime;
+	u32 tx_mpdu_cnt;
+	u32 tx_failed_wm;
 	/* WED RX */
 	u64 rx_bytes;
 	u64 rx_bytes_per_ac[IEEE80211_NUM_ACS];
@@ -410,6 +414,7 @@ struct mt76_sta_stats {
 	u32 rx_errors;
 	u32 rx_drops;
 	u64 rx_airtime;
+	u64 last_rx_bytes;
 };
 
 enum mt76_wcid_flags {
@@ -433,6 +438,7 @@ DECLARE_EWMA(signal, 10, 8);
 #define MT_WCID_TX_INFO_TXPWR_ADJ	GENMASK(25, 18)
 #define MT_WCID_TX_INFO_SET		BIT(31)
 
+#define ADDBA_RETRY_PERIOD		(5 * HZ)
 struct mt76_wcid {
 	struct mt76_rx_tid __rcu *aggr[IEEE80211_NUM_TIDS];
 
@@ -445,7 +451,13 @@ struct mt76_wcid {
 	struct rate_info rate;
 	struct rate_info rx_rate;
 
+	/*
+	 * For connac2:
+	 * Bit 0 - 15: ADDBA of TID n started
+	 * Bit 16 - 31: ADDBA of TID n succeeded
+	 */
 	unsigned long ampdu_state;
+	unsigned long last_addba_req_time[IEEE80211_NUM_TIDS];
 
 	u16 idx;
 	u8 hw_key_idx;
@@ -1129,6 +1141,8 @@ struct mt76_phy {
 	u8 macaddr[ETH_ALEN];
 
 	int txpower_cur;
+	u8 beacon_dup;
+	u8 mgmt_pwr_enhance;
 	u8 sku_idx;
 	char sku_filename[SKU_FILENAME_MAX];
 	u8 antenna_mask;
@@ -1192,6 +1206,9 @@ struct mt76_dev {
 	struct device *dma_dev;
 
 	struct mt76_mcu mcu;
+	struct mt76_connac2_patch_hdr *patch_hdr;
+	struct mt76_connac2_fw_trailer *wm_hdr;
+	struct mt76_connac2_fw_trailer *wa_hdr;
 
 	struct net_device *napi_dev;
 	struct net_device *tx_napi_dev;

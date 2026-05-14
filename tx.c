@@ -895,7 +895,7 @@ int mt76_token_consume(struct mt76_dev *dev, struct mt76_txwi_cache **ptxwi,
 
 	spin_lock_bh(&dev->token_lock);
 
-	if (phy->tokens >= dev->token_threshold)
+	if (dev->token_threshold && phy->tokens >= dev->token_threshold)
 		goto out;
 
 	token = idr_alloc(&dev->token, *ptxwi, dev->token_start,
