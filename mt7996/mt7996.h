@@ -178,7 +178,6 @@
 #define MT7996_MAX_PROBE_TRIES		2
 
 #define IP_DSCP_NUM			64
-#define ADDBA_RETRY_PERIOD		(5 * HZ)
 
 #define MT7996_HW_DROP_STAT	4
 #define MT7996_HW_DROP_REASON	0x20
@@ -457,8 +456,6 @@ struct mt7996_sta {
 	struct mt7996_vif *vif;
 
 	bool stop_rx_ba_in_progress;
-
-	unsigned long last_addba_req_time[IEEE80211_NUM_TIDS];
 };
 
 struct mt7996_vif_link {

@@ -91,6 +91,8 @@
 
 #define MT7915_BUILD_TIME_LEN		24
 
+#define AMPDU_ADDBA_SUCC_SHFT IEEE80211_NUM_TIDS
+
 struct mt7915_vif;
 struct mt7915_sta;
 struct mt7915_dfs_pulse;

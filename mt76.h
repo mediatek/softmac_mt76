@@ -91,8 +91,6 @@
 				 FIELD_PREP(MT_QFLAG_WED_RING, _n))
 #define SKU_FILENAME_MAX	64
 
-#define AMPDU_ADDBA_SUCC_SHFT IEEE80211_NUM_TIDS
-
 struct mt76_dev;
 struct mt76_phy;
 struct mt76_wcid;
@@ -454,8 +452,9 @@ struct mt76_wcid {
 	struct rate_info rx_rate;
 
 	/*
-	 *Bit 0 - 15: ADDBA of TID n started
-	 *Bit 16 - 31: ADDBA of TID n succeeded
+	 * For connac2:
+	 * Bit 0 - 15: ADDBA of TID n started
+	 * Bit 16 - 31: ADDBA of TID n succeeded
 	 */
 	unsigned long ampdu_state;
 	unsigned long last_addba_req_time[IEEE80211_NUM_TIDS];

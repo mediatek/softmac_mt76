@@ -114,7 +114,6 @@
 #define MT7999_MAX_PROBE_TRIES		2
 
 #define IP_DSCP_NUM			64
-#define ADDBA_RETRY_PERIOD		(5 * HZ)
 
 #define MT7999_HW_DROP_STAT	4
 #define MT7999_HW_DROP_REASON	0x20
@@ -416,8 +415,6 @@ struct mt7999_sta {
 	struct mt7999_vif *vif;
 
 	bool stop_rx_ba_in_progress;
-
-	unsigned long last_addba_req_time[IEEE80211_NUM_TIDS];
 };
 
 struct mt7999_vif_link {

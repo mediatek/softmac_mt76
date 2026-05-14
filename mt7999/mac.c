@@ -1170,8 +1170,6 @@ static void
 mt7999_tx_check_aggr(struct ieee80211_link_sta *link_sta,
 		     struct mt76_wcid *wcid, struct sk_buff *skb, u8 tid)
 {
-	struct mt7999_sta *msta;
-
 	if (!(link_sta->ht_cap.ht_supported || link_sta->he_cap.has_he))
 		return;
 
@@ -1207,13 +1205,12 @@ mt7999_tx_check_aggr(struct ieee80211_link_sta *link_sta,
 		return;
 	}
 
-	msta = (struct mt7999_sta *)link_sta->sta->drv_priv;
-	if (!msta->last_addba_req_time[tid] ||
-	    time_after(jiffies, msta->last_addba_req_time[tid] + ADDBA_RETRY_PERIOD)) {
+	if (!wcid->last_addba_req_time[tid] ||
+	    time_after(jiffies, wcid->last_addba_req_time[tid] + ADDBA_RETRY_PERIOD)) {
 		set_bit(tid, &wcid->ampdu_state);
 		if (ieee80211_start_tx_ba_session(link_sta->sta, tid, 0))
 			clear_bit(tid, &wcid->ampdu_state);
-		msta->last_addba_req_time[tid] = jiffies;
+		wcid->last_addba_req_time[tid] = jiffies;
 	}
 }
 
