@@ -69,6 +69,8 @@ enum mt7915_eeprom_field {
 #define MT_EE_RATE_DELTA_SIGN			BIT(6)
 #define MT_EE_RATE_DELTA_EN			BIT(7)
 
+#define MT_EE_ADIE1_BASE_7896			0x1000
+
 enum mt7915_adie_sku {
 	MT7976_ONE_ADIE_DBDC = 0x7,
 	MT7975_ONE_ADIE	= 0x8,
@@ -108,6 +110,13 @@ enum mt7915_sku_rate_group {
 	SKU_HE_RU996,
 	SKU_HE_RU2x996,
 	MAX_SKU_RATE_GROUP_NUM,
+};
+
+enum mt7915_eeprom_mode {
+	DEFAULT_BIN_MODE,
+	EFUSE_MODE,
+	FLASH_MODE,
+	BIN_FILE_MODE,
 };
 
 static inline int

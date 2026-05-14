@@ -8,6 +8,13 @@
 #include "mac.h"
 
 #define FW_BIN_LOG_MAGIC	0x44e98caf
+#ifdef MTK_DEBUG
+#define FW_BIN_LOG_MAGIC_V2	0x44d9c99a
+#endif
+
+#define MAC2STR(a) (a)[0], (a)[1], (a)[2], (a)[3], (a)[4], (a)[5]
+#define MACSTR "%02x:%02x:%02x:%02x:%02x:%02x"
+
 
 /** global debugfs **/
 
@@ -79,8 +86,10 @@ mt7915_sys_recovery_set(struct file *file, const char __user *user_buf,
 	 * 4: trigger & enable system error L3 tx abort
 	 * 5: trigger & enable system error L3 tx disable.
 	 * 6: trigger & enable system error L3 bf recovery.
-	 * 7: trigger & enable system error full recovery.
-	 * 8: trigger firmware crash.
+	 * 8: trigger & enable system error full recovery.
+	 * 9: trigger firmware crash.
+	 * 10: trigger grab wa firmware coredump.
+	 * 11: trigger grab wm firmware coredump.
 	 */
 	case SER_QUERY:
 		ret = mt7915_mcu_set_ser(dev, 0, 0, band);
@@ -105,7 +114,7 @@ mt7915_sys_recovery_set(struct file *file, const char __user *user_buf,
 		if (ret)
 			return ret;
 
-		dev->recovery.state |= MT_MCU_CMD_WDT_MASK;
+		dev->recovery.state |= MT_MCU_CMD_WM_WDT;
 		mt7915_reset(dev);
 		break;
 
@@ -114,6 +123,12 @@ mt7915_sys_recovery_set(struct file *file, const char __user *user_buf,
 		mt76_wr(dev, MT_MCU_WM_CIRQ_EINT_MASK_CLR_ADDR, BIT(18));
 		mt76_wr(dev, MT_MCU_WM_CIRQ_EINT_SOFT_ADDR, BIT(18));
 		break;
+
+	case SER_SET_FW_COREDUMP_WA:
+		mt7915_coredump(dev, MT7915_COREDUMP_MANUAL_WA);
+		break;
+	case SER_SET_FW_COREDUMP_WM:
+		mt7915_coredump(dev, MT7915_COREDUMP_MANUAL_WM);
 	default:
 		break;
 	}
@@ -154,9 +169,13 @@ mt7915_sys_recovery_get(struct file *file, char __user *user_buf,
 	desc += scnprintf(buff + desc, bufsz - desc,
 			  "6: trigger system error L3 bf recovery\n");
 	desc += scnprintf(buff + desc, bufsz - desc,
-			  "7: trigger system error full recovery\n");
+			  "8: trigger system error full recovery\n");
 	desc += scnprintf(buff + desc, bufsz - desc,
-			  "8: trigger firmware crash\n");
+			  "9: trigger firmware crash\n");
+	desc += scnprintf(buff + desc, bufsz - desc,
+			  "10: trigger grab wa firmware coredump\n");
+	desc += scnprintf(buff + desc, bufsz - desc,
+			  "11: trigger grab wm firmware coredump\n");
 
 	/* SER statistics */
 	desc += scnprintf(buff + desc, bufsz - desc,
@@ -204,6 +223,357 @@ mt7915_sys_recovery_get(struct file *file, char __user *user_buf,
 static const struct file_operations mt7915_sys_recovery_ops = {
 	.write = mt7915_sys_recovery_set,
 	.read = mt7915_sys_recovery_get,
+	.open = simple_open,
+	.llseek = default_llseek,
+};
+
+static ssize_t mt7915_vow_get(struct file *file, char __user *user_buf,
+                              size_t count, loff_t *ppos)
+{
+	char *buff;
+	int desc = 0;
+	ssize_t ret;
+	static const size_t bufsz = 1000;
+
+	buff = kmalloc(bufsz, GFP_KERNEL);
+	if (!buff)
+		return -ENOMEM;
+
+	desc += scnprintf(buff + desc, bufsz - desc,
+			  "======== Control =============\n"
+			  "vow_atf_en=<0/1> 0:disable, 1:enable\n"
+			  "vow_watf_en=<0/1> 0:disable, 1:enable\n"
+			  "vow_watf_quantum=<level>-<quantum> unit 256us\n"
+			  "======== Station table =============\n"
+			  "vow_sta_dwrr_quantum_id=<wlanidx>-<WMM AC>-<Qid>\n"
+			  "vow_dwrr_max_wait_time=<time> 256us\n"
+			  "======== Debug =============\n"
+			  "vow_show_en=<0/1> 0:dieable, 1:enable\n"
+			  "vow_show_sta=<STA num>\n"
+			  "show_vow_info\n"
+			  "show_vow_sta_conf=<STA num> 0:all\n");
+	ret = simple_read_from_buffer(user_buf, count, ppos, buff, desc);
+	kfree(buff);
+	return ret;
+}
+
+static int mt7915_set_vow_sta_dwrr_quantum_id(struct mt7915_dev *dev,
+                                              u32 wcid_id,
+                                              u32 ac, u32 val)
+{
+	struct mt7915_sta *msta;
+	struct mt76_wcid *wcid;
+	int ret;
+
+	wcid = rcu_dereference(dev->mt76.wcid[wcid_id]);
+	if ((!wcid) || (!wcid->sta)) {
+		dev_err(dev->mt76.dev, "%s: error station.\n", __func__);
+		return 0;
+	}
+
+	msta = container_of(wcid, struct mt7915_sta, wcid);
+
+	msta->vow_sta_cfg.dwrr_quantum[ac] = val;
+
+	ret = mt7915_mcu_set_vow_drr_ctrl(dev, msta, VOW_DRR_STA_AC0_QUA_ID + ac);
+	dev_info(dev->mt76.dev, "%s: set sta %d, ac %d, quantum id %u.\n",
+                 __func__, wcid_id, ac, val);
+
+	return ret;
+}
+
+static int mt7915_set_vow_atf_en(struct mt7915_dev *dev, u32 val)
+{
+	int ret;
+
+	dev->vow_cfg.vow_atf_en = !!val;
+	dev->vow_cfg.sta_max_wait_time = val ? 0x40 : 0x1;
+	ret = mt7915_mcu_set_vow_feature_ctrl(dev);
+        dev_info(dev->mt76.dev, "%s: set vow_atf_en %u.\n",
+                 __func__, val);
+
+	ret = mt7915_mcu_set_vow_drr_ctrl(dev, NULL,
+                                          VOW_DRR_AIRTIME_DEFICIT_BOUND);
+	dev_info(dev->mt76.dev, "%s: set vow_dwrr_max_wait_time %u.\n",
+                 __func__, dev->vow_cfg.sta_max_wait_time);
+
+	return ret;
+}
+
+static int mt7915_set_vow_dwrr_max_wait_time(struct mt7915_dev *dev,
+                                             u32 val)
+{
+	int ret;
+
+	dev->vow_cfg.sta_max_wait_time = val;
+	ret = mt7915_mcu_set_vow_drr_ctrl(dev, NULL,
+		                          VOW_DRR_AIRTIME_DEFICIT_BOUND);
+	dev_info(dev->mt76.dev, "%s: set vow_dwrr_max_wait_time %u.\n",
+		 __func__, val);
+
+	return ret;
+}
+
+static int mt7915_set_vow_watf_en(struct mt7915_dev *dev, u32 val)
+{
+	int ret;
+
+	dev->vow_cfg.vow_watf_en = !!val;
+	ret = mt7915_mcu_set_vow_feature_ctrl(dev);
+	dev_info(dev->mt76.dev, "%s: set vow_watf_en %u.\n", __func__, val);
+
+	return ret;
+}
+
+static int mt7915_set_vow_watf_quantum(struct mt7915_dev *dev,
+                                       u32 id, u32 val)
+{
+	int ret;
+
+	dev->vow_cfg.vow_sta_dwrr_quantum[id] = val;
+	ret = mt7915_mcu_set_vow_drr_ctrl(dev, NULL,
+				          VOW_DRR_AIRTIME_QUANTUM_L0 + id);
+	dev_info(dev->mt76.dev, "%s: set quantum id %u, val %d.\n",
+                 __func__, id, val);
+
+	return ret;
+}
+
+static void mt7915_show_station_tx_airtime(struct work_struct *work){
+	struct mt7915_dev *dev = container_of(work, struct mt7915_dev,
+					      vow_work.work);
+	static u32 vow_last_tx_time[MT7916_WTBL_SIZE];
+	struct ieee80211_sta *ieee80211_sta;
+	struct mt7915_sta *msta;
+	struct mt76_wcid *wcid;
+	int idx = 0;
+	int i = 0;
+	u32 addr;
+	int tx_airtime_sum = 0;
+	int tx_add_airtime = 0;
+
+	if (!dev->vow_cfg.vow_show_en)
+		return;
+
+	rcu_read_lock();
+	for (idx = 1; (idx < dev->vow_cfg.vow_show_sta) &&
+	     (idx < MT7915_WTBL_STA); idx++) {
+		if (idx >= ARRAY_SIZE(dev->mt76.wcid))
+			return;
+
+		wcid = rcu_dereference(dev->mt76.wcid[idx]);
+		if (!wcid || !wcid->sta)
+			continue;
+
+		msta = container_of(wcid, struct mt7915_sta, wcid);
+		addr = mt7915_mac_wtbl_lmac_addr(dev, idx, 20);
+		tx_airtime_sum = 0;
+
+		for (i = 0; i < IEEE80211_NUM_ACS; i++) {
+			tx_airtime_sum += mt76_rr(dev, addr);
+			addr += 8;
+		}
+		tx_add_airtime = tx_airtime_sum - vow_last_tx_time[idx];
+		vow_last_tx_time[idx] = tx_airtime_sum;
+
+		ieee80211_sta = container_of((void *)msta, struct ieee80211_sta,
+					     drv_priv);
+
+		dev_info(dev->mt76.dev, "sta%u:" MACSTR " tx -> %u)\n",
+                         idx, MAC2STR(ieee80211_sta->addr), tx_add_airtime);
+	}
+	mt7915_vow_pleinfo_read(dev);
+	ieee80211_queue_delayed_work(mt76_hw(dev), &dev->vow_work, 1 * HZ);
+	rcu_read_unlock();
+	return;
+}
+
+
+static int mt7915_set_vow_show_en(struct mt7915_dev *dev, u32 val)
+{
+	if (!!dev->vow_cfg.vow_show_en == !!val)
+		return 0;
+	dev->vow_cfg.vow_show_en = val;
+	mt7915_mcu_set_vow_feature_ctrl(dev);
+	if (dev->vow_cfg.vow_show_en) {
+		INIT_DELAYED_WORK(&dev->vow_work, mt7915_show_station_tx_airtime);
+		ieee80211_queue_delayed_work(mt76_hw(dev), &dev->vow_work, 1 * HZ);
+	}
+	else {
+		cancel_delayed_work_sync(&dev->vow_work);
+	}
+	return 0;
+}
+
+static int mt7915_set_vow_show_sta(struct mt7915_dev *dev, u32 val)
+{
+	dev->vow_cfg.vow_show_sta = val;
+	dev_info(dev->mt76.dev, "%s: show station up to %d.\n",
+		 __func__, dev->vow_cfg.vow_show_sta);
+	return 0;
+}
+static int mt7915_set_show_vow_info(struct mt7915_dev *dev)
+{
+	dev_info(dev->mt76.dev, "====== VOW Control Information ======\n");
+	dev_info(dev->mt76.dev, "ATF Enbale: %d\n",
+                 dev->vow_cfg.vow_atf_en);
+	dev_info(dev->mt76.dev, "WATF Enable: %d\n",
+                 dev->vow_cfg.vow_watf_en);
+	dev_info(dev->mt76.dev, "refill_period: %d\n",
+                 dev->vow_cfg.refill_period);
+	dev_info(dev->mt76.dev, "===== VOW Max Deficit Information =====\n");
+	dev_info(dev->mt76.dev, "VOW Max Deficit(unit 256us): %d\n",
+                 dev->vow_cfg.sta_max_wait_time);
+	dev_info(dev->mt76.dev, "===== VOW Quantum Information =====\n");
+	dev_info(dev->mt76.dev, "Quantum ID 0 value(unit 256us): %d\n",
+                 dev->vow_cfg.vow_sta_dwrr_quantum[0]);
+	dev_info(dev->mt76.dev, "Quantum ID 1 value(unit 256us): %d\n",
+                 dev->vow_cfg.vow_sta_dwrr_quantum[1]);
+	dev_info(dev->mt76.dev, "Quantum ID 2 value(unit 256us): %d\n",
+                 dev->vow_cfg.vow_sta_dwrr_quantum[2]);
+	dev_info(dev->mt76.dev, "Quantum ID 3 value(unit 256us): %d\n",
+                 dev->vow_cfg.vow_sta_dwrr_quantum[3]);
+	return 0;
+}
+
+static int mt7915_show_vow_sta_conf(struct mt7915_dev *dev, u32 val)
+{
+	struct ieee80211_sta *ieee80211_sta;
+	struct mt7915_sta *msta;
+	struct mt76_wcid *wcid;
+	u32 i;
+	u8 q;
+
+	if (val > 0 && val < MT7915_WTBL_STA) {
+		wcid = rcu_dereference(dev->mt76.wcid[val]);
+		if (!wcid || !wcid->sta)
+			return 0;
+		msta = container_of(wcid, struct mt7915_sta, wcid);
+		ieee80211_sta = container_of((void *)msta, struct ieee80211_sta,
+					     drv_priv);
+		dev_info(dev->mt76.dev, "%s: ****** sta%d: "MACSTR"******\n",
+			 __func__, val, MAC2STR(ieee80211_sta->addr));
+		q = msta->vow_sta_cfg.dwrr_quantum[IEEE80211_AC_VO];
+		dev_info(dev->mt76.dev, "Ac0 --> %uus(%u)\n",
+			 (dev->vow_cfg.vow_sta_dwrr_quantum[q] << 8), q);
+		q = msta->vow_sta_cfg.dwrr_quantum[IEEE80211_AC_VI];
+		dev_info(dev->mt76.dev, "Ac1 --> %uus(%u)\n",
+			 (dev->vow_cfg.vow_sta_dwrr_quantum[q] << 8), q);
+		q = msta->vow_sta_cfg.dwrr_quantum[IEEE80211_AC_BE];
+		dev_info(dev->mt76.dev, "Ac2 --> %uus(%u)\n",
+			 (dev->vow_cfg.vow_sta_dwrr_quantum[q] << 8), q);
+		q = msta->vow_sta_cfg.dwrr_quantum[IEEE80211_AC_BK];
+		dev_info(dev->mt76.dev, "Ac3 --> %uus(%u)\n",
+			 (dev->vow_cfg.vow_sta_dwrr_quantum[q] << 8), q);
+	}
+	else{
+		for (i = 1; i < MT7915_WTBL_STA; i++) {
+			wcid = rcu_dereference(dev->mt76.wcid[i]);
+			if (!wcid || !wcid->sta)
+				continue;
+			msta = container_of(wcid, struct mt7915_sta, wcid);
+			ieee80211_sta = container_of((void *)msta, struct ieee80211_sta,
+						     drv_priv);
+			dev_info(dev->mt76.dev, "%s: ****** sta%d: "MACSTR"******\n",
+				 __func__, i, MAC2STR(ieee80211_sta->addr));
+			q = msta->vow_sta_cfg.dwrr_quantum[IEEE80211_AC_VO];
+			dev_info(dev->mt76.dev, "Ac0 --> %uus(%u)\n",
+				 (dev->vow_cfg.vow_sta_dwrr_quantum[q] << 8), q);
+			q = msta->vow_sta_cfg.dwrr_quantum[IEEE80211_AC_VI];
+			dev_info(dev->mt76.dev, "Ac1 --> %uus(%u)\n",
+				 (dev->vow_cfg.vow_sta_dwrr_quantum[q] << 8), q);
+			q = msta->vow_sta_cfg.dwrr_quantum[IEEE80211_AC_BE];
+			dev_info(dev->mt76.dev, "Ac2 --> %uus(%u)\n",
+				 (dev->vow_cfg.vow_sta_dwrr_quantum[q] << 8), q);
+			q = msta->vow_sta_cfg.dwrr_quantum[IEEE80211_AC_BK];
+			dev_info(dev->mt76.dev, "Ac3 --> %uus(%u)\n",
+				 (dev->vow_cfg.vow_sta_dwrr_quantum[q] << 8), q);
+		}
+	}
+	return 0;
+}
+
+static ssize_t
+mt7915_vow_set(struct file *file, const char __user *user_buf,
+	       size_t count, loff_t *ppos)
+{
+	struct mt7915_phy *phy = file->private_data;
+	struct mt7915_dev *dev = phy->dev;
+	u32 param1, param2, param3;
+	char buf[64];
+	int ret;
+
+	if (count >= sizeof(buf))
+		return -EINVAL;
+
+	if (copy_from_user(buf, user_buf, count))
+		return -EFAULT;
+
+	if (count && buf[count - 1] == '\n')
+		buf[count - 1] = '\0';
+	else
+		buf[count] = '\0';
+
+	if (!strncmp(buf, "vow_sta_dwrr_quantum_id", strlen("vow_sta_dwrr_quantum_id"))) {
+		ret = sscanf(buf, "vow_sta_dwrr_quantum_id=%u-%u-%u",
+		             &param1, &param2, &param3);
+		if (ret != 3 || param2 >= IEEE80211_NUM_ACS || param3 >= VOW_WATF_LEVEL_NUM)
+			return -EINVAL;
+
+		ret = mt7915_set_vow_sta_dwrr_quantum_id(dev, param1, param2, param3);
+	} else if (!strncmp(buf, "vow_atf_en", strlen("vow_atf_en"))) {
+		ret = sscanf(buf, "vow_atf_en=%u", &param1);
+		if (ret != 1)
+			return -EINVAL;
+
+		ret = mt7915_set_vow_atf_en(dev, param1);
+	} else if (!strncmp(buf, "vow_dwrr_max_wait_time", strlen("vow_dwrr_max_wait_time"))) {
+		ret = sscanf(buf, "vow_dwrr_max_wait_time=%u", &param1);
+		if (ret != 1)
+			return -EINVAL;
+
+		ret = mt7915_set_vow_dwrr_max_wait_time(dev, param1);
+	} else if (!strncmp(buf, "vow_watf_en", strlen("vow_watf_en"))) {
+		ret = sscanf(buf, "vow_watf_en=%u", &param1);
+		if (ret != 1)
+			return -EINVAL;
+
+		ret = mt7915_set_vow_watf_en(dev, param1);
+	} else if (!strncmp(buf, "vow_watf_quantum", strlen("vow_watf_quantum"))) {
+		ret = sscanf(buf, "vow_watf_quantum=%u-%u", &param1, &param2);
+		if (!dev->vow_cfg.vow_watf_en || ret != 2 || param1 >= VOW_WATF_LEVEL_NUM)
+			return -EINVAL;
+
+		ret = mt7915_set_vow_watf_quantum(dev, param1, param2);
+	} else if (!strncmp(buf, "vow_show_en", strlen("vow_show_en"))) {
+		ret = sscanf(buf, "vow_show_en=%u", &param1);
+		if (ret != 1)
+			return -EINVAL;
+
+		ret = mt7915_set_vow_show_en(dev, param1);
+	} else if (!strncmp(buf, "vow_show_sta", strlen("vow_show_sta"))) {
+		ret = sscanf(buf, "vow_show_sta=%u", &param1);
+		if (ret != 1 || param1 >= MT7915_WTBL_STA)
+			return -EINVAL;
+
+		ret = mt7915_set_vow_show_sta(dev, param1);
+	} else if (!strncmp(buf, "show_vow_info", strlen("show_vow_info")))
+		ret = mt7915_set_show_vow_info(dev);
+	else if (!strncmp(buf, "show_vow_sta_conf", strlen("show_vow_sta_conf"))) {
+		ret = sscanf(buf, "show_vow_sta_conf=%u", &param1);
+		if (ret != 1 || param1 >= MT7915_WTBL_STA)
+			return -EINVAL;
+
+		ret = mt7915_show_vow_sta_conf(dev, param1);
+	} else
+		return -EINVAL;
+
+	return ret ? ret : count;
+}
+
+static const struct file_operations mt7915_vow_ops = {
+	.write = mt7915_vow_set,
+	.read = mt7915_vow_get,
 	.open = simple_open,
 	.llseek = default_llseek,
 };
@@ -517,6 +887,9 @@ mt7915_fw_debug_wm_set(void *data, u64 val)
 	int ret;
 
 	dev->fw.debug_wm = val ? MCU_FW_LOG_TO_HOST : 0;
+#ifdef MTK_DEBUG
+	dev->fw.debug_wm = val;
+#endif
 
 	if (dev->fw.debug_bin)
 		val = 16;
@@ -541,6 +914,9 @@ mt7915_fw_debug_wm_set(void *data, u64 val)
 		if (ret)
 			goto out;
 	}
+#ifdef MTK_DEBUG
+	mt7915_mcu_fw_dbg_ctrl(dev, 68, !!val);
+#endif
 
 	/* WM CPU info record control */
 	mt76_clear(dev, MT_CPU_UTIL_CTRL, BIT(0));
@@ -548,6 +924,12 @@ mt7915_fw_debug_wm_set(void *data, u64 val)
 		(dev->fw.debug_wm ? 0 : BIT(0)));
 	mt76_wr(dev, MT_MCU_WM_CIRQ_IRQ_MASK_CLR_ADDR, BIT(5));
 	mt76_wr(dev, MT_MCU_WM_CIRQ_IRQ_SOFT_ADDR, BIT(5));
+
+#ifdef MTK_DEBUG
+	if (dev->fw.debug_bin & BIT(3))
+		/* use bit 7 to indicate v2 magic number */
+		dev->fw.debug_wm |= BIT(7);
+#endif
 
 out:
 	if (ret)
@@ -561,7 +943,11 @@ mt7915_fw_debug_wm_get(void *data, u64 *val)
 {
 	struct mt7915_dev *dev = data;
 
-	*val = dev->fw.debug_wm;
+#ifdef MTK_DEBUG
+	*val = dev->fw.debug_wm & ~BIT(7);
+#else
+	val = dev->fw.debug_wm;
+#endif
 
 	return 0;
 }
@@ -575,7 +961,11 @@ mt7915_fw_debug_wa_set(void *data, u64 val)
 	struct mt7915_dev *dev = data;
 	int ret;
 
-	dev->fw.debug_wa = val ? MCU_FW_LOG_TO_HOST : 0;
+	/* bit 0: log to uart, bit 1: log to Host */
+	if (val > 3)
+		return -EINVAL;
+
+	dev->fw.debug_wa = val;
 
 	ret = mt7915_mcu_fw_log_2_host(dev, MCU_FW_LOG_WA, dev->fw.debug_wa);
 	if (ret)
@@ -636,15 +1026,29 @@ mt7915_fw_debug_bin_set(void *data, u64 val)
 	};
 	struct mt7915_dev *dev = data;
 
-	if (!dev->relay_fwlog)
+	if (!dev->relay_fwlog && val) {
 		dev->relay_fwlog = relay_open("fwlog_data", dev->debugfs_dir,
 					    1500, 512, &relay_cb, NULL);
-	if (!dev->relay_fwlog)
-		return -ENOMEM;
+		if (!dev->relay_fwlog)
+			return -ENOMEM;
+	}
 
 	dev->fw.debug_bin = val;
 
 	relay_reset(dev->relay_fwlog);
+
+#ifdef MTK_DEBUG
+	dev->dbg.dump_mcu_pkt = val & BIT(4) ? true : false;
+	dev->dbg.dump_txd = val & BIT(5) ? true : false;
+	dev->dbg.dump_tx_pkt = val & BIT(6) ? true : false;
+	dev->dbg.dump_rx_pkt = val & BIT(7) ? true : false;
+	dev->dbg.dump_rx_raw = val & BIT(8) ? true : false;
+#endif
+
+	if (dev->relay_fwlog && !val) {
+		relay_close(dev->relay_fwlog);
+		dev->relay_fwlog = NULL;
+	}
 
 	return mt7915_fw_debug_wm_set(dev, dev->fw.debug_wm);
 }
@@ -972,9 +1376,9 @@ mt7915_xmit_queues_show(struct seq_file *file, void *data)
 
 DEFINE_SHOW_ATTRIBUTE(mt7915_xmit_queues);
 
-#define mt7915_txpower_puts(rate)						\
+#define mt7915_txpower_puts(rate, _len)						\
 ({										\
-	len += scnprintf(buf + len, sz - len, "%-16s:", #rate " (TMAC)");	\
+	len += scnprintf(buf + len, sz - len, "%-*s:", _len, #rate " (TMAC)");	\
 	for (i = 0; i < mt7915_sku_group_len[SKU_##rate]; i++, offs++)		\
 		len += scnprintf(buf + len, sz - len, " %6d", txpwr[offs]);	\
 	len += scnprintf(buf + len, sz - len, "\n");				\
@@ -996,10 +1400,16 @@ mt7915_rate_txpower_get(struct file *file, char __user *user_buf,
 {
 	struct mt7915_phy *phy = file->private_data;
 	struct mt7915_dev *dev = phy->dev;
+	struct ieee80211_channel *chan = phy->mt76->chandef.chan;
+	struct ieee80211_supported_band sband;
 	s8 txpwr[MT7915_SKU_RATE_NUM];
-	static const size_t sz = 2048;
+	static const size_t sz = 4096;
 	u8 band = phy->mt76->band_idx;
 	int i, offs = 0, len = 0;
+	u32 target_power = 0;
+	int n_chains = hweight16(phy->mt76->chainmask);
+	int path_delta = mt76_tx_power_path_delta(n_chains);
+	int pwr_delta;
 	ssize_t ret;
 	char *buf;
 	u32 reg;
@@ -1016,49 +1426,80 @@ mt7915_rate_txpower_get(struct file *file, char __user *user_buf,
 	len += scnprintf(buf + len, sz - len,
 			 "\nPhy%d Tx power table (channel %d)\n",
 			 phy != &dev->phy, phy->mt76->chandef.chan->hw_value);
-	len += scnprintf(buf + len, sz - len, "%-16s  %6s %6s %6s %6s\n",
+	len += scnprintf(buf + len, sz - len, "%-23s  %6s %6s %6s %6s\n",
 			 " ", "1m", "2m", "5m", "11m");
-	mt7915_txpower_puts(CCK);
+	mt7915_txpower_puts(CCK, 23);
 
 	len += scnprintf(buf + len, sz - len,
-			 "%-16s  %6s %6s %6s %6s %6s %6s %6s %6s\n",
+			 "%-23s  %6s %6s %6s %6s %6s %6s %6s %6s\n",
 			 " ", "6m", "9m", "12m", "18m", "24m", "36m", "48m",
 			 "54m");
-	mt7915_txpower_puts(OFDM);
+	mt7915_txpower_puts(OFDM, 23);
 
 	len += scnprintf(buf + len, sz - len,
-			 "%-16s  %6s %6s %6s %6s %6s %6s %6s %6s\n",
+			 "%-23s  %6s %6s %6s %6s %6s %6s %6s %6s\n",
 			 " ", "mcs0", "mcs1", "mcs2", "mcs3", "mcs4",
 			 "mcs5", "mcs6", "mcs7");
-	mt7915_txpower_puts(HT_BW20);
+	mt7915_txpower_puts(HT_BW20, 23);
 
 	len += scnprintf(buf + len, sz - len,
-			 "%-16s  %6s %6s %6s %6s %6s %6s %6s %6s %6s\n",
+			 "%-23s  %6s %6s %6s %6s %6s %6s %6s %6s %6s\n",
 			 " ", "mcs0", "mcs1", "mcs2", "mcs3", "mcs4", "mcs5",
 			 "mcs6", "mcs7", "mcs32");
-	mt7915_txpower_puts(HT_BW40);
+	mt7915_txpower_puts(HT_BW40, 23);
 
 	len += scnprintf(buf + len, sz - len,
-			 "%-16s  %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s\n",
+			 "%-23s  %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s %6s\n",
 			 " ", "mcs0", "mcs1", "mcs2", "mcs3", "mcs4", "mcs5",
 			 "mcs6", "mcs7", "mcs8", "mcs9", "mcs10", "mcs11");
-	mt7915_txpower_puts(VHT_BW20);
-	mt7915_txpower_puts(VHT_BW40);
-	mt7915_txpower_puts(VHT_BW80);
-	mt7915_txpower_puts(VHT_BW160);
-	mt7915_txpower_puts(HE_RU26);
-	mt7915_txpower_puts(HE_RU52);
-	mt7915_txpower_puts(HE_RU106);
-	mt7915_txpower_puts(HE_RU242);
-	mt7915_txpower_puts(HE_RU484);
-	mt7915_txpower_puts(HE_RU996);
-	mt7915_txpower_puts(HE_RU2x996);
+	mt7915_txpower_puts(VHT_BW20, 23);
+	mt7915_txpower_puts(VHT_BW40, 23);
+	mt7915_txpower_puts(VHT_BW80, 23);
+	mt7915_txpower_puts(VHT_BW160, 23);
+	mt7915_txpower_puts(HE_RU26, 23);
+	mt7915_txpower_puts(HE_RU52, 23);
+	mt7915_txpower_puts(HE_RU106, 23);
+	len += scnprintf(buf + len, sz - len, "BW20/");
+	mt7915_txpower_puts(HE_RU242, 18);
+	len += scnprintf(buf + len, sz - len, "BW40/");
+	mt7915_txpower_puts(HE_RU484, 18);
+	len += scnprintf(buf + len, sz - len, "BW80/");
+	mt7915_txpower_puts(HE_RU996, 18);
+	len += scnprintf(buf + len, sz - len, "BW160/");
+	mt7915_txpower_puts(HE_RU2x996, 17);
 
-	reg = is_mt7915(&dev->mt76) ? MT_WF_PHY_TPC_CTRL_STAT(band) :
-	      MT_WF_PHY_TPC_CTRL_STAT_MT7916(band);
+	reg = is_mt7915(&dev->mt76) ? MT_WF_IRPI_TPC_CTRL_STAT(band) :
+	      MT_WF_IRPI_TPC_CTRL_STAT_MT7916(band);
 
-	len += scnprintf(buf + len, sz - len, "\nTx power (bbp)  : %6ld\n",
-			 mt76_get_field(dev, reg, MT_WF_PHY_TPC_POWER));
+	len += scnprintf(buf + len, sz - len, "\nTx power (bbp)  : %6ld [0.5 dBm]\n",
+			 mt76_get_field(dev, reg, MT_WF_IRPI_TPC_POWER));
+
+	len += scnprintf(buf + len, sz - len, "RegDB maximum power:\t%d [dBm]\n",
+			 chan->max_reg_power);
+
+	if (chan->band == NL80211_BAND_2GHZ)
+		sband = phy->mt76->sband_2g.sband;
+	else if (chan->band == NL80211_BAND_5GHZ)
+		sband = phy->mt76->sband_5g.sband;
+	else if (chan->band == NL80211_BAND_6GHZ)
+		sband = phy->mt76->sband_6g.sband;
+
+	pwr_delta = mt7915_eeprom_get_power_delta(dev, sband.band);
+
+	for (i = 0; i < n_chains; i++) {
+		u32 val;
+
+		val = mt7915_eeprom_get_target_power(dev, chan, i);
+		target_power = max(target_power, val);
+	}
+
+	target_power += pwr_delta + path_delta;
+	target_power = DIV_ROUND_UP(target_power, 2);
+	len += scnprintf(buf + len, sz - len, "eeprom maximum power:\t%d [dBm]\n",
+			 target_power);
+
+	len += scnprintf(buf + len, sz - len, "path_delta:\t%d [0.5 dBm]\n",
+			 path_delta);
 
 	ret = simple_read_from_buffer(user_buf, count, ppos, buf, len);
 
@@ -1233,12 +1674,102 @@ mt7915_txpower_path_show(struct seq_file *file, void *data)
 DEFINE_SHOW_ATTRIBUTE(mt7915_txpower_path);
 
 static int
+mt7915_txpower_info_show(struct seq_file *file, void *data)
+{
+	struct mt7915_phy *phy = file->private;
+	struct mt76_phy *mphy = phy->mt76;
+	struct {
+		u8 category;
+		u8 rsv1;
+
+		/* basic info */
+		u8 band_idx;
+		u8 band;
+
+		/* board type info */
+		bool is_epa;
+		bool is_elna;
+
+		/* power percentage info */
+		bool percentage_ctrl_enable;
+		s8 power_drop_level;
+
+		/* frond-end loss TX info */
+		s8 front_end_loss_tx[4];
+
+		/* frond-end loss RX info */
+		s8 front_end_loss_rx[4];
+
+		/* thermal info */
+		bool thermal_compensate_enable;
+		s8 thermal_compensate_value;
+		u8 rsv2;
+
+		/* TX power max/min limit info */
+		s8 max_power_bound;
+		s8 min_power_bound;
+
+		/* power limit info */
+		bool sku_enable;
+		bool bf_backoff_enable;
+
+		/* MU TX power info */
+		bool mu_tx_power_manual_enable;
+		s8 mu_tx_power_auto;
+		s8 mu_tx_power_manual;
+		u8 rsv3;
+	} __packed basic_info = {};
+	struct device_node *np;
+	int ret;
+
+	ret = mt7915_mcu_get_txpower_sku(phy, (s8 *)&basic_info, sizeof(basic_info),
+					 TX_POWER_INFO_BASIC);
+	if (ret || basic_info.category != TX_POWER_INFO_BASIC)
+		goto out;
+
+	seq_puts(file, "======================== BASIC INFO ========================\n");
+	seq_printf(file, "    Band Index: %d, Channel Band: %d\n",
+		   basic_info.band_idx, basic_info.band);
+	seq_printf(file, "    PA Type: %s\n", basic_info.is_epa ? "ePA" : "iPA");
+	seq_printf(file, "    LNA Type: %s\n", basic_info.is_elna ? "eLNA" : "iLNA");
+	seq_puts(file, "------------------------------------------------------------\n");
+	seq_printf(file, "    SKU: %s\n", basic_info.sku_enable ? "enable" : "disable");
+	seq_printf(file, "    Percentage Control: %s\n",
+		   basic_info.percentage_ctrl_enable ? "enable" : "disable");
+	seq_printf(file, "    Power Drop: %d [dBm]\n", basic_info.power_drop_level >> 1);
+	seq_printf(file, "    Backoff: %s\n",
+		   basic_info.bf_backoff_enable ? "enable" : "disable");
+	seq_printf(file, "    TX Front-end Loss:  %d, %d, %d, %d\n",
+		   basic_info.front_end_loss_tx[0], basic_info.front_end_loss_tx[1],
+		   basic_info.front_end_loss_tx[2], basic_info.front_end_loss_tx[3]);
+	seq_printf(file, "    RX Front-end Loss:  %d, %d, %d, %d\n",
+		   basic_info.front_end_loss_rx[0], basic_info.front_end_loss_rx[1],
+		   basic_info.front_end_loss_rx[2], basic_info.front_end_loss_rx[3]);
+	seq_printf(file, "    MU TX Power Mode:  %s\n",
+		   basic_info.mu_tx_power_manual_enable ? "manual" : "auto");
+	seq_printf(file, "    MU TX Power (Auto / Manual): %d / %d [0.5 dBm]\n",
+		   basic_info.mu_tx_power_auto, basic_info.mu_tx_power_manual);
+	seq_printf(file, "    Thermal Compensation:  %s\n",
+		   basic_info.thermal_compensate_enable ? "enable" : "disable");
+	seq_printf(file, "    Theraml Compensation Value: %d\n",
+		   basic_info.thermal_compensate_value);
+
+	np = mt76_find_power_limits_node(mphy);
+	seq_printf(file, "    RegDB:  %s\n", !np ? "enable" : "disable");
+
+out:
+	return ret;
+}
+
+DEFINE_SHOW_ATTRIBUTE(mt7915_txpower_info);
+
+static int
 mt7915_twt_stats(struct seq_file *s, void *data)
 {
 	struct mt7915_dev *dev = dev_get_drvdata(s->private);
 	struct mt7915_twt_flow *iter;
 
-	rcu_read_lock();
+	mutex_lock(&dev->mt76.mutex);
 
 	seq_puts(s, "     wcid |       id |    flags |      exp | mantissa");
 	seq_puts(s, " | duration |            tsf |\n");
@@ -1253,7 +1784,7 @@ mt7915_twt_stats(struct seq_file *s, void *data)
 			iter->exp, iter->mantissa,
 			iter->duration, iter->tsf);
 
-	rcu_read_unlock();
+	mutex_unlock(&dev->mt76.mutex);
 
 	return 0;
 }
@@ -1289,6 +1820,90 @@ mt7915_rf_regval_set(void *data, u64 val)
 DEFINE_DEBUGFS_ATTRIBUTE(fops_rf_regval, mt7915_rf_regval_get,
 			 mt7915_rf_regval_set, "0x%08llx\n");
 
+#ifdef CONFIG_MTK_VENDOR
+static ssize_t
+mt7915_get_csi_stats(struct file *file, char __user *user_buf,
+		size_t count, loff_t *ppos)
+
+{
+	struct mt7915_phy *phy = file->private_data;
+	struct csi_mac_filter *current_mac, *tmp_mac;
+	static const size_t sz = 4096;
+	char *buf;
+	u32 len = 0;
+	int ret;
+
+	buf = kzalloc(sz, GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
+
+	len += scnprintf(buf + len, sz - len, "CSI enable: %d\n", phy->csi.enable);
+
+	if (phy->csi.enable) {
+		len += scnprintf(buf + len, sz - len, "CSI data_cnt: %d\n", phy->csi.count);
+
+		mutex_lock(&phy->csi.mac_filter_lock);
+
+		list_for_each_entry_safe(current_mac, tmp_mac, &phy->csi.mac_filter_list, node) {
+			len += scnprintf(buf + len, sz - len, "mac: %pM, interval: %d\n", current_mac->mac, current_mac->interval);
+		}
+
+		mutex_unlock(&phy->csi.mac_filter_lock);
+	}
+
+	ret = simple_read_from_buffer(user_buf, count, ppos, buf, len);
+
+	kfree(buf);
+	return ret;
+}
+
+static const struct file_operations mt7915_csi_ops = {
+	.read = mt7915_get_csi_stats,
+	.open = simple_open,
+	.llseek = default_llseek,
+};
+#endif
+
+static ssize_t
+mt7915_efuse_get(struct file *file, char __user *user_buf,
+		 size_t count, loff_t *ppos)
+{
+	struct mt7915_dev *dev = file->private_data;
+	struct mt76_dev *mdev = &dev->mt76;
+	u8 *buff = mdev->otp.data;
+	int i;
+	ssize_t ret;
+	u32 block_num;
+
+	mdev->otp.size = mt7915_eeprom_size(dev);
+	if (is_mt7986(&dev->mt76))
+		mdev->otp.size += MT_EE_ADIE1_BASE_7896;
+
+	if (!mdev->otp.data) {
+		mdev->otp.data = devm_kzalloc(mdev->dev, mdev->otp.size, GFP_KERNEL);
+		if (!mdev->otp.data)
+			return -ENOMEM;
+
+		block_num = DIV_ROUND_UP(mdev->otp.size, MT7915_EEPROM_BLOCK_SIZE);
+		for (i = 0; i < block_num; i++) {
+			buff = mdev->otp.data + i * MT7915_EEPROM_BLOCK_SIZE;
+			ret = mt7915_mcu_get_eeprom(dev, i * MT7915_EEPROM_BLOCK_SIZE, buff);
+			if (ret)
+				continue;
+		}
+	}
+
+	ret = simple_read_from_buffer(user_buf, count, ppos, mdev->otp.data, mdev->otp.size);
+
+	return ret;
+}
+
+static const struct file_operations mt7915_efuse_ops = {
+	.read = mt7915_efuse_get,
+	.open = simple_open,
+	.llseek = default_llseek,
+};
+
 int mt7915_init_debugfs(struct mt7915_phy *phy)
 {
 	struct mt7915_dev *dev = phy->dev;
@@ -1321,9 +1936,12 @@ int mt7915_init_debugfs(struct mt7915_phy *phy)
 			    &mt7915_txpower_fops);
 	debugfs_create_file("txpower_path", 0400, dir, phy,
 			    &mt7915_txpower_path_fops);
+	debugfs_create_file("txpower_info", 0400, dir, phy,
+			    &mt7915_txpower_info_fops);
 	debugfs_create_devm_seqfile(dev->mt76.dev, "twt_stats", dir,
 				    mt7915_twt_stats);
 	debugfs_create_file("rf_regval", 0600, dir, dev, &fops_rf_regval);
+	debugfs_create_file("vow", 0600, dir, phy, &mt7915_vow_ops);
 
 	if (!dev->dbdc_support || phy->mt76->band_idx) {
 		debugfs_create_u32("dfs_hw_pattern", 0400, dir,
@@ -1333,9 +1951,18 @@ int mt7915_init_debugfs(struct mt7915_phy *phy)
 		debugfs_create_devm_seqfile(dev->mt76.dev, "rdd_monitor", dir,
 					    mt7915_rdd_monitor);
 	}
+	debugfs_create_file("otp", 0400, dir, dev, &mt7915_efuse_ops);
+#ifdef CONFIG_MTK_VENDOR
+	debugfs_create_file("csi_stats", 0400, dir, phy, &mt7915_csi_ops);
+#endif
 
 	if (!ext_phy)
 		dev->debugfs_dir = dir;
+
+#ifdef MTK_DEBUG
+	debugfs_create_u16("wlan_idx", 0600, dir, &dev->wlan_idx);
+	mt7915_mtk_init_debugfs(phy, dir);
+#endif
 
 	return 0;
 }
@@ -1349,6 +1976,12 @@ mt7915_debugfs_write_fwlog(struct mt7915_dev *dev, const void *hdr, int hdrlen,
 	void *dest;
 
 	spin_lock_irqsave(&lock, flags);
+
+	if (!dev->relay_fwlog) {
+		spin_unlock_irqrestore(&lock, flags);
+		return;
+	}
+
 	dest = relay_reserve(dev->relay_fwlog, hdrlen + len + 4);
 	if (dest) {
 		*(u32 *)dest = hdrlen + len;
@@ -1377,17 +2010,50 @@ void mt7915_debugfs_rx_fw_monitor(struct mt7915_dev *dev, const void *data, int 
 		.msg_type = cpu_to_le16(PKT_TYPE_RX_FW_MONITOR),
 	};
 
-	if (!dev->relay_fwlog)
-		return;
+#ifdef MTK_DEBUG
+	struct {
+		__le32 magic;
+		u8 version;
+		u8 _rsv;
+		__le16 serial_id;
+		__le32 timestamp;
+		__le16 msg_type;
+		__le16 len;
+	} hdr2 = {
+		.version = 0x1,
+		.magic = cpu_to_le32(FW_BIN_LOG_MAGIC_V2),
+		.msg_type = PKT_TYPE_RX_FW_MONITOR,
+	};
+#endif
 
+#ifdef MTK_DEBUG
+	/* old magic num */
+	if (!(dev->fw.debug_wm & BIT(7))) {
+		hdr.timestamp = mt76_rr(dev, MT_LPON_FRCR(0));
+		hdr.len = *(__le16 *)data;
+		mt7915_debugfs_write_fwlog(dev, &hdr, sizeof(hdr), data, len);
+	} else {
+		hdr2.serial_id = dev->dbg.fwlog_seq++;
+		hdr2.timestamp = mt76_rr(dev, MT_LPON_FRCR(0));
+		hdr2.len = *(__le16 *)data;
+		mt7915_debugfs_write_fwlog(dev, &hdr2, sizeof(hdr2), data, len);
+	}
+#else
 	hdr.timestamp = cpu_to_le32(mt76_rr(dev, MT_LPON_FRCR(0)));
 	hdr.len = *(__le16 *)data;
 	mt7915_debugfs_write_fwlog(dev, &hdr, sizeof(hdr), data, len);
+#endif
 }
 
 bool mt7915_debugfs_rx_log(struct mt7915_dev *dev, const void *data, int len)
 {
+#ifdef MTK_DEBUG
+	if (get_unaligned_le32(data) != FW_BIN_LOG_MAGIC &&
+	    get_unaligned_le32(data) != FW_BIN_LOG_MAGIC_V2 &&
+	    get_unaligned_le32(data) != PKT_BIN_DEBUG_MAGIC)
+#else
 	if (get_unaligned_le32(data) != FW_BIN_LOG_MAGIC)
+#endif
 		return false;
 
 	if (dev->relay_fwlog)

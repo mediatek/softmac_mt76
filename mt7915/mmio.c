@@ -584,6 +584,7 @@ static void mt7915_mmio_wed_update_rx_stats(struct mtk_wed_device *wed,
 	int idx = le16_to_cpu(stats->wlan_idx);
 	struct mt7915_dev *dev;
 	struct mt76_wcid *wcid;
+	struct mt76_phy *mphy;
 
 	dev = container_of(wed, struct mt7915_dev, mt76.mmio.wed);
 
@@ -591,12 +592,40 @@ static void mt7915_mmio_wed_update_rx_stats(struct mtk_wed_device *wed,
 
 	wcid = mt76_wcid_ptr(dev, idx);
 	if (wcid) {
+		mphy = mt76_dev_phy(&dev->mt76, wcid->phy_idx);
+		ieee80211_tpt_led_trig_rx(mphy->hw,
+					  le32_to_cpu(stats->rx_byte_cnt));
+
 		wcid->stats.rx_bytes += le32_to_cpu(stats->rx_byte_cnt);
 		wcid->stats.rx_packets += le32_to_cpu(stats->rx_pkt_cnt);
 		wcid->stats.rx_errors += le32_to_cpu(stats->rx_err_cnt);
 		wcid->stats.rx_drops += le32_to_cpu(stats->rx_drop_cnt);
+
+		if (wiphy_ext_feature_isset(dev->mphy.hw->wiphy,
+					    NL80211_EXT_FEATURE_STAS_COUNT)) {
+			struct mt7915_sta *msta;
+			struct ieee80211_vif *vif;
+			struct wireless_dev *wdev;
+
+			msta = container_of(wcid, struct mt7915_sta, wcid);
+
+			vif = container_of((void *)msta->vif,
+					   struct ieee80211_vif,
+					   drv_priv);
+			if (!vif)
+				goto unlock;
+
+			wdev = ieee80211_vif_to_wdev(vif);
+
+			if (vif->type == NL80211_IFTYPE_MONITOR)
+				goto unlock;
+
+			__dev_sw_netstats_rx_add(wdev->netdev, le32_to_cpu(stats->rx_pkt_cnt),
+						 le32_to_cpu(stats->rx_byte_cnt));
+		}
 	}
 
+unlock:
 	rcu_read_unlock();
 }
 
@@ -658,8 +687,8 @@ int mt7915_mmio_wed_init(struct mt7915_dev *dev, void *pdev_ptr,
 				       MT_INT_WED_MASK_CSR;
 		wed->wlan.wpdma_phys = pci_resource_start(pci_dev, 0) +
 				       MT_WFDMA_EXT_CSR_BASE;
-		wed->wlan.wpdma_tx = pci_resource_start(pci_dev, 0) +
-				     MT_TXQ_WED_RING_BASE;
+		wed->wlan.wpdma_tx[0] = pci_resource_start(pci_dev, 0) +
+					MT_TXQ_WED_RING_BASE;
 		wed->wlan.wpdma_txfree = pci_resource_start(pci_dev, 0) +
 					 MT_RXQ_WED_RING_BASE;
 		wed->wlan.wpdma_rx_glo = pci_resource_start(pci_dev, 0) +
@@ -684,16 +713,18 @@ int mt7915_mmio_wed_init(struct mt7915_dev *dev, void *pdev_ptr,
 		wed->wlan.phy_base = res->start;
 		wed->wlan.wpdma_int = res->start + MT_INT_SOURCE_CSR;
 		wed->wlan.wpdma_mask = res->start + MT_INT_MASK_CSR;
-		wed->wlan.wpdma_tx = res->start + MT_TXQ_WED_RING_BASE;
+		wed->wlan.wpdma_tx[0] = res->start + MT_TXQ_WED_RING_BASE;
 		wed->wlan.wpdma_txfree = res->start + MT_RXQ_WED_RING_BASE;
 		wed->wlan.wpdma_rx_glo = res->start + MT_WPDMA_GLO_CFG;
 		wed->wlan.wpdma_rx[0] = res->start + MT_RXQ_WED_DATA_RING_BASE;
 	}
-	wed->wlan.nbuf = MT7915_HW_TOKEN_SIZE;
+	wed->wlan.nbuf = is_mt7915(&dev->mt76) ?
+			 MT7915_WED_TOKEN_SIZE_V0 :
+			 MT7915_WED_TOKEN_SIZE;
 	wed->wlan.tx_tbit[0] = is_mt7915(&dev->mt76) ? 4 : 30;
 	wed->wlan.tx_tbit[1] = is_mt7915(&dev->mt76) ? 5 : 31;
 	wed->wlan.txfree_tbit = is_mt798x(&dev->mt76) ? 2 : 1;
-	wed->wlan.token_start = MT7915_TOKEN_SIZE - wed->wlan.nbuf;
+	wed->wlan.token_start = 0;
 	wed->wlan.wcid_512 = !is_mt7915(&dev->mt76);
 
 	wed->wlan.rx_nbuf = 65536;
@@ -723,6 +754,8 @@ int mt7915_mmio_wed_init(struct mt7915_dev *dev, void *pdev_ptr,
 
 	if (mtk_wed_device_attach(wed))
 		return 0;
+
+	dev->mt76.token_start = wed->wlan.nbuf;
 
 	*irq = wed->irq;
 	dev->mt76.dma_dev = wed->dev;
@@ -925,7 +958,7 @@ struct mt7915_dev *mt7915_mmio_probe(struct device *pdev,
 		.survey_flags = SURVEY_INFO_TIME_TX |
 				SURVEY_INFO_TIME_RX |
 				SURVEY_INFO_TIME_BSS_RX,
-		.token_size = MT7915_TOKEN_SIZE,
+		.token_size = MT7915_WED_SW_TOKEN_SIZE,
 		.tx_prepare_skb = mt7915_tx_prepare_skb,
 		.tx_complete_skb = mt76_connac_tx_complete_skb,
 		.rx_skb = mt7915_queue_rx_skb,
