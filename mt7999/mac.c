@@ -3915,19 +3915,25 @@ static int mt7999_mac_itwt_setup(struct ieee80211_hw *hw,
 		break;
 	}
 
+	if (dev->twt.n_agrt == MT7999_MAX_TWT_AGRT) {
+		mt76_dev_dbg(&dev->mt76, "iTWT reject %pM: HW TWT table full", sta->addr);
+		ret = 0;
+		goto unlock;
+	}
+
+	if (hweight8(msta_link->twt.flowid_mask) == ARRAY_SIZE(msta_link->twt.flow)) {
+		mt76_dev_dbg(&dev->mt76, "iTWT reject %pM: STA flow IDs exhausted", sta->addr);
+		ret = 0;
+		goto unlock;
+	}
+
 	/* only check min_twt_dur for newly added agreement */
 	if (twt_agrt->indiv.min_twt_dur < MT7999_MIN_TWT_DUR) {
 		setup_cmd = TWT_SETUP_CMD_DICTATE;
 		twt_agrt->indiv.min_twt_dur = MT7999_MIN_TWT_DUR;
+		ret = 0;
 		goto unlock;
 	}
-
-	if (dev->twt.n_agrt == MT7999_MAX_TWT_AGRT)
-		goto unlock;
-
-	if (hweight8(msta_link->twt.flowid_mask) ==
-	    ARRAY_SIZE(msta_link->twt.flow))
-		goto unlock;
 
 	table_id = ffs(~dev->twt.table_mask) - 1;
 
