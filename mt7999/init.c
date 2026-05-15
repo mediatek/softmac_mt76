@@ -739,6 +739,35 @@ int mt7999_vow_init(struct mt7999_phy *phy)
 	return mt7999_mcu_set_vow_feature_ctrl(phy, flags);
 }
 
+int mt7999_vow_sta_init(struct mt7999_vif_link *mconf,
+			struct mt7999_sta_link *msta_link)
+{
+	struct mt7999_phy *phy = mconf->phy;
+	struct mt7999_vow_sta_ctrl *vow = &msta_link->vow;
+	u8 omac_idx = mconf->mt76.omac_idx;
+	int ret;
+
+	/* Assignment of STA BSS group index aligns FW.
+	 * Each band has its own BSS group bitmap space.
+	 * BSS group 0: OwnMAC index 0
+	 * BSS group 4..18: OwnMAC index 0x11..0x1f
+	 */
+	vow->bss_grp_idx = (omac_idx <= HW_BSSID_MAX)
+	                   ? omac_idx
+	                   : HW_BSSID_MAX + omac_idx - EXT_BSSID_START;
+	vow->paused = false;
+	vow->drr_quantum[IEEE80211_AC_VO] = VOW_DRR_QUANTUM_IDX0;
+	vow->drr_quantum[IEEE80211_AC_VI] = VOW_DRR_QUANTUM_IDX1;
+	vow->drr_quantum[IEEE80211_AC_BE] = VOW_DRR_QUANTUM_IDX2;
+	vow->drr_quantum[IEEE80211_AC_BK] = VOW_DRR_QUANTUM_IDX2;
+
+	ret = mt7999_mcu_set_vow_drr_ctrl(phy, mconf, msta_link, VOW_DRR_CTRL_STA_ALL);
+	if (ret)
+		return ret;
+
+	return mt7999_mcu_set_vow_drr_ctrl(phy, mconf, msta_link, VOW_DRR_CTRL_STA_PAUSE);
+}
+
 static int mt7999_register_phy(struct mt7999_dev *dev, enum mt76_band_id band)
 {
 	struct mt7999_phy *phy;

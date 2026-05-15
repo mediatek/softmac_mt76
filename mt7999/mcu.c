@@ -3641,42 +3641,6 @@ error_unlock:
 	return ret;
 }
 
-#if 0
-static int
-mt7999_mcu_sta_init_vow(struct mt7999_vif_link *mconf,
-			struct mt7999_sta_link *msta_link)
-{
-	struct mt7999_phy *phy = mconf->phy;
-	struct mt7999_vow_sta_ctrl *vow = &msta_link->vow;
-	u8 omac_idx = mconf->mt76.omac_idx;
-	int ret;
-
-	/* Assignment of STA BSS group index aligns FW.
-	 * Each band has its own BSS group bitmap space.
-	 * 0: BSS 0
-	 * 4..18: BSS 0x11..0x1f
-	 */
-	vow->bss_grp_idx = (omac_idx <= HW_BSSID_MAX)
-	                   ? omac_idx
-	                   : HW_BSSID_MAX + omac_idx - EXT_BSSID_START;
-	vow->paused = false;
-	vow->drr_quantum[IEEE80211_AC_VO] = VOW_DRR_QUANTUM_IDX0;
-	vow->drr_quantum[IEEE80211_AC_VI] = VOW_DRR_QUANTUM_IDX1;
-	vow->drr_quantum[IEEE80211_AC_BE] = VOW_DRR_QUANTUM_IDX2;
-	vow->drr_quantum[IEEE80211_AC_BK] = VOW_DRR_QUANTUM_IDX2;
-
-	ret = mt7999_mcu_set_vow_drr_ctrl(phy, mconf, msta_link, VOW_DRR_CTRL_STA_BSS_GROUP);
-	if (ret)
-		return ret;
-
-	ret = mt7999_mcu_set_vow_drr_ctrl(phy, mconf, msta_link, VOW_DRR_CTRL_STA_PAUSE);
-	if (ret)
-		return ret;
-
-	return mt7999_mcu_set_vow_drr_ctrl(phy, mconf, msta_link, VOW_DRR_CTRL_STA_ALL);
-}
-#endif
-
 int mt7999_mcu_mld_reconf_stop_link(struct mt7999_dev *dev,
 				    struct ieee80211_vif *vif,
 				    u16 removed_links)
@@ -3871,7 +3835,6 @@ int mt7999_mcu_add_sta(struct mt7999_dev *dev,
 	struct mt76_wcid *wcid = msta_link ? &msta_link->wcid : link->mt76.wcid;
 	struct ieee80211_sta *sta = link_sta ? link_sta->sta : NULL;
 	struct sk_buff *skb;
-	// int ret;
 
 	skb = __mt76_connac_mcu_alloc_sta_req(&dev->mt76, &link->mt76, wcid,
 					      MT7999_STA_UPDATE_MAX_SIZE);
@@ -3935,14 +3898,6 @@ int mt7999_mcu_add_sta(struct mt7999_dev *dev,
 		/* starec mesh */
 		mt7999_mcu_sta_mesh_tlv(dev, skb, link_conf->vif);
 	}
-
-#if 0
-	ret = mt7999_mcu_sta_init_vow(mconf, msta_link);
-	if (ret) {
-		dev_kfree_skb(skb);
-		return ret;
-	}
-#endif
 out:
 	return mt76_mcu_skb_send_msg(&dev->mt76, skb,
 				     MCU_WMWA_UNI_CMD(STA_REC_UPDATE), true);
@@ -8594,6 +8549,7 @@ int mt7999_mcu_set_vow_drr_ctrl(struct mt7999_phy *phy,
 	switch (id) {
 	case VOW_DRR_CTRL_STA_ALL:
 		val |= FIELD_PREP(MT7999_DRR_STA_BSS_GRP_MASK, vow->bss_grp_idx);
+		val |= FIELD_PREP(MT7999_DRR_STA_WMM_MASK, req.wmm_idx);
 		val |= FIELD_PREP(MT7999_DRR_STA_AC0_QNTM_MASK, vow->drr_quantum[IEEE80211_AC_BK]);
 		val |= FIELD_PREP(MT7999_DRR_STA_AC1_QNTM_MASK, vow->drr_quantum[IEEE80211_AC_BE]);
 		val |= FIELD_PREP(MT7999_DRR_STA_AC2_QNTM_MASK, vow->drr_quantum[IEEE80211_AC_VI]);

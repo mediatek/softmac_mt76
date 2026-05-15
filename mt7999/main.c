@@ -425,9 +425,14 @@ int mt7999_vif_link_add(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 	/* defer the first STA_REC of BMC entry to BSS_CHANGED_BSSID for STA
 	 * interface, since firmware only records BSSID when the entry is new
 	 */
-	if (vif->type != NL80211_IFTYPE_STATION)
+	if (vif->type != NL80211_IFTYPE_STATION) {
 		mt7999_mcu_add_sta(dev, link_conf, NULL, link, NULL,
 				   CONN_STATE_PORT_SECURE, true);
+
+		if (mt7999_vow_sta_init(link, msta_link))
+			mt76_bss_dbg(vif, "link_id=%u: failed to init VoW for AP BMC entry",
+				     link_conf->link_id);
+	}
 	rcu_assign_pointer(dev->mt76.wcid[idx], &msta_link->wcid);
 	rcu_assign_pointer(mvif->sta.link[link_conf->link_id], msta_link);
 

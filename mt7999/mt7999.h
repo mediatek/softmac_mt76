@@ -99,7 +99,8 @@
 #define MT7999_RRO_MSDU_PG_CR_CNT	8
 #define MT7999_RRO_MSDU_PG_SIZE_PER_CR	0x10000
 
-#define MT7999_DRR_STA_BSS_GRP_MASK	GENMASK(5, 0)
+#define MT7999_DRR_STA_BSS_GRP_MASK	GENMASK(4, 0)
+#define MT7999_DRR_STA_WMM_MASK		GENMASK(6, 5)
 #define MT7999_DRR_STA_AC0_QNTM_MASK	GENMASK(9, 7)
 #define MT7999_DRR_STA_AC1_QNTM_MASK	GENMASK(12, 10)
 #define MT7999_DRR_STA_AC2_QNTM_MASK	GENMASK(15, 13)
@@ -1570,6 +1571,8 @@ void mt7999_mac_ba_trigger(struct mt7999_dev *dev, u16 wlan_idx, u8 tid);
 int mt7999_dma_rro_init(struct mt7999_dev *dev);
 void mt7999_dma_rro_start(struct mt7999_dev *dev);
 int mt7999_vow_init(struct mt7999_phy *phy);
+int mt7999_vow_sta_init(struct mt7999_vif_link *mconf,
+			struct mt7999_sta_link *msta_link);
 
 #ifdef CONFIG_MT7999_NPU
 int __mt7999_npu_hw_init(struct mt7999_dev *dev);
