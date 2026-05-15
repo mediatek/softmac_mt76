@@ -79,6 +79,30 @@ struct rdd_hw_pulse_ext {
 	u8 rsv;
 };
 
+struct mt7999_mcu_chan_info {
+	/* fixed field */
+	u8 __rsv[4];
+
+	__le16 tag;
+	__le16 len;
+	u8 control_ch;
+	u8 center_ch;
+	u8 bw;
+	u8 tx_path_num;
+	u8 rx_path;	/* mask or num */
+	u8 switch_reason;
+	u8 band_idx;
+	u8 center_ch2;	/* for 80+80 only */
+	__le16 cac_case;
+	u8 channel_band;
+	u8 rsv0;
+	__le32 outband_freq;
+	u8 txpower_drop;
+	u8 ap_bw;
+	u8 ap_center_ch;
+	u8 rsv1[53];
+} __packed;
+
 struct mt7999_mcu_rdd_report {
 	struct mt7999_mcu_rxd rxd;
 

@@ -605,10 +605,17 @@ enum mt76_sta_event {
 	MT76_STA_EVENT_DISASSOC,
 };
 
+enum radio_sel {
+	RADIO_SEL_FULL,
+	RADIO_SEL_LOW,
+	RADIO_SEL_HIGH,
+};
+
 struct mt76_hw_cap {
 	bool has_2ghz;
 	bool has_5ghz;
 	bool has_6ghz;
+	enum radio_sel sel;
 };
 
 #define MT_DRV_TXWI_NO_FREE		BIT(0)
@@ -869,6 +876,7 @@ struct mt76_testmode_ops {
 	int (*get_attr)(struct mt76_phy *phy, int attr, u32 *val);
 	int (*set_appdu_info)(struct mt76_phy *phy, u8 appdu_idx);
 	int (*set_uhr_ch_op_mode)(struct mt76_phy *phy);
+	int (*set_dpd_valid_ch)(struct mt76_phy *phy, u8 bw, u16 *ch_list, int ch_num);
 };
 
 #define MT_TM_FW_RX_COUNT	BIT(0)

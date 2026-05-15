@@ -16,9 +16,9 @@ enum mt7999_eeprom_field {
 	MT_EE_WIFI_CONF_BASE =		0x170,
 	MT_EE_MAC_ADDR_BASE =		0x17a,
 	MT_EE_DO_RX_GAIN_CAL =		0x1a1,
-	MT_EE_DO_PRE_CAL =		0x1a5,
 	MT_EE_TESTMODE_EN =		0x1af,
 	MT_EE_VERSION =			0x1300,
+	MT_EE_DO_PRE_CAL_BASE =		0x140b,
 	MT_EE_TX0_POWER_2G =		0x2000,
 	MT_EE_RATE_DELTA_2G =		0x2010,
 	MT_EE_TX0_POWER_5G_B0 =		0x2400,	/* for band 0 5g variant */
@@ -30,12 +30,13 @@ enum mt7999_eeprom_field {
 	MT_EE_RX_GAIN_CAL =		0x5b00,
 
 	__MT_EE_MAX =			0x63ff,
-	/* offsets after 0x6410 are used to save cal data */
-	MT_EE_PRECAL =			0x6410,
+	/* offsets after 0x6400 are used to save cal data */
+	MT_EE_PRECAL =			0x6400,
 };
 
 #define MT_EE_WIFI_CONF(_band)			(MT_EE_WIFI_CONF_BASE + (_band) * 0x10)
 #define MT_EE_MAC_ADDR(_band)			(MT_EE_MAC_ADDR_BASE + (_band) * 0x10)
+#define MT_EE_DO_PRE_CAL(_band)			(MT_EE_DO_PRE_CAL_BASE + (_band) * 0x400)
 #define MT_EE_WIFI_CONF_BAND_SEL		GENMASK(2, 0)
 #define MT_EE_WIFI_CONF_PA_LNA			GENMASK(4, 3)
 #define MT_EE_WIFI_CONF_TX_PATH			GENMASK(2, 0)
@@ -47,6 +48,10 @@ enum mt7999_eeprom_band {
 	MT_EE_BAND_SEL_2GHZ,
 	MT_EE_BAND_SEL_5GHZ,
 	MT_EE_BAND_SEL_6GHZ,
+	MT_EE_BAND_SEL_5GHZ_LOW,
+	MT_EE_BAND_SEL_5GHZ_HIGH,
+	MT_EE_BAND_SEL_6GHZ_LOW,
+	MT_EE_BAND_SEL_6GHZ_HIGH,
 };
 
 #define MT_EE_RATE_DELTA_MASK			GENMASK(5, 0)
@@ -55,82 +60,41 @@ enum mt7999_eeprom_band {
 
 #define MT_EE_WIFI_CAL_RX_GAIN			GENMASK(5, 3)
 
-#define MT_EE_WIFI_CAL_GROUP_2G			BIT(0)
-#define MT_EE_WIFI_CAL_GROUP_5G			BIT(1)
-#define MT_EE_WIFI_CAL_GROUP_6G			BIT(2)
-#define MT_EE_WIFI_CAL_GROUP			GENMASK(2, 0)
-#define MT_EE_WIFI_CAL_DPD_2G			BIT(3)
-#define MT_EE_WIFI_CAL_DPD_5G			BIT(4)
-#define MT_EE_WIFI_CAL_DPD_6G			BIT(5)
-#define MT_EE_WIFI_CAL_DPD			GENMASK(5, 3)
-
 #define MT_EE_CAL_UNIT				1024
 
+#define DPD_CH(_chan) {			\
+	.chan = (_chan),			\
+	.valid = true,				\
+}
+
+enum mt7999_do_prek {
+	MT_EE_WIFI_CAL_GROUP = BIT(0),
+	MT_EE_WIFI_CAL_DPD = BIT(1),
+};
+
 enum mt7999_prek_rev {
-	GROUP_SIZE_2G,
-	GROUP_SIZE_5G,
-	GROUP_SIZE_6G,
-	GROUP_SIZE_2G_V2,
-	GROUP_SIZE_ABAND_V2,
-	ADCDCOC_SIZE_2G,
-	ADCDCOC_SIZE_5G,
-	ADCDCOC_SIZE_6G,
-	DPD_LEGACY_SIZE,
-	DPD_MEM_SIZE,
-	DPD_OTFG0_SIZE,
+	GROUP_STATE_SIZE_2G,
+	GROUP_DATA_SIZE_2G,
+	GROUP_STATE_SIZE_5G,
+	GROUP_DATA_SIZE_5G,
+	GROUP_STATE_SIZE_6G,
+	GROUP_DATA_SIZE_6G,
+	DPD_PER_CH_SIZE,
 };
 
 static const u32 mt7999_prek_rev[] = {
-	[GROUP_SIZE_2G] =			4 * MT_EE_CAL_UNIT,
-	[GROUP_SIZE_5G] =			45 * MT_EE_CAL_UNIT,
-	[GROUP_SIZE_6G] =			125 * MT_EE_CAL_UNIT,
-	[ADCDCOC_SIZE_2G] =			4 * 4,
-	[ADCDCOC_SIZE_5G] =			4 * 4,
-	[ADCDCOC_SIZE_6G] =			4 * 5,
-	[DPD_LEGACY_SIZE] =			4 * MT_EE_CAL_UNIT,
-	[DPD_MEM_SIZE] =			13 * MT_EE_CAL_UNIT,
-	[DPD_OTFG0_SIZE] =			2 * MT_EE_CAL_UNIT,
+	[GROUP_STATE_SIZE_2G] =			1 * MT_EE_CAL_UNIT,
+	[GROUP_DATA_SIZE_2G] =			44 * MT_EE_CAL_UNIT,
+	[GROUP_STATE_SIZE_5G] =			4 * MT_EE_CAL_UNIT,
+	[GROUP_DATA_SIZE_5G] =			75 * MT_EE_CAL_UNIT,
+	[GROUP_STATE_SIZE_6G] =			4 * MT_EE_CAL_UNIT,
+	[GROUP_DATA_SIZE_6G] =			145 * MT_EE_CAL_UNIT,
+	[DPD_PER_CH_SIZE] =			21 * MT_EE_CAL_UNIT,
 };
-
-static const u32 mt7999_prek_rev_233[] = {
-	[GROUP_SIZE_2G] =			4 * MT_EE_CAL_UNIT,
-	[GROUP_SIZE_5G] =			44 * MT_EE_CAL_UNIT,
-	[GROUP_SIZE_6G] =			125 * MT_EE_CAL_UNIT,
-	[ADCDCOC_SIZE_2G] =			4 * 4,
-	[ADCDCOC_SIZE_5G] =			4 * 4,
-	[ADCDCOC_SIZE_6G] =			4 * 5,
-	[DPD_LEGACY_SIZE] =			4 * MT_EE_CAL_UNIT,
-	[DPD_MEM_SIZE] =			13 * MT_EE_CAL_UNIT,
-	[DPD_OTFG0_SIZE] =			2 * MT_EE_CAL_UNIT,
-};
-
-extern const struct ieee80211_channel dpd_2g_ch_list_bw20[];
-extern const struct ieee80211_channel dpd_5g_skip_ch_list[];
-extern const struct ieee80211_channel dpd_5g_ch_list_bw80[];
-extern const struct ieee80211_channel dpd_5g_ch_list_bw160[];
-extern const struct ieee80211_channel dpd_6g_ch_list_bw80[];
-extern const struct ieee80211_channel dpd_6g_ch_list_bw160[];
-extern const struct ieee80211_channel dpd_6g_ch_list_bw320[];
 
 #define PREK(id)				(dev->prek.rev[(id)])
-#define DPD_CH_NUM(_type)			(dev->prek.dpd_ch_num[DPD_CH_NUM_##_type])
-#define MT_EE_CAL_GROUP_SIZE			(PREK(GROUP_SIZE_2G) + PREK(GROUP_SIZE_5G) + \
-						 PREK(GROUP_SIZE_6G) + PREK(ADCDCOC_SIZE_2G) + \
-						 PREK(ADCDCOC_SIZE_5G) + PREK(ADCDCOC_SIZE_6G))
-#define DPD_PER_CH_BW20_SIZE			(PREK(DPD_LEGACY_SIZE) + PREK(DPD_OTFG0_SIZE))
-#define DPD_PER_CH_GT_BW20_SIZE			(PREK(DPD_MEM_SIZE) ? PREK(DPD_MEM_SIZE) + \
-								      PREK(DPD_OTFG0_SIZE) : \
-								      DPD_PER_CH_BW20_SIZE)
-#define MT_EE_CAL_DPD_SIZE_2G			(DPD_CH_NUM(BW20_2G) * DPD_PER_CH_BW20_SIZE)
-#define MT_EE_CAL_DPD_SIZE_5G			(DPD_CH_NUM(BW20_5G) * DPD_PER_CH_BW20_SIZE + \
-						 DPD_CH_NUM(BW80_5G) * DPD_PER_CH_GT_BW20_SIZE + \
-						 DPD_CH_NUM(BW160_5G) * DPD_PER_CH_GT_BW20_SIZE)
-#define MT_EE_CAL_DPD_SIZE_6G			(DPD_CH_NUM(BW20_6G) * DPD_PER_CH_BW20_SIZE + \
-						 DPD_CH_NUM(BW80_6G) * DPD_PER_CH_GT_BW20_SIZE + \
-						 DPD_CH_NUM(BW160_6G) * DPD_PER_CH_GT_BW20_SIZE + \
-						 DPD_CH_NUM(BW320_6G) * DPD_PER_CH_GT_BW20_SIZE)
-#define MT_EE_CAL_DPD_SIZE			(MT_EE_CAL_DPD_SIZE_2G + MT_EE_CAL_DPD_SIZE_5G + \
-						 MT_EE_CAL_DPD_SIZE_6G)
+#define MT_EE_CAL_GROUP_SIZE(_radio)		(PREK(GROUP_STATE_SIZE_ ## _radio ## G) + \
+						 PREK(GROUP_DATA_SIZE_ ## _radio ## G))
 
 #define MT_EE_CAL_RX_GAIN_SIZE			748
 
@@ -138,10 +102,6 @@ enum rf_cal_item {
 	RF_RX_GAIN_CAL = BIT(24),
 	RF_DPD_FLAT_CAL = BIT(28),
 	RF_PRE_CAL = BIT(29),
-	RF_DPD_FLAT_5G_CAL = GENMASK(29, 28),
-	RF_DPD_FLAT_5G_MEM_CAL = (BIT(30) | BIT(28)),
-	RF_DPD_FLAT_6G_CAL = GENMASK(30, 28),
-	RF_DPD_FLAT_6G_MEM_CAL = (BIT(31) | BIT(28)),
 };
 
 static inline int

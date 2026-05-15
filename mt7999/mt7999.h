@@ -180,6 +180,69 @@ enum mt7999_adie_type {
 	ADIE_TYPE_NUM,
 };
 
+enum prek_category {
+	PREK_CATEGORY_2G_CH,
+	PREK_CATEGORY_5G_CH_FULL,
+	PREK_CATEGORY_5G_CH_HIGH,
+	PREK_CATEGORY_5G_CH_LOW,
+	PREK_CATEGORY_6G_CH_FULL,
+	PREK_CATEGORY_6G_CH_HIGH,
+	PREK_CATEGORY_6G_CH_LOW,
+	PREK_CATEGORY_2G_GROUP,
+	PREK_CATEGORY_5G_GROUP_FULL,
+	PREK_CATEGORY_5G_GROUP_HIGH,
+	PREK_CATEGORY_5G_GROUP_LOW,
+	PREK_CATEGORY_6G_GROUP_FULL,
+	PREK_CATEGORY_6G_GROUP_HIGH,
+	PREK_CATEGORY_6G_GROUP_LOW,
+	PREK_CATEGORY_LOCATION,
+	PREK_CATEGORY_MAX
+};
+
+enum prek_status {
+	PREK_STATUS_NO_DATA,
+	PREK_STATUS_PREPARE,
+	PREK_STATUS_DONE,
+	PREK_STATUS_INVALID,
+};
+
+enum dpd_ch_bw {
+	DPD_CH_BW_20,
+	DPD_CH_BW_40,
+	DPD_CH_BW_80,
+	DPD_CH_BW_160,
+	DPD_CH_BW_320,
+	DPD_CH_BW_NUM
+};
+
+struct prek_block_header {
+	__le32 length;
+	__le32 data_offset;
+	__le32 crc;
+	u8 channel_num;
+	u8 category;
+	u8 band_idx;
+	u8 status;
+} __packed;
+
+struct prek_dpd_ch_header {
+	__le32 ch_data_offs;
+	__le32 crc;
+	__le16 channel;
+	u8 status;
+	u8 bw;
+} __packed;
+
+struct dpd_ch {
+	u16 chan;
+	bool valid;
+};
+
+struct dpd_ch_info {
+	struct dpd_ch *list;
+	int ch_num;
+};
+
 enum mt7999_coredump_state {
 	MT7999_COREDUMP_IDLE = 0,
 	MT7999_COREDUMP_MANUAL_WA,
@@ -265,19 +328,6 @@ struct mt7999_twt_event {
 };
 
 DECLARE_EWMA(avg_signal, 10, 8)
-
-enum mt7999_dpd_ch_num {
-	DPD_CH_NUM_BW20_2G,
-	DPD_CH_NUM_BW20_5G,
-	DPD_CH_NUM_BW20_5G_SKIP,
-	DPD_CH_NUM_BW80_5G,
-	DPD_CH_NUM_BW160_5G,
-	DPD_CH_NUM_BW20_6G,
-	DPD_CH_NUM_BW80_6G,
-	DPD_CH_NUM_BW160_6G,
-	DPD_CH_NUM_BW320_6G,
-	DPD_CH_NUM_TYPE_MAX,
-};
 
 enum vow_feature_flag {
 	VOW_FF_BWC_REFILL_PERIOD,
@@ -929,10 +979,14 @@ struct mt7999_dev {
 	struct rchan *relay_idxlog;
 
 	struct debugfs_blob_wrapper cal;
-	u32 cur_prek_offset;
 	struct {
 		const u32 *rev;
-		u8 dpd_ch_num[DPD_CH_NUM_TYPE_MAX];
+		u32 group_size[__MT_MAX_BAND];
+		u32 dpd_size[__MT_MAX_BAND];
+		int dpd_ch_num[__MT_MAX_BAND];
+		struct dpd_ch_info ch_info[__MT_MAX_BAND][DPD_CH_BW_NUM];
+		struct prek_block_header *cur_hdr;
+		u32 cur_offs;
 	} prek;
 
 	struct {
@@ -1242,6 +1296,11 @@ void mt7999_vif_link_remove(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 			    struct mt76_vif_link *mlink);
 const char *mt7999_eeprom_name(struct mt7999_dev *dev);
 int mt7999_eeprom_init(struct mt7999_dev *dev);
+int mt7999_eeprom_get_prek_category(struct mt7999_phy *phy, bool group);
+int mt7999_eeprom_get_prek_block_header(struct mt7999_phy *phy, bool group);
+struct prek_dpd_ch_header *mt7999_eeprom_get_dpd_ch_header(struct mt7999_phy *phy,
+							   u16 channel, enum dpd_ch_bw bw);
+int mt7999_eeprom_init_precal(struct mt7999_dev *dev);
 int mt7999_eeprom_check_fw_mode(struct mt7999_dev *dev);
 int mt7999_eeprom_parse_hw_cap(struct mt7999_dev *dev, struct mt7999_phy *phy);
 int mt7999_eeprom_get_target_power(struct mt7999_dev *dev,

@@ -173,6 +173,11 @@ static int mt76_tm_get_##type(struct nlattr *attr, type *dest, type min, type ma
  * @MT76_TM_ATTR_SUB_CHAN: config the sub channel for DSO/NPCA (u16)
  * @MT76_TM_ATTR_SUB_PRI_SEL: config the primary channel selection index of
  *	the sub channel for DSO/NPCA (u8)
+ *
+ * @MT76_TM_ATTR_DPD_CH_BW: config the DPD channel bandwidth for valid
+ *	channel selection (u8, see &enum mt76_testmode_dpd_bw)
+ * @MT76_TM_ATTR_DPD_VALID_CH: config the valid channel list for DPD
+ *	calibration (nested)
  */
 enum mt76_testmode_attr {
 	MT76_TM_ATTR_UNSPEC,
@@ -297,6 +302,9 @@ enum mt76_testmode_attr {
 	MT76_TM_ATTR_UHR_CH_OP_MODE,
 	MT76_TM_ATTR_SUB_CHAN,
 	MT76_TM_ATTR_SUB_PRI_SEL,
+
+	MT76_TM_ATTR_DPD_CH_BW,
+	MT76_TM_ATTR_DPD_VALID_CH,
 
 	/* keep last */
 	NUM_MT76_TM_ATTRS,
@@ -780,5 +788,26 @@ enum mt76_testmode_uhr_ch_op_mode {
 	/* keep last */
 	NUM_MT76_TM_UHR_CH_OP_MODE,
 	MT76_TM_UHR_CH_OP_MODE_MAX = NUM_MT76_TM_UHR_CH_OP_MODE - 1,
+};
+
+/**
+ * enum mt76_testmode_dpd_bw - bandwidth for configuring the DPD valid channel list
+ *
+ * @MT76_TM_DPD_BW_20: configure valid channel list for bandwidth 20 MHz
+ * @MT76_TM_DPD_BW_40: configure valid channel list for bandwidth 40 MHz
+ * @MT76_TM_DPD_BW_80: configure valid channel list for bandwidth 80 MHz
+ * @MT76_TM_DPD_BW_160: configure valid channel list for bandwidth 160 MHz
+ * @MT76_TM_DPD_BW_320: configure valid channel list for bandwidth 320 MHz
+ */
+enum mt76_testmode_dpd_bw {
+	MT76_TM_DPD_BW_20,
+	MT76_TM_DPD_BW_40,
+	MT76_TM_DPD_BW_80,
+	MT76_TM_DPD_BW_160,
+	MT76_TM_DPD_BW_320,
+
+	/* keep last */
+	NUM_MT76_TM_DPD_BW,
+	MT76_TM_DPD_BW_MAX = NUM_MT76_TM_DPD_BW - 1,
 };
 #endif

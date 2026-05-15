@@ -1176,6 +1176,157 @@ static const struct file_operations mt7999_precal_ops = {
 };
 
 static int
+mt7999_precal_info_show(struct seq_file *file, void *data)
+{
+	struct mt7999_dev *dev = file->private;
+	static const char * const precal_category[] = {
+		[PREK_CATEGORY_2G_CH] = "2g DPD",
+		[PREK_CATEGORY_5G_CH_FULL] = "5g full DPD",
+		[PREK_CATEGORY_5G_CH_HIGH] = "5g high DPD",
+		[PREK_CATEGORY_5G_CH_LOW] = "5g low DPD",
+		[PREK_CATEGORY_6G_CH_FULL] = "6g full DPD",
+		[PREK_CATEGORY_6G_CH_HIGH] = "6g high DPD",
+		[PREK_CATEGORY_6G_CH_LOW] = "6g low DPD",
+		[PREK_CATEGORY_2G_GROUP] = "2g group",
+		[PREK_CATEGORY_5G_GROUP_FULL] = "5g full group",
+		[PREK_CATEGORY_5G_GROUP_HIGH] = "5g high group",
+		[PREK_CATEGORY_5G_GROUP_LOW] = "5g low group",
+		[PREK_CATEGORY_6G_GROUP_FULL] = "6g full group",
+		[PREK_CATEGORY_6G_GROUP_HIGH] = "6g high group",
+		[PREK_CATEGORY_6G_GROUP_LOW] = "6g low group"
+	};
+	static const char * const precal_status[] = {
+		[PREK_STATUS_NO_DATA] = "no data",
+		[PREK_STATUS_PREPARE] = "preparing",
+		[PREK_STATUS_DONE] = "complete",
+		[PREK_STATUS_INVALID] = "invalid"
+	};
+	static const char * const ch_bw[] = {
+		[DPD_CH_BW_20] = "20",
+		[DPD_CH_BW_40] = "40",
+		[DPD_CH_BW_80] = "80",
+		[DPD_CH_BW_160] = "160",
+		[DPD_CH_BW_320] = "320"
+	};
+	u8 *eeprom = dev->mt76.eeprom.data;
+	int band;
+
+	if (dev->eeprom_mode != EEPROM_MODE_FLASH &&
+	    dev->eeprom_mode != EEPROM_MODE_BIN) {
+		seq_puts(file, "Not in flash or binfile mode\n");
+		return 0;
+	}
+
+	if (!dev->cal.data || !dev->cal.size) {
+		seq_puts(file, "No precal data available\n");
+		return 0;
+	}
+
+	for (band = MT_BAND0; band < __MT_MAX_BAND; band++) {
+		struct mt7999_phy *phy = __mt7999_phy(dev, band);
+		u32 val, length, data_offset;
+		size_t offs;
+		int ret;
+
+		if (!phy)
+			continue;
+
+		val = eeprom[MT_EE_DO_PRE_CAL(band)];
+		seq_printf(file, "Band %d\n", band);
+
+		/* group cal data */
+		ret = mt7999_eeprom_get_prek_block_header(phy, true);
+		if (ret != -ENODATA) {
+			struct prek_block_header *hdr = dev->prek.cur_hdr;
+
+			offs = (u8 *)hdr - (u8 *)dev->cal.data;
+			if (ret)
+				seq_puts(file, "\tGroup precal: No valid data\n");
+			else
+				seq_printf(file, "\tGroup precal: %s\n",
+					   val & MT_EE_WIFI_CAL_GROUP ?
+					   "applied" : "not applied");
+
+			length = le32_to_cpu(hdr->length);
+			data_offset = le32_to_cpu(hdr->data_offset);
+			seq_printf(file, "\t\theader offset: [0x%lx, 0x%lx]\n",
+				   offs, offs + sizeof(*hdr) - 1);
+			seq_printf(file, "\t\tdata offset: [0x%lx, 0x%lx], size: %dKbytes\n",
+				   offs + data_offset, offs + length - 1,
+				   dev->prek.group_size[band] / MT_EE_CAL_UNIT);
+			seq_printf(file, "\t\tcategory: %s, status: %s\n",
+				   precal_category[hdr->category], precal_status[hdr->status]);
+		} else {
+			seq_puts(file, "\tGroup precal: No data\n");
+		}
+
+		/* dpd cal data */
+		ret = mt7999_eeprom_get_prek_block_header(phy, false);
+		if (ret != -ENODATA) {
+			struct prek_block_header *hdr = dev->prek.cur_hdr;
+			int bw, i;
+
+			offs = (u8 *)hdr - (u8 *)dev->cal.data;
+			if (ret)
+				seq_puts(file, "\tDPD precal: No valid data\n");
+			else
+				seq_printf(file, "\tDPD precal: %s\n",
+					   val & MT_EE_WIFI_CAL_DPD ?
+					   "applied" : "not applied");
+
+			length = le32_to_cpu(hdr->length);
+			data_offset = le32_to_cpu(hdr->data_offset);
+			seq_printf(file, "\t\theader offset: [0x%lx, 0x%lx]\n",
+				   offs, offs + sizeof(*hdr) - 1);
+			seq_printf(file, "\t\tchannel headers offset: [0x%lx, 0x%lx]\n",
+				   offs + sizeof(*hdr), offs + data_offset - 1);
+			seq_printf(file, "\t\tdata offset: [0x%lx, 0x%lx], size: %dKbytes\n",
+				   offs + data_offset, offs + length - 1,
+				   hdr->channel_num * PREK(DPD_PER_CH_SIZE) / MT_EE_CAL_UNIT);
+			seq_printf(file, "\t\tcategory: %s, status: %s\n",
+				   precal_category[hdr->category], precal_status[hdr->status]);
+			for (bw = DPD_CH_BW_20; bw < DPD_CH_BW_NUM; bw++) {
+				struct dpd_ch *list = dev->prek.ch_info[band][bw].list;
+				int ch_num = dev->prek.ch_info[band][bw].ch_num;
+
+				if (!list)
+					break;
+
+				seq_printf(file, "\t\tBW %s (%d channels)\n", ch_bw[bw], ch_num);
+				for (i = 0; i < ch_num; i++) {
+					struct prek_dpd_ch_header *ch_hdr;
+					int chan = list[i].chan;
+					bool valid;
+
+					ch_hdr = mt7999_eeprom_get_dpd_ch_header(phy, chan, bw);
+					valid = ch_hdr && list[i].valid;
+					seq_printf(file, "\t\t\tchannel %d: %s",
+						   chan, valid ? "valid" : "invalid");
+					if (!valid) {
+						seq_puts(file, "\n");
+						continue;
+					}
+
+					offs = (u8 *)ch_hdr - (u8 *)dev->cal.data;
+					seq_printf(file, ", header offset: [0x%lx, 0x%lx]",
+						   offs, offs + sizeof(*ch_hdr) - 1);
+					offs = (u8 *)hdr - (u8 *)dev->cal.data +
+					       data_offset + le32_to_cpu(ch_hdr->ch_data_offs);
+					seq_printf(file,
+						   ", data offset: [0x%lx, 0x%lx]\n",
+						   offs, offs + PREK(DPD_PER_CH_SIZE) - 1);
+				}
+			}
+		} else {
+			seq_puts(file, "\tDPD precal: No data\n");
+		}
+	}
+
+	return 0;
+}
+DEFINE_SHOW_ATTRIBUTE(mt7999_precal_info);
+
+static int
 mt7999_vow_info_read(struct seq_file *s, void *data)
 {
 	struct mt7999_dev *dev = dev_get_drvdata(s->private);
@@ -1486,6 +1637,7 @@ int mt7999_init_dev_debugfs(struct mt7999_phy *phy)
 				    mt7999_efuse_get_free_block);
 	debugfs_create_file("ext_eeprom", 0400, dir, dev, &mt7999_ext_eeprom_ops);
 	debugfs_create_file("precal", 0400, dir, dev, &mt7999_precal_ops);
+	debugfs_create_file("precal_info", 0400, dir, dev, &mt7999_precal_info_fops);
 	debugfs_create_devm_seqfile(dev->mt76.dev, "vow_info", dir,
 				    mt7999_vow_info_read);
 	debugfs_create_file("atf_enable", 0600, dir, phy, &fops_atf_enable);

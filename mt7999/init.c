@@ -1458,12 +1458,6 @@ static int mt7999_init_hardware(struct mt7999_dev *dev)
 	if (ret < 0)
 		return ret;
 
-	if (dev->cal.data) {
-		ret = mt7999_mcu_apply_group_cal(dev);
-		if (ret)
-			return ret;
-	}
-
 	/* Beacon and mgmt frames should occupy wcid 0 */
 	idx = mt76_wcid_alloc(dev->mt76.wcid_mask, MT7999_WTBL_STA);
 	if (idx)
@@ -2001,6 +1995,16 @@ int mt7999_register_device(struct mt7999_dev *dev)
 	if (ret)
 		goto error;
 
+	ret = mt7999_eeprom_init_precal(dev);
+	if (ret)
+		goto error;
+
+	if (dev->cal.data) {
+		ret = mt7999_mcu_apply_group_cal(dev);
+		if (ret)
+			goto error;
+	}
+
 	mt7999_for_each_phy(dev, phy) {
 		mt7999_thermal_init(phy);
 		ret = mt7999_init_band_debugfs(phy);
@@ -2044,6 +2048,9 @@ error:
 
 void mt7999_unregister_device(struct mt7999_dev *dev)
 {
+	kvfree(dev->cal.data);
+	dev->cal.data = NULL;
+
 	cancel_work_sync(&dev->dump_work);
 	cancel_work_sync(&dev->wed_rro.work);
 	cancel_work_sync(&dev->twt.event_work);

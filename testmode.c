@@ -69,6 +69,8 @@ const struct nla_policy mt76_tm_policy[NUM_MT76_TM_ATTRS] = {
 	[MT76_TM_ATTR_UHR_CH_OP_MODE] = { .type = NLA_U8 },
 	[MT76_TM_ATTR_SUB_CHAN] = { .type = NLA_U16 },
 	[MT76_TM_ATTR_SUB_PRI_SEL] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_DPD_CH_BW] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_DPD_VALID_CH] = { .type = NLA_NESTED },
 };
 EXPORT_SYMBOL_GPL(mt76_tm_policy);
 
@@ -1038,6 +1040,47 @@ out:
 }
 
 static int
+mt76_testmode_set_dpd_valid_ch(struct mt76_phy *phy, struct nlattr **tb)
+{
+#define DPD_CH_MAX_NUM		66
+	struct mt76_dev *dev = phy->dev;
+	u16 ch_list[DPD_CH_MAX_NUM];
+	int ch_num = 0, err = -EINVAL;
+	u8 bw;
+
+	if (!dev->test_ops->set_dpd_valid_ch)
+		return -EOPNOTSUPP;
+
+	if (mt76_tm_get_u8(tb[MT76_TM_ATTR_DPD_CH_BW], &bw,
+			   0, MT76_TM_DPD_BW_MAX))
+		goto out;
+
+	if (tb[MT76_TM_ATTR_DPD_VALID_CH]) {
+		struct nlattr *cur;
+		int rem;
+
+		nla_for_each_nested(cur, tb[MT76_TM_ATTR_DPD_VALID_CH], rem) {
+			if (nla_len(cur) != sizeof(u16) || ch_num >= DPD_CH_MAX_NUM)
+				goto out;
+
+			ch_list[ch_num++] = nla_get_u16(cur);
+		}
+	}
+
+	if (!ch_num)
+		goto out;
+
+	/* reset all channels to a valid state */
+	if (ch_num == 1 && !ch_list[0])
+		err = dev->test_ops->set_dpd_valid_ch(phy, bw, NULL, 0);
+	else
+		err = dev->test_ops->set_dpd_valid_ch(phy, bw, ch_list, ch_num);
+
+out:
+	return err;
+}
+
+static int
 mt76_testmode_txbf_profile_update_all_cmd(struct mt76_phy *phy, struct nlattr **tb, u32 state)
 {
 #define PARAM_UNIT	5
@@ -1135,6 +1178,11 @@ int mt76_testmode_cmd(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 
 	if (tb[MT76_TM_ATTR_EEPROM_ACTION]) {
 		err = mt76_testmode_set_eeprom(phy, tb);
+		goto out;
+	}
+
+	if (tb[MT76_TM_ATTR_DPD_VALID_CH] && tb[MT76_TM_ATTR_DPD_CH_BW]) {
+		err = mt76_testmode_set_dpd_valid_ch(phy, tb);
 		goto out;
 	}
 

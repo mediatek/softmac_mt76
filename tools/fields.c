@@ -145,6 +145,14 @@ static const char * const testmode_uhr_ch_op_mode[] = {
 	[MT76_TM_UHR_CH_OP_MODE_NPCA] = "npca",
 };
 
+static const char * const testmode_dpd_bw[] = {
+	[MT76_TM_DPD_BW_20] = "20",
+	[MT76_TM_DPD_BW_40] = "40",
+	[MT76_TM_DPD_BW_80] = "80",
+	[MT76_TM_DPD_BW_160] = "160",
+	[MT76_TM_DPD_BW_320] = "320",
+};
+
 static void print_enum(const struct tm_field *field, struct nlattr *attr)
 {
 	unsigned int i = nla_get_u8(attr);
@@ -678,6 +686,8 @@ static const struct tm_field testdata_fields[NUM_MT76_TM_ATTRS] = {
 	FIELD_ENUM(UHR_CH_OP_MODE, "uhr_ch_op_mode", testmode_uhr_ch_op_mode),
 	FIELD(u16, SUB_CHAN, "sub_chan"),
 	FIELD(u8, SUB_PRI_SEL, "sub_pri_sel"),
+	FIELD_ENUM(DPD_CH_BW, "dpd_ch_bw", testmode_dpd_bw),
+	FIELD_ARRAY(u16, DPD_VALID_CH, "dpd_ch_list"),
 };
 #undef FIELD_NAME
 
@@ -762,6 +772,8 @@ static struct nla_policy testdata_policy[NUM_MT76_TM_ATTRS] = {
 	[MT76_TM_ATTR_UHR_CH_OP_MODE] = { .type = NLA_U8 },
 	[MT76_TM_ATTR_SUB_CHAN] = { .type = NLA_U16 },
 	[MT76_TM_ATTR_SUB_PRI_SEL] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_DPD_CH_BW] = { .type = NLA_U8 },
+	[MT76_TM_ATTR_DPD_VALID_CH] = { .type = NLA_NESTED },
 };
 
 const struct tm_field msg_field = {
