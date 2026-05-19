@@ -437,6 +437,7 @@ mt7999_radar_trigger(void *data, u64 val)
 	if (ret <= 0)
 		return ret;
 
+	phy->rdd_emulate = true;
 	return mt7999_mcu_rdd_cmd(dev, RDD_RADAR_EMULATE, rdd_idx, 0);
 }
 

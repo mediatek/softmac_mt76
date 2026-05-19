@@ -443,6 +443,7 @@ mt7999_mcu_rx_radar_detected(struct mt7999_dev *dev, struct sk_buff *skb)
 {
 	struct mt76_phy *mphy = &dev->mt76.phy;
 	struct mt7999_mcu_rdd_report *r;
+	struct mt7999_phy *phy;
 
 	r = (struct mt7999_mcu_rdd_report *)skb->data;
 
@@ -465,6 +466,19 @@ mt7999_mcu_rx_radar_detected(struct mt7999_dev *dev, struct sk_buff *skb)
 	if (!mphy)
 		goto err;
 
+	phy = mphy->priv;
+
+#ifdef CONFIG_MTK_DEBUG
+	mt7999_mcu_dump_radar_pulse(phy, r);
+#endif
+
+	if (!r->long_detected && !r->constant_prf_detected &&
+	    !r->staggered_prf_detected && !phy->rdd_emulate) {
+		dev_err(dev->mt76.dev, "Unknown pulse\n");
+		phy->rdd_emulate = false;
+		return;
+	}
+
 	if (r->rdd_idx == MT_RDD_IDX_BACKGROUND) {
 		dev->bg_nxt_freq = 0;
 		cfg80211_background_radar_event(mphy->hw->wiphy,
@@ -477,6 +491,7 @@ mt7999_mcu_rx_radar_detected(struct mt7999_dev *dev, struct sk_buff *skb)
 		ieee80211_radar_detected(mphy->hw, NULL);
 	}
 	dev->hw_pattern++;
+	phy->rdd_emulate = false;
 
 	dev_info(dev->mt76.dev, "radar detected on %s\n",
 		 r->rdd_idx == MT_RDD_IDX_BACKGROUND ?

@@ -69,6 +69,16 @@ struct mt7999_mcu_countdown_notify {
 	u8 rsv;
 } __packed;
 
+#define MAX_PULSE_BUF_SIZE	32
+
+struct rdd_hw_pulse_ext {
+	__le16 sub20_rdd_ind;
+	__le16 fc_est_end;
+	__le16 fc_est_start;
+	u8 rssi_max_idx;
+	u8 rsv;
+};
+
 struct mt7999_mcu_rdd_report {
 	struct mt7999_mcu_rxd rxd;
 
@@ -106,7 +116,7 @@ struct mt7999_mcu_rdd_report {
 		__le16 pulse_power;
 		u8 mdrdy_flag;
 		u8 rsv[3];
-	} long_pulse[32];
+	} long_pulse[MAX_PULSE_BUF_SIZE];
 
 	struct {
 		__le32 start;
@@ -114,7 +124,7 @@ struct mt7999_mcu_rdd_report {
 		__le16 pulse_power;
 		u8 mdrdy_flag;
 		u8 rsv[3];
-	} periodic_pulse[32];
+	} periodic_pulse[MAX_PULSE_BUF_SIZE];
 
 	struct {
 		__le32 start;
@@ -124,7 +134,12 @@ struct mt7999_mcu_rdd_report {
 		u8 sw_reset;
 		u8 mdrdy_flag;
 		u8 tx_active;
-	} hw_pulse[32];
+	} hw_pulse[MAX_PULSE_BUF_SIZE];
+
+	struct rdd_hw_pulse_ext hw_pulse_ext[MAX_PULSE_BUF_SIZE];
+
+	__le16 radar_pp_bitmap;
+	__le16 dfs_pp_status;
 } __packed;
 
 struct mt7999_rdd_ctrl {
