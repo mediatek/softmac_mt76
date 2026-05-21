@@ -816,6 +816,31 @@ mt7999_mac_write_txwi_80211(struct mt7999_dev *dev, __le32 *txwi,
 		txwi[6] |= cpu_to_le32(MT_TXD6_HW_AMSDU);
 }
 
+static struct mt76_wcid *mt7999_get_txd_wcid(struct mt76_wcid *wcid, u8 tid)
+{
+	struct mt7999_sta_link *msta_link;
+	struct mt7999_sta *msta;
+	u8 link_id;
+
+	if (!wcid->sta)
+		return wcid;
+
+	msta_link = container_of(wcid, struct mt7999_sta_link, wcid);
+	msta = msta_link->sta;
+
+	if (!msta || wcid->link_id == msta->seclink_id ||
+	    wcid->link_id == msta->deflink_id)
+		return wcid;
+
+	link_id = (tid % 2) ? msta->seclink_id : msta->deflink_id;
+
+	msta_link = mt7999_sta_link(msta, link_id);
+	if (msta_link)
+		return &msta_link->wcid;
+
+	return wcid;
+}
+
 void mt7999_mac_write_txwi(struct mt7999_dev *dev, __le32 *txwi,
 			   struct sk_buff *skb, struct mt76_wcid *wcid,
 			   struct ieee80211_key_conf *key, int pid,
@@ -828,6 +853,7 @@ void mt7999_mac_write_txwi(struct mt7999_dev *dev, __le32 *txwi,
 	u8 p_fmt, q_idx, omac_idx = 0, wmm_idx = 0;
 	bool is_8023 = info->flags & IEEE80211_TX_CTL_HW_80211_ENCAP;
 	struct mt76_vif_link *mlink = NULL;
+	struct mt76_wcid *wcid_txd;
 	struct mt7999_vif *mvif;
 	unsigned int link_id;
 	u32 val;
@@ -835,6 +861,7 @@ void mt7999_mac_write_txwi(struct mt7999_dev *dev, __le32 *txwi,
 					 BSS_CHANGED_FILS_DISCOVERY));
 	bool beacon = !!(changed & (BSS_CHANGED_BEACON |
 				    BSS_CHANGED_BEACON_ENABLED)) && (!inband_disc);
+	u8 tid = skb->priority & IEEE80211_QOS_CTL_TID_MASK;
 
 	if (wcid != &dev->mt76.global_wcid)
 		link_id = wcid->link_id;
@@ -876,7 +903,9 @@ void mt7999_mac_write_txwi(struct mt7999_dev *dev, __le32 *txwi,
 	      FIELD_PREP(MT_TXD0_Q_IDX, q_idx);
 	txwi[0] = cpu_to_le32(val);
 
-	val = FIELD_PREP(MT_TXD1_WLAN_IDX, wcid->idx) |
+	/* WLAN_IDX can only be primary or secondary link */
+	wcid_txd = mt7999_get_txd_wcid(wcid, tid);
+	val = FIELD_PREP(MT_TXD1_WLAN_IDX, wcid_txd->idx) |
 	      FIELD_PREP(MT_TXD1_OWN_MAC, omac_idx);
 
 	if (band_idx)
@@ -979,9 +1008,11 @@ int mt7999_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
 	struct mt7999_vif *mvif = vif ? (struct mt7999_vif *)vif->drv_priv : NULL;
 	struct mt7999_sta *msta = sta ? (struct mt7999_sta *)sta->drv_priv : NULL;
 	struct mt76_vif_link *mlink = NULL;
+	struct mt76_wcid *wcid_txd;
 	struct mt76_txwi_cache *t;
 	int id, i, pid, nbuf = tx_info->nbuf - 1;
 	bool is_8023 = info->flags & IEEE80211_TX_CTL_HW_80211_ENCAP;
+	u8 tid = tx_info->skb->priority & IEEE80211_QOS_CTL_TID_MASK;
 	u8 *txwi = (u8 *)txwi_ptr;
 	u8 link_id;
 
@@ -992,14 +1023,11 @@ int mt7999_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
 		wcid = &dev->mt76.global_wcid;
 
 	if ((is_8023 || ieee80211_is_data_qos(hdr->frame_control)) && sta && sta->mlo &&
-	    likely(tx_info->skb->protocol != cpu_to_be16(ETH_P_PAE))) {
-		u8 tid = tx_info->skb->priority & IEEE80211_QOS_CTL_TID_MASK;
-
+	    likely(tx_info->skb->protocol != cpu_to_be16(ETH_P_PAE)))
 		link_id = (tid % 2) ? msta->seclink_id : msta->deflink_id;
-	} else {
+	else
 		link_id = u32_get_bits(info->control.flags,
 				       IEEE80211_TX_CTRL_MLO_LINK);
-	}
 
 	if (link_id != wcid->link_id && link_id != IEEE80211_LINK_UNSPECIFIED) {
 		if (msta) {
@@ -1129,7 +1157,9 @@ int mt7999_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
 	}
 
 	txp->fw.token = cpu_to_le16(id);
-	txp->fw.rept_wds_wcid = cpu_to_le16(sta ? wcid->idx : 0xfff);
+	wcid_txd = mt7999_get_txd_wcid(wcid, tid);
+	/* wcid in txp can only be primary or secondary link */
+	txp->fw.rept_wds_wcid = cpu_to_le16(sta ? wcid_txd->idx : 0xfff);
 
 	tx_info->skb = NULL;
 
