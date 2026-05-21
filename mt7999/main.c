@@ -68,9 +68,6 @@ int mt7999_run(struct mt7999_phy *phy)
 	if (ret)
 		return ret;
 
-	memset(phy->user_edcca_threshold, MT7999_EDCCA_DEFAULT_THRESHOLD,
-	       EDCCA_MAX_BW_NUM);
-
 	set_bit(MT76_STATE_RUNNING, &phy->mt76->state);
 
 	ieee80211_queue_delayed_work(dev->mphy.hw, &phy->mt76->mac_work,
@@ -809,13 +806,6 @@ int mt7999_set_channel(struct mt76_phy *mphy)
 	ret = mt7999_dfs_init_radar_detector(phy);
 
 	mt7999_mac_reset_counters(phy);
-#ifdef CONFIG_MTK_VENDOR
-	if (phy->user_edcca_threshold[EDCCA_BW_20] != MT7999_EDCCA_DEFAULT_THRESHOLD ||
-	    phy->user_edcca_threshold[EDCCA_BW_40] != MT7999_EDCCA_DEFAULT_THRESHOLD ||
-	    phy->user_edcca_threshold[EDCCA_BW_80] != MT7999_EDCCA_DEFAULT_THRESHOLD ||
-	    phy->user_edcca_threshold[EDCCA_BW_160] != MT7999_EDCCA_DEFAULT_THRESHOLD)
-		mt7999_mcu_edcca_threshold_ctrl(phy, phy->user_edcca_threshold, true);
-#endif
 	phy->noise = 0;
 
 out:

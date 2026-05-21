@@ -652,8 +652,6 @@ enum edcca_bw_id {
 	EDCCA_MAX_BW_NUM,
 };
 
-#define MT7999_EDCCA_DEFAULT_THRESHOLD 0x7f
-
 struct mt7999_rro_ba_session {
 	u32 ack_sn         :12;
 	u32 win_sz         :3;
@@ -745,7 +743,6 @@ struct mt7999_phy {
 
 	bool rdd_emulate;
 
-	u8 user_edcca_threshold[EDCCA_MAX_BW_NUM];
 	/* Index 0 (TxBSS) is not used */
 	struct mt7999_vif_link __rcu *mbssid_conf[MT7999_MAX_MBSSID];
 
