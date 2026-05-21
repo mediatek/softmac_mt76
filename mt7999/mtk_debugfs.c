@@ -343,7 +343,7 @@ static int mt7999_dump_version(struct seq_file *s, void *data)
 		[MT7999_FEM_INT] = "iFEM",
 	};
 
-	seq_printf(s, "Version: 4.4.%02d.%02d\n", PKG_YEAR, PKG_MONTH);
+	seq_printf(s, "Version: 5.0.%02d.%02d\n", PKG_YEAR, PKG_MONTH);
 
 	if (!test_bit(MT76_STATE_MCU_RUNNING, &dev->mphy.state))
 		return 0;
