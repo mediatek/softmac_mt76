@@ -823,10 +823,10 @@ struct sta_rec_eht {
 struct sta_rec_uhr {
 	__le16 tag;
 	__le16 len;
-	__le32 mac_cap[3];
-	__le32 _rsv;
-	__le32 phy_cap[2];
-	__le32 _rsv2;
+	u8 mac_cap[6];
+	u8 phy_cap[5];
+	u8 dbe_cap[7];
+	u8 _rsv[2];
 } __packed;
 
 struct sec_key_uni {

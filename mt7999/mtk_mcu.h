@@ -1055,7 +1055,8 @@ struct mt7999_muru_ul {
 		u8 target_rssi;
 		__le32 trig_pkt_size;
 		u8 ru_allo_ps160;
-		u8 _rsv2[3];
+		u8 dru_dbw;
+		u8 _rsv2[2];
 	} usr[MURU_MAX_USER];
 };
 
@@ -1063,6 +1064,13 @@ struct mt7999_muru_dbg {
 	/* HE TB RX Debug */
 	__le32 rx_hetb_nonsf_en_bitmap;
 	__le32 rx_hetb_cfg[2];
+};
+
+struct mt7999_muru_uhr {
+	u8 ul_dru_ind;
+	u8 mu_bar_dru_ind;
+	u8 mu_bar_dru_dbw;
+	u8 _rsv_uhr;
 };
 
 struct mt7999_muru {
@@ -1075,6 +1083,9 @@ struct mt7999_muru {
 	struct mt7999_muru_dl dl;
 	struct mt7999_muru_ul ul;
 	struct mt7999_muru_dbg dbg;
+
+	__le32 cfg_uhr;
+	struct mt7999_muru_uhr uhr;
 };
 
 #define MURU_PPDU_HE_TRIG		BIT(2)

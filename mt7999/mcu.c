@@ -2568,23 +2568,17 @@ static void
 mt7999_mcu_sta_uhr_tlv(struct sk_buff *skb,
 		       struct ieee80211_link_sta *link_sta)
 {
-	struct ieee80211_uhr_cap_mac *mac;
-	struct ieee80211_uhr_cap_phy *phy;
 	struct sta_rec_uhr *uhr;
 	struct tlv *tlv;
 
 	if (!link_sta->uhr_cap.has_uhr)
 		return;
 
-	mac = &link_sta->uhr_cap.mac;
-	phy = &link_sta->uhr_cap.phy;
-
 	tlv = mt76_connac_mcu_add_tlv(skb, STA_REC_UHR, sizeof(*uhr));
 	uhr = (struct sta_rec_uhr *)tlv;
 
-	uhr->mac_cap[0] = cpu_to_le32(get_unaligned_le32(&mac->mac_cap[0]));
-	uhr->mac_cap[1] = cpu_to_le32(mac->mac_cap[4]);
-	uhr->phy_cap[0] = cpu_to_le32(phy->cap);
+	memcpy(uhr->mac_cap, &link_sta->uhr_cap.mac, sizeof(uhr->mac_cap));
+	memcpy(uhr->phy_cap, &link_sta->uhr_cap.phy, sizeof(uhr->phy_cap));
 }
 
 static void
