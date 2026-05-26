@@ -782,11 +782,6 @@ int mt7999_set_channel(struct mt76_phy *mphy)
 		ret = mt7999_mcu_edcca_enable(phy, true);
 		if (ret)
 			goto out;
-
-		ret = mt7999_mcu_set_pp_en(phy, PP_USR_MODE,
-					   mphy->chandef.punctured);
-		if (ret)
-			goto out;
 	} else if (mphy->chanctx && mphy->chanctx->state == MT76_CHANCTX_STATE_SWITCH) {
 		ret = mt7999_mcu_set_txpower_sku(phy, phy->txpower);
 		if (ret)
@@ -800,6 +795,26 @@ int mt7999_set_channel(struct mt76_phy *mphy)
 	ret = mt7999_mcu_set_chan_info(phy, UNI_CHANNEL_RX_PATH, false);
 	if (ret)
 		goto out;
+
+	/* PP config depends on current channel info in FW */
+	if (mphy->chanctx && mphy->chanctx->state == MT76_CHANCTX_STATE_ADD) {
+		ret = mt7999_mcu_set_pp_en(phy, PP_USR_MODE,
+					   mphy->chandef.punctured);
+		if (ret)
+			goto out;
+	} else if (mphy->chanctx && mphy->chanctx->state == MT76_CHANCTX_STATE_SWITCH) {
+		if (mphy->chanctx->has_ap && phy->pp_mode == PP_USR_MODE) {
+			ret = mt7999_mcu_set_pp_en(phy, PP_USR_MODE,
+						   mphy->main_chandef.punctured);
+		} else if (mphy->chanctx->has_sta) {
+			u8 omac_idx = get_omac_idx(NL80211_IFTYPE_STATION,
+				      phy->omac_mask);
+			ret = mt7999_mcu_set_pp_sta_dscb(phy, &mphy->main_chandef,
+							 omac_idx);
+		}
+		if (ret)
+			goto out;
+	}
 
 	ret = mt7999_dfs_init_radar_detector(phy);
 
