@@ -180,6 +180,17 @@ mt7999_eeprom_check_or_use_default(struct mt7999_dev *dev)
 		goto out;
 	}
 
+	if (dev->eeprom_mode == EEPROM_MODE_FLASH ||
+	    dev->eeprom_mode == EEPROM_MODE_BIN) {
+		u8 eep_ver, cur_eep_ver;
+
+		eep_ver = fw->data[MT_EE_VERSION];
+		cur_eep_ver = eeprom[MT_EE_VERSION];
+		WARN(eep_ver > cur_eep_ver,
+		     "Current eeprom version %x is outdated. Please reapply calibrated data\n",
+		     cur_eep_ver);
+	}
+
 	if (dev->eeprom_mode != EEPROM_MODE_DEFAULT_BIN &&
 	    mt7999_eeprom_variant_valid(dev, fw->data))
 		goto out;

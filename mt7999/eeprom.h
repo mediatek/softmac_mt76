@@ -10,7 +10,7 @@
 
 enum mt7999_eeprom_field {
 	MT_EE_CHIP_ID =			0x000,
-	MT_EE_VERSION =			0x002,
+	MT_EE_BASE_VERSION =		0x002,
 	MT_EE_MAC_WAN_ADDR =		0x004,
 	MT_EE_MAC_LAN_ADDR =		0x00a,
 	MT_EE_WIFI_CONF_BASE =		0x170,
@@ -18,6 +18,7 @@ enum mt7999_eeprom_field {
 	MT_EE_DO_RX_GAIN_CAL =		0x1a1,
 	MT_EE_DO_PRE_CAL =		0x1a5,
 	MT_EE_TESTMODE_EN =		0x1af,
+	MT_EE_VERSION =			0x1300,
 	MT_EE_TX0_POWER_2G =		0x2000,
 	MT_EE_RATE_DELTA_2G =		0x2010,
 	MT_EE_TX0_POWER_5G_B0 =		0x2400,	/* for band 0 5g variant */
