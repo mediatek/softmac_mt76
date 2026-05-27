@@ -1285,7 +1285,8 @@ int mt7999_mcu_add_sta(struct mt7999_dev *dev,
 		       struct mt7999_sta_link *msta_link,
 		       int conn_state, bool newly);
 int mt7999_mcu_set_peer_mld(struct mt7999_dev *dev, struct ieee80211_vif *vif,
-			    struct ieee80211_sta *sta);
+			    struct ieee80211_sta *sta,
+			    struct mt7999_sta_link *msta_link, bool assoc);
 int mt7999_mcu_teardown_mld_sta(struct mt7999_dev *dev,
 				struct mt7999_vif_link *link,
 				struct mt7999_sta_link *msta_link);

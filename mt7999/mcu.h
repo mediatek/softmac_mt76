@@ -1683,7 +1683,8 @@ struct peer_mld_info {
 	__le16 len;
 	u8 ver;
 	u8 link_num;
-	u8 rsv[2];
+	u8 stage;
+	u8 rsv;
 
 	struct {
 		__le16 primary_id;

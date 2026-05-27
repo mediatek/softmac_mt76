@@ -424,6 +424,7 @@ int mt7999_vif_link_add(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 	 * interface, since firmware only records BSSID when the entry is new
 	 */
 	if (vif->type != NL80211_IFTYPE_STATION) {
+		mt7999_mcu_set_peer_mld(dev, vif, NULL, msta_link, false);
 		mt7999_mcu_add_sta(dev, link_conf, NULL, link, NULL,
 				   CONN_STATE_PORT_SECURE, true);
 
@@ -993,6 +994,7 @@ mt7999_vif_cfg_changed(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 			mt7999_mcu_add_bss_info(phy, vif, link_conf,
 						&link->mt76, &link->msta_link,
 						true);
+			mt7999_mcu_set_peer_mld(dev, vif, NULL, &link->msta_link, false);
 			mt7999_mcu_add_sta(dev, link_conf, NULL, link, NULL,
 					   CONN_STATE_PORT_SECURE, false);
 		}
@@ -1506,7 +1508,13 @@ mt7999_mac_sta_add(struct mt7999_dev *dev, struct ieee80211_vif *vif,
 	msta->seclink_id = IEEE80211_LINK_UNSPECIFIED;
 	msta->vif = mvif;
 	err = mt7999_mac_sta_add_links(dev, vif, sta, links);
+	if (err)
+		goto out;
 
+	err = mt7999_mcu_set_peer_mld(dev, vif, sta, NULL, false);
+	if (err)
+		mt7999_mac_sta_remove_links(dev, vif, sta, links, true);
+out:
 	mutex_unlock(&dev->mt76.mutex);
 
 	return err;
@@ -1561,7 +1569,7 @@ mt7999_mac_sta_event(struct mt7999_dev *dev, struct ieee80211_vif *vif,
 		switch (ev) {
 		case MT76_STA_EVENT_ASSOC:
 			if (links == sta->valid_links && sta->mlo) {
-				err = mt7999_mcu_set_peer_mld(dev, vif, sta);
+				err = mt7999_mcu_set_peer_mld(dev, vif, sta, NULL, true);
 				if (err)
 					goto unlock;
 			}
