@@ -3326,7 +3326,8 @@ void mt7996_mac_work(struct work_struct *work)
 				mt7996_mcu_get_all_sta_info(mdev, UNI_ALL_STA_TX_STAT);
 				mt7996_mcu_get_all_sta_info(mdev, UNI_ALL_STA_DATA_TX_RETRY_COUNT);
 
-				mt7996_mcu_get_bss_acq_pkt_cnt(phy->dev);
+				if (mphy->mac_work_count % 10 == 0)
+					mt7996_mcu_get_bss_acq_pkt_cnt(phy->dev);
 
 				if (mphy->mac_work_count % 100 == 0) {
 					if (phy->dev->idxlog_enable && mt7996_mcu_fw_time_sync(mdev))

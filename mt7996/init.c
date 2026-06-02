@@ -2046,13 +2046,41 @@ void mt7996_set_stream_he_eht_caps(struct mt7996_phy *phy)
 						NL80211_BAND_6GHZ);
 }
 
+static void mt7996_init_pbc(struct mt7996_dev *dev)
+{
+#define WMM_PBC_LOW_BOUND_VO	300
+#define WMM_PBC_LOW_BOUND_VI	350
+#define WMM_PBC_LOW_BOUND_BE	250
+#define WMM_PBC_LOW_BOUND_BK	100
+#define WMM_PBC_LOW_BOUND_MGMT	32
+#define WMM_PBC_UP_BOUND_VO	is_mt7996(&dev->mt76) ? 7100 : 3000
+#define WMM_PBC_UP_BOUND_VI	is_mt7996(&dev->mt76) ? 7100 : 3000
+#define WMM_PBC_UP_BOUND_BE	is_mt7996(&dev->mt76) ? 6500 : 2800
+#define WMM_PBC_UP_BOUND_BK	is_mt7996(&dev->mt76) ? 2000 : 1100
+#define WMM_PBC_UP_BOUND_MGMT	32
+	struct mt7996_phy *phy;
+
+#define pbc_acq_bound_config(_type, _ac, _val)					\
+	dev->pbc_ ## _type ## _bound[mt76_connac_lmac_mapping(_ac)] = (_val)
+
+	pbc_acq_bound_config(low, IEEE80211_AC_VO, WMM_PBC_LOW_BOUND_VO);
+	pbc_acq_bound_config(low, IEEE80211_AC_VI, WMM_PBC_LOW_BOUND_VI);
+	pbc_acq_bound_config(low, IEEE80211_AC_BE, WMM_PBC_LOW_BOUND_BE);
+	pbc_acq_bound_config(low, IEEE80211_AC_BK, WMM_PBC_LOW_BOUND_BK);
+	pbc_acq_bound_config(up, IEEE80211_AC_VO, WMM_PBC_UP_BOUND_VO);
+	pbc_acq_bound_config(up, IEEE80211_AC_VI, WMM_PBC_UP_BOUND_VI);
+	pbc_acq_bound_config(up, IEEE80211_AC_BE, WMM_PBC_UP_BOUND_BE);
+	pbc_acq_bound_config(up, IEEE80211_AC_BK, WMM_PBC_UP_BOUND_BK);
+	dev->pbc_low_bound[4] = WMM_PBC_LOW_BOUND_MGMT;
+	dev->pbc_up_bound[4] = WMM_PBC_UP_BOUND_MGMT;
+#undef pbc_acq_bound_config
+
+	mt7996_for_each_phy(dev, phy)
+		INIT_WORK(&phy->wmm_pbc_work, mt7996_mcu_wmm_pbc_work);
+}
+
 int mt7996_register_device(struct mt7996_dev *dev)
 {
-#define WMM_PBC_LOW_BOUND_VO	1900
-#define WMM_PBC_LOW_BOUND_VI	1900
-#define WMM_PBC_LOW_BOUND_BE	1500
-#define WMM_PBC_LOW_BOUND_BK	900
-#define WMM_PBC_LOW_BOUND_MGMT	32
 	struct ieee80211_hw *hw = mt76_hw(dev);
 	struct mt7996_phy *phy;
 	int ret;
@@ -2074,17 +2102,6 @@ int mt7996_register_device(struct mt7996_dev *dev)
 	INIT_WORK(&dev->reset_work, mt7996_mac_reset_work);
 	INIT_WORK(&dev->dump_work, mt7996_mac_dump_work);
 	mutex_init(&dev->dump_mutex);
-
-#define pbc_acq_low_bound_config(_ac, _bound)				\
-	dev->pbc_bound[mt76_connac_lmac_mapping(_ac)] = (_bound)
-
-	pbc_acq_low_bound_config(IEEE80211_AC_VO, WMM_PBC_LOW_BOUND_VO);
-	pbc_acq_low_bound_config(IEEE80211_AC_VI, WMM_PBC_LOW_BOUND_VI);
-	pbc_acq_low_bound_config(IEEE80211_AC_BE, WMM_PBC_LOW_BOUND_BE);
-	pbc_acq_low_bound_config(IEEE80211_AC_BK, WMM_PBC_LOW_BOUND_BK);
-	dev->pbc_bound[4] = WMM_PBC_LOW_BOUND_MGMT;
-#undef pbc_acq_low_bound_config
-	INIT_WORK(&dev->wmm_pbc_work, mt7996_mcu_wmm_pbc_work);
 
 	ret = mt7996_init_hardware(dev);
 	if (ret)
@@ -2122,6 +2139,8 @@ int mt7996_register_device(struct mt7996_dev *dev)
 	ret = mt7996_init_dev_debugfs(&dev->phy);
 	if (ret)
 		goto error;
+
+	mt7996_init_pbc(dev);
 
 	mt7996_for_each_phy(dev, phy) {
 		mt7996_thermal_init(phy);

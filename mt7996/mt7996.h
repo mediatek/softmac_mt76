@@ -183,6 +183,10 @@
 #define MT7996_HW_DROP_STAT	4
 #define MT7996_HW_DROP_REASON	0x20
 
+#define WMM_PBC_QUEUE_NUM	5
+#define WMM_PBC_PKT_THRESHOLD	200
+#define WMM_PBC_PG_THRESHOLD	64
+
 struct mt7996_vif;
 struct mt7996_sta;
 struct mt7996_dfs_pulse;
@@ -814,6 +818,11 @@ struct mt7996_phy {
 	u8 user_edcca_threshold[EDCCA_MAX_BW_NUM];
 	/* Index 0 (TxBSS) is not used */
 	struct mt7996_vif_link __rcu *mbssid_conf[MT7996_MAX_MBSSID];
+
+	bool wmm_pbc_enable;
+	struct work_struct wmm_pbc_work;
+	u64 pbc_pkt_cnt[IEEE80211_NUM_ACS];
+	u64 pbc_pg_cnt[IEEE80211_NUM_ACS];
 };
 
 struct mt7996_dev {
@@ -961,9 +970,8 @@ struct mt7996_dev {
 
 	struct mt7996_vow_ctrl vow;
 
-	bool wmm_pbc_enable;
-	struct work_struct wmm_pbc_work;
-	u16 pbc_bound[5];
+	u16 pbc_low_bound[WMM_PBC_QUEUE_NUM];
+	u16 pbc_up_bound[WMM_PBC_QUEUE_NUM];
 #ifdef CONFIG_MTK_DEBUG
 	u16 wlan_idx;
 	bool wtbl_query_cr;

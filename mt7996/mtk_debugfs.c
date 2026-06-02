@@ -5422,7 +5422,7 @@ static ssize_t mt7996_pbc_lower_bound_set(struct file *file,
 		   &val[0], &val[1], &val[2], &val[3], &val[4]) != 5)
 		goto err;
 
-	memcpy(&dev->pbc_bound, &val, sizeof(dev->pbc_bound));
+	memcpy(&dev->pbc_low_bound, &val, sizeof(dev->pbc_low_bound));
 
 	return count;
 err:
@@ -5444,9 +5444,10 @@ static ssize_t mt7996_pbc_lower_bound_dump(struct file *file,
 	if (!buf)
 		return -ENOMEM;
 
-	len += scnprintf(buf + len, size - len, "pbc_bound = %d %d %d %d %d\n",
-			 dev->pbc_bound[0], dev->pbc_bound[1], dev->pbc_bound[2],
-			 dev->pbc_bound[3], dev->pbc_bound[4]);
+	len += scnprintf(buf + len, size - len, "pbc_low_bound = %d %d %d %d %d\n",
+			 dev->pbc_low_bound[0], dev->pbc_low_bound[1],
+			 dev->pbc_low_bound[2], dev->pbc_low_bound[3],
+			 dev->pbc_low_bound[4]);
 	ret = simple_read_from_buffer(user_buf, count, ppos, buf, len);
 
 	kfree(buf);
@@ -5456,6 +5457,69 @@ static ssize_t mt7996_pbc_lower_bound_dump(struct file *file,
 static const struct file_operations fops_mt7996_pbc_lower_bound = {
 	.write = mt7996_pbc_lower_bound_set,
 	.read = mt7996_pbc_lower_bound_dump,
+	.open = simple_open,
+	.owner = THIS_MODULE,
+	.llseek = default_llseek,
+};
+
+static ssize_t mt7996_pbc_upper_bound_set(struct file *file,
+					  const char __user *user_buf,
+					  size_t count, loff_t *ppos)
+{
+	struct mt7996_dev *dev = file->private_data;
+	char buf[100];
+	u16 val[5];
+
+	if (count >= sizeof(buf))
+		return -EINVAL;
+
+	if (copy_from_user(buf, user_buf, count))
+		return -EFAULT;
+
+	if (count && buf[count - 1] == '\n')
+		buf[count - 1] = '\0';
+	else
+		buf[count] = '\0';
+
+	if (sscanf(buf, "%hu %hu %hu %hu %hu",
+		   &val[0], &val[1], &val[2], &val[3], &val[4]) != 5)
+		goto err;
+
+	memcpy(&dev->pbc_up_bound, &val, sizeof(dev->pbc_up_bound));
+
+	return count;
+err:
+	dev_warn(dev->mt76.dev,
+		 "format: [BK] [BE] [VI] [VO] [Mgmt]\n");
+	return -EINVAL;
+}
+
+static ssize_t mt7996_pbc_upper_bound_dump(struct file *file,
+					   char __user *user_buf,
+					   size_t count, loff_t *ppos)
+{
+	struct mt7996_dev *dev = file->private_data;
+	static const size_t size = 64;
+	int len = 0, ret;
+	char *buf;
+
+	buf = kzalloc(size, GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
+
+	len += scnprintf(buf + len, size - len, "pbc_up_bound = %d %d %d %d %d\n",
+			 dev->pbc_up_bound[0], dev->pbc_up_bound[1],
+			 dev->pbc_up_bound[2], dev->pbc_up_bound[3],
+			 dev->pbc_up_bound[4]);
+	ret = simple_read_from_buffer(user_buf, count, ppos, buf, len);
+
+	kfree(buf);
+	return ret;
+}
+
+static const struct file_operations fops_mt7996_pbc_upper_bound = {
+	.write = mt7996_pbc_upper_bound_set,
+	.read = mt7996_pbc_upper_bound_dump,
 	.open = simple_open,
 	.owner = THIS_MODULE,
 	.llseek = default_llseek,
@@ -6037,7 +6101,9 @@ void mt7996_mtk_init_dev_debugfs(struct mt7996_dev *dev, struct dentry *dir)
 	debugfs_create_file("mlo_agc_tx", 0200, dir, dev, &fops_mlo_agc_tx);
 	debugfs_create_file("mlo_agc_trig", 0200, dir, dev, &fops_mlo_agc_trig);
 	debugfs_create_file("pbc_lower_bound", 0600, dir, dev,
-			     &fops_mt7996_pbc_lower_bound);
+			    &fops_mt7996_pbc_lower_bound);
+	debugfs_create_file("pbc_upper_bound", 0600, dir, dev,
+			    &fops_mt7996_pbc_upper_bound);
 
 	if (!is_mt7996(&dev->mt76)) {
 		debugfs_create_file("sr_pp_enable", 0600, dir, dev,

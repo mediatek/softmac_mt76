@@ -461,15 +461,20 @@ enum {
 #define BSS_ACQ_PKT_CNT_BSS_NUM		24
 #define BSS_ACQ_PKT_CNT_BSS_BITMAP_ALL	0x00ffffff
 #define BSS_ACQ_PKT_CNT_READ_CLR	BIT(31)
-#define WMM_PKT_THRESHOLD		100
 
 struct mt7996_mcu_bss_acq_pkt_cnt_event {
 	struct mt7996_mcu_rxd rxd;
 
 	__le32 bss_bitmap;
-	struct {
-		__le32 cnt[IEEE80211_NUM_ACS];
-	} __packed bss[BSS_ACQ_PKT_CNT_BSS_NUM];
+	union {
+		struct {
+			__le32 cnt[IEEE80211_NUM_ACS];
+		} __packed bss[BSS_ACQ_PKT_CNT_BSS_NUM];
+
+		struct {
+			__le32 pg_cnt[IEEE80211_NUM_ACS];
+		} __packed band[__MT_MAX_BAND];
+	};
 } __packed;
 
 struct mt7996_mcu_ba_trigger {
