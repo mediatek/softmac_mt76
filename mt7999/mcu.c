@@ -3649,6 +3649,11 @@ int mt7999_mcu_add_rate_ctrl(struct mt7999_dev *dev, struct mt7999_sta *msta,
 	struct sk_buff *skb;
 	int ret = -ENODEV;
 
+#ifdef CONFIG_MTK_VENDOR
+	if (changed && dev->cert_mode == 2)
+		return mt7999_mcu_add_rate_ctrl_fixed(dev, msta, vif, link_id);
+#endif
+
 	rcu_read_lock();
 
 	link = mt7999_vif_link(dev, vif, link_id);
@@ -3675,11 +3680,6 @@ int mt7999_mcu_add_rate_ctrl(struct mt7999_dev *dev, struct mt7999_sta *msta,
 		ret = PTR_ERR(skb);
 		goto error_unlock;
 	}
-
-#ifdef CONFIG_MTK_VENDOR
-	if (changed && dev->cert_mode == 2)
-		return mt7999_mcu_add_rate_ctrl_fixed(dev, msta, vif, link_id);
-#endif
 
 	/* firmware rc algorithm refers to sta_rec_he for HE control.
 	 * once dev->rc_work changes the settings driver should also
