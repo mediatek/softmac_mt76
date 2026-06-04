@@ -1578,7 +1578,7 @@ mt7999_mac_sta_event(struct mt7999_dev *dev, struct ieee80211_vif *vif,
 			    vif->type == NL80211_IFTYPE_STATION) {
 				err = mt7999_mcu_set_pp_sta_dscb(link->phy, &link_conf->chanreq.oper, link->mt76.omac_idx);
 				if (err)
-					return err;
+					goto unlock;
 			}
 			if (sta->mlo)
 				mt7999_set_pse_drop(dev, 0);
