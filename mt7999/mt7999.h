@@ -1308,6 +1308,7 @@ int mt7999_set_channel(struct mt76_phy *mphy);
 int mt7999_mcu_set_chan_info(struct mt7999_phy *phy, u16 tag, bool sta);
 int mt7999_mcu_set_tx(struct mt7999_dev *dev, struct ieee80211_vif *vif,
 		      struct ieee80211_bss_conf *link_conf);
+int mt7999_mcu_set_ra_option_ctrl(struct mt7999_dev *dev, u8 option, u8 val);
 int mt7999_mcu_set_fixed_rate_ctrl(struct mt7999_dev *dev, void *data, u16 tag,
 				   u16 version);
 int mt7999_mcu_set_fixed_rate_param(struct mt7999_dev *dev,

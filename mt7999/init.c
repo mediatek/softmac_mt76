@@ -960,6 +960,7 @@ void mt7999_init_work_reset(struct mt7999_dev *dev)
 	mt7999_mcu_ba_trigger_enable(dev, true);
 	mt7999_mcu_init_rx_airtime(dev);
 	mt7999_mcu_red_config(dev, true);
+	mt7999_mcu_set_ra_option_ctrl(dev, RA_OPTION_VHT_1024_QAM, false);
 }
 
 static void mt7999_init_work(struct work_struct *work)

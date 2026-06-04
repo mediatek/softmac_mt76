@@ -3158,6 +3158,28 @@ mt7999_mcu_get_mmps_mode(enum ieee80211_smps_mode smps)
 	}
 }
 
+int mt7999_mcu_set_ra_option_ctrl(struct mt7999_dev *dev, u8 option, u8 val)
+{
+	struct {
+		u8 __rsv1[4];
+
+		__le16 tag;
+		__le16 len;
+		__le16 version;
+
+		u8 option;
+		u8 val;
+	} __packed req = {
+		.tag = cpu_to_le16(UNI_RA_OPTION_CTRL),
+		.len = cpu_to_le16(sizeof(req) - 4),
+		.option = option,
+		.val = val,
+	};
+
+	return mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(RA), &req,
+				 sizeof(req), false);
+}
+
 int mt7999_mcu_set_fixed_rate_ctrl(struct mt7999_dev *dev, void *data,
 				   u16 tag, u16 version)
 {

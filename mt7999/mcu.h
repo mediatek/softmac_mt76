@@ -1281,6 +1281,11 @@ struct ra_fixed_rate {
 } __packed;
 
 enum {
+	RA_OPTION_VHT_1024_QAM = 0x2,
+};
+
+enum {
+	UNI_RA_OPTION_CTRL = 0x4,
 	UNI_RA_FIXED_RATE_SET = 0xf,
 	UNI_RA_FIXED_RATE_RESET = 0x11,
 	UNI_RA_FIXED_RATE_OPT_PARAM_SET = 0x16,
