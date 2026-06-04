@@ -1696,6 +1696,7 @@ mt7996_mac_sta_event(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 				goto unlock;
 			break;
 		case MT76_STA_EVENT_DISASSOC:
+			msta_link->wcid.tx_info &= ~MT_WCID_TX_INFO_SET;
 			if (links == msta->valid_links) {
 				ieee80211_iterate_stations_atomic(dev->mt76.hw, mt7996_check_mld_sta,
 								&has_mld_sta);
