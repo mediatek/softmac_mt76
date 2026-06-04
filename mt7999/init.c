@@ -1317,21 +1317,6 @@ reset:
 		}
 reset_session:
 		mt7999_mcu_set_rro(dev, UNI_RRO_DEL_BA_SESSION, e->id);
-
-		if (is_mt7999(&dev->mt76)) {
-			struct ieee80211_sta *sta;
-			struct mt7999_sta *msta;
-			struct mt76_wcid *wcid;
-
-			rcu_read_lock();
-			wcid = mt76_wcid_ptr(dev, e->wcid);
-			sta = wcid_to_sta(wcid);
-			if (sta) {
-				msta = (struct mt7999_sta *)sta->drv_priv;
-				msta->stop_rx_ba_in_progress = false;
-			}
-			rcu_read_unlock();
-		}
 out:
 		kfree(e);
 	}

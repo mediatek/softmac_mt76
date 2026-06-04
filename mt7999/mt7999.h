@@ -414,8 +414,6 @@ struct mt7999_sta {
 	u16 setup_links;
 
 	struct mt7999_vif *vif;
-
-	bool stop_rx_ba_in_progress;
 };
 
 struct mt7999_vif_link {
@@ -513,7 +511,6 @@ struct mt7999_wed_rro_addr {
 struct mt7999_wed_rro_session_id {
 	struct list_head list;
 	u16 id;
-	u16 wcid;
 };
 
 struct mt7999_msdu_page {

@@ -1831,10 +1831,6 @@ mt7999_ampdu_action(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 
 	switch (params->action) {
 	case IEEE80211_AMPDU_RX_START:
-		if (msta->stop_rx_ba_in_progress) {
-			ret = -EAGAIN;
-			break;
-		}
 		/* Since packets belonging to the same TID can be split over
 		 * multiple links, store the AMPDU state for reordering in the
 		 * primary link
