@@ -5062,12 +5062,10 @@ int mt7999_mcu_beacon_inband_discov(struct mt7999_dev *dev,
 	if (IS_ERR(rskb))
 		return PTR_ERR(rskb);
 
-	if (changed & BSS_CHANGED_FILS_DISCOVERY &&
-	    link_conf->fils_discovery.max_interval) {
+	if (changed & BSS_CHANGED_FILS_DISCOVERY) {
 		interval = link_conf->fils_discovery.max_interval;
 		skb = ieee80211_get_fils_discovery_tmpl(hw, vif, link_conf->link_id);
-	} else if (changed & BSS_CHANGED_UNSOL_BCAST_PROBE_RESP &&
-		   link_conf->unsol_bcast_probe_resp_interval) {
+	} else if (changed & BSS_CHANGED_UNSOL_BCAST_PROBE_RESP) {
 		interval = link_conf->unsol_bcast_probe_resp_interval;
 		skb = ieee80211_get_unsol_bcast_probe_resp_tmpl(hw, vif, link_conf->link_id);
 	}
