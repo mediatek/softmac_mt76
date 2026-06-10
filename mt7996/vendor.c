@@ -218,6 +218,8 @@ static int mt7996_vendor_mu_ctrl(struct wiphy *wiphy,
 							   mt7996_set_wireless_vif, &val32);
 	} else if (tb[MTK_VENDOR_ATTR_MU_CTRL_STRUCT]) {
 		muru = kzalloc(sizeof(struct mt7996_muru), GFP_KERNEL);
+		if (!muru)
+			return -ENOMEM;
 
 		nla_memcpy(muru, tb[MTK_VENDOR_ATTR_MU_CTRL_STRUCT],
 			   sizeof(struct mt7996_muru));
