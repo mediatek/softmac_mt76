@@ -1043,6 +1043,41 @@ int mt7999_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
 		}
 	}
 
+	/* Since the rules of HW MLD address translation are not fully
+	 * compatible with 802.11 EAPOL frame, we do the translation by
+	 * software
+	 */
+	if (tx_info->skb->protocol == cpu_to_be16(ETH_P_PAE) && sta && sta->mlo) {
+		struct ieee80211_hdr *hdr = (void *)tx_info->skb->data;
+		struct ieee80211_bss_conf *link_conf;
+		struct ieee80211_link_sta *link_sta;
+
+		link_conf = rcu_dereference(vif->link_conf[wcid->link_id]);
+		if (!link_conf)
+			return -EINVAL;
+
+		link_sta = rcu_dereference(sta->link[wcid->link_id]);
+		if (!link_sta)
+			return -EINVAL;
+
+		dma_sync_single_for_cpu(mdev->dma_dev, tx_info->buf[1].addr,
+					tx_info->buf[1].len, DMA_TO_DEVICE);
+
+		memcpy(hdr->addr1, link_sta->addr, ETH_ALEN);
+		memcpy(hdr->addr2, link_conf->addr, ETH_ALEN);
+		if (ieee80211_has_a4(hdr->frame_control)) {
+			memcpy(hdr->addr3, sta->addr, ETH_ALEN);
+			memcpy(hdr->addr4, vif->addr, ETH_ALEN);
+		} else if (ieee80211_has_tods(hdr->frame_control)) {
+			memcpy(hdr->addr3, sta->addr, ETH_ALEN);
+		} else if (ieee80211_has_fromds(hdr->frame_control)) {
+			memcpy(hdr->addr3, vif->addr, ETH_ALEN);
+		}
+
+		dma_sync_single_for_device(mdev->dma_dev, tx_info->buf[1].addr,
+					   tx_info->buf[1].len, DMA_TO_DEVICE);
+	}
+
 	t = (struct mt76_txwi_cache *)(txwi + mdev->drv->txwi_size);
 	t->skb = tx_info->skb;
 	t->wcid = wcid->idx;
@@ -1077,42 +1112,6 @@ int mt7999_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
 	spin_lock_bh(&wcid->token_lock);
 	wcid->used_token++;
 	spin_unlock_bh(&wcid->token_lock);
-
-
-	/* Since the rules of HW MLD address translation are not fully
-	 * compatible with 802.11 EAPOL frame, we do the translation by
-	 * software
-	 */
-	if (tx_info->skb->protocol == cpu_to_be16(ETH_P_PAE) && sta->mlo) {
-		struct ieee80211_hdr *hdr = (void *)tx_info->skb->data;
-		struct ieee80211_bss_conf *link_conf;
-		struct ieee80211_link_sta *link_sta;
-
-		link_conf = rcu_dereference(vif->link_conf[wcid->link_id]);
-		if (!link_conf)
-			return -EINVAL;
-
-		link_sta = rcu_dereference(sta->link[wcid->link_id]);
-		if (!link_sta)
-			return -EINVAL;
-
-		dma_sync_single_for_cpu(mdev->dma_dev, tx_info->buf[1].addr,
-					tx_info->buf[1].len, DMA_TO_DEVICE);
-
-		memcpy(hdr->addr1, link_sta->addr, ETH_ALEN);
-		memcpy(hdr->addr2, link_conf->addr, ETH_ALEN);
-		if (ieee80211_has_a4(hdr->frame_control)) {
-			memcpy(hdr->addr3, sta->addr, ETH_ALEN);
-			memcpy(hdr->addr4, vif->addr, ETH_ALEN);
-		} else if (ieee80211_has_tods(hdr->frame_control)) {
-			memcpy(hdr->addr3, sta->addr, ETH_ALEN);
-		} else if (ieee80211_has_fromds(hdr->frame_control)) {
-			memcpy(hdr->addr3, vif->addr, ETH_ALEN);
-		}
-
-		dma_sync_single_for_device(mdev->dma_dev, tx_info->buf[1].addr,
-					   tx_info->buf[1].len, DMA_TO_DEVICE);
-	}
 
 	pid = mt76_tx_status_skb_add(mdev, wcid, tx_info->skb);
 	memset(txwi_ptr, 0, MT_TXD_SIZE);
