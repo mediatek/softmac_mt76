@@ -138,9 +138,10 @@ static ssize_t mt7999_thermal_temp_show(struct device *dev,
 		return sprintf(buf, "%u\n", temperature * 1000);
 	case 1:
 	case 2:
+	case 3:
 		return sprintf(buf, "%u\n",
 			       phy->throttle_temp[i - 1] * 1000);
-	case 3:
+	case 4:
 		return sprintf(buf, "%hhu\n", phy->throttle_state);
 	default:
 		return -EINVAL;
@@ -162,14 +163,13 @@ static ssize_t mt7999_thermal_temp_store(struct device *dev,
 	switch (i) {
 	case 1:
 	case 2:
+	case 3:
 		mutex_lock(&phy->dev->mt76.mutex);
 		val = DIV_ROUND_CLOSEST(clamp_val(val, 40 * 1000, 130 * 1000), 1000);
 
-		/* add a safety margin ~10 */
-		if ((i - 1 == MT7999_CRIT_TEMP_IDX &&
-		     val > phy->throttle_temp[MT7999_MAX_TEMP_IDX] - 10) ||
-		    (i - 1 == MT7999_MAX_TEMP_IDX &&
-		     val - 10 < phy->throttle_temp[MT7999_CRIT_TEMP_IDX])) {
+		/* add a safety margin ~10 for the duty crit/max */
+		if ((i - 1 == TTI_CRIT && val > phy->throttle_temp[TTI_MAX] - 10) ||
+		    (i - 1 == TTI_MAX && val - 10 < phy->throttle_temp[TTI_CRIT])) {
 			dev_err(phy->dev->mt76.dev,
 				"temp1_max shall be 10 degrees higher than temp1_crit.");
 			mutex_unlock(&phy->dev->mt76.mutex);
@@ -183,7 +183,7 @@ static ssize_t mt7999_thermal_temp_store(struct device *dev,
 		if (ret)
 			return ret;
 		break;
-	case 3:
+	case 4:
 		ret = mt7999_mcu_set_thermal_info_query(phy);
 		if (ret)
 			return ret;
@@ -198,12 +198,14 @@ static ssize_t mt7999_thermal_temp_store(struct device *dev,
 static SENSOR_DEVICE_ATTR_RO(temp1_input, mt7999_thermal_temp, 0);
 static SENSOR_DEVICE_ATTR_RW(temp1_crit, mt7999_thermal_temp, 1);
 static SENSOR_DEVICE_ATTR_RW(temp1_max, mt7999_thermal_temp, 2);
-static SENSOR_DEVICE_ATTR_RW(throttle1, mt7999_thermal_temp, 3);
+static SENSOR_DEVICE_ATTR_RW(temp1_emergency, mt7999_thermal_temp, 3);
+static SENSOR_DEVICE_ATTR_RW(throttle1, mt7999_thermal_temp, 4);
 
 static struct attribute *mt7999_hwmon_attrs[] = {
 	&sensor_dev_attr_temp1_input.dev_attr.attr,
 	&sensor_dev_attr_temp1_crit.dev_attr.attr,
 	&sensor_dev_attr_temp1_max.dev_attr.attr,
+	&sensor_dev_attr_temp1_emergency.dev_attr.attr,
 	&sensor_dev_attr_throttle1.dev_attr.attr,
 	NULL,
 };
@@ -301,9 +303,9 @@ static int mt7999_thermal_init(struct mt7999_phy *phy)
 			phy->cdev = cdev;
 	}
 
-	/* initialize critical/maximum high temperature */
-	phy->throttle_temp[MT7999_CRIT_TEMP_IDX] = MT7999_CRIT_TEMP;
-	phy->throttle_temp[MT7999_MAX_TEMP_IDX] = MT7999_MAX_TEMP;
+	phy->throttle_temp[TTI_CRIT] = MT7999_TT_CRIT;
+	phy->throttle_temp[TTI_MAX] = MT7999_TT_MAX;
+	phy->throttle_temp[TTI_RADIO_OFF] = MT7999_TT_RADIO_OFF;
 
 	if (!IS_REACHABLE(CONFIG_HWMON))
 		return 0;

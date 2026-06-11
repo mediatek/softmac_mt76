@@ -6815,41 +6815,67 @@ int mt7999_mcu_set_thermal_throttling(struct mt7999_phy *phy, u8 state)
 int mt7999_mcu_set_thermal_protect(struct mt7999_phy *phy, bool enable)
 {
 #define SUSTAIN_PERIOD		10
-	struct {
-		u8 _rsv[4];
-
-		__le16 tag;
-		__le16 len;
-
-		struct mt7999_mcu_thermal_ctrl ctrl;
-		struct mt7999_mcu_thermal_enable enable;
-	} __packed req = {
-		.len = cpu_to_le16(sizeof(req) - 4 - sizeof(req.enable)),
-		.ctrl = {
-			.band_idx = phy->mt76->band_idx,
-			.type.protect_type = 1,
-			.type.trigger_type = 1,
-		},
+	const struct mt7999_thermal_protect_cfg {
+		u8 protect_type;
+		u8 trigger_type;
+		u32 trigger_temp;
+		u32 restore_temp;
+		u16 sustain_time;
+	} cfgs[] = {
+		{ .protect_type = 1,
+		  .trigger_type = 1,
+		  .trigger_temp = phy->throttle_temp[TTI_MAX],
+		  .restore_temp = phy->throttle_temp[TTI_CRIT],
+		  .sustain_time = SUSTAIN_PERIOD },
+		{ .protect_type = 2,
+		  .trigger_type = 1,
+		  .trigger_temp = phy->throttle_temp[TTI_RADIO_OFF],
+		  .restore_temp = 0,
+		  .sustain_time = 0 },
 	};
-	int ret;
+	int i, ret;
 
-	req.tag = cpu_to_le16(UNI_THERMAL_PROTECT_DISABLE);
+	for (i = 0; i < ARRAY_SIZE(cfgs); i++) {
+		const struct mt7999_thermal_protect_cfg *cfg = &cfgs[i];
+		struct {
+			u8 _rsv[4];
 
-	ret = mt76_mcu_send_msg(&phy->dev->mt76, MCU_WM_UNI_CMD(THERMAL),
-				&req, sizeof(req) - sizeof(req.enable), false);
-	if (ret || !enable)
-		return ret;
+			__le16 tag;
+			__le16 len;
 
-	/* set high-temperature trigger threshold */
-	req.tag = cpu_to_le16(UNI_THERMAL_PROTECT_ENABLE);
-	req.enable.restore_temp = cpu_to_le32(phy->throttle_temp[MT7999_CRIT_TEMP_IDX]);
-	req.enable.trigger_temp = cpu_to_le32(phy->throttle_temp[MT7999_MAX_TEMP_IDX]);
-	req.enable.sustain_time = cpu_to_le16(SUSTAIN_PERIOD);
+			struct mt7999_mcu_thermal_ctrl ctrl;
+			struct mt7999_mcu_thermal_enable enable;
+		} __packed req = {
+			.tag = cpu_to_le16(UNI_THERMAL_PROTECT_DISABLE),
+			.len = cpu_to_le16(sizeof(req) - 4 - sizeof(req.enable)),
+			.ctrl = {
+				.band_idx = phy->mt76->band_idx,
+				.type.protect_type = cfg->protect_type,
+				.type.trigger_type = cfg->trigger_type,
+			},
+		};
 
-	req.len = cpu_to_le16(sizeof(req) - 4);
+		ret = mt76_mcu_send_msg(&phy->dev->mt76, MCU_WM_UNI_CMD(THERMAL),
+					&req, sizeof(req) - sizeof(req.enable), false);
+		if (ret)
+			return ret;
 
-	return mt76_mcu_send_msg(&phy->dev->mt76, MCU_WM_UNI_CMD(THERMAL),
-				 &req, sizeof(req), false);
+		if (!enable)
+			continue;
+
+		req.tag = cpu_to_le16(UNI_THERMAL_PROTECT_ENABLE);
+		req.len = cpu_to_le16(sizeof(req) - 4);
+		req.enable.trigger_temp = cpu_to_le32(cfg->trigger_temp);
+		req.enable.restore_temp = cpu_to_le32(cfg->restore_temp);
+		req.enable.sustain_time = cpu_to_le16(cfg->sustain_time);
+
+		ret = mt76_mcu_send_msg(&phy->dev->mt76, MCU_WM_UNI_CMD(THERMAL),
+					&req, sizeof(req), false);
+		if (ret)
+			return ret;
+	}
+
+	return 0;
 }
 
 int mt7999_mcu_set_thermal_info_query(struct mt7999_phy *phy)

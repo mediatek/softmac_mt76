@@ -78,11 +78,17 @@
 
 #define MT7999_THERMAL_THROTTLE_MAX	100
 #define MT7999_CDEV_THROTTLE_MAX	99
-#define MT7999_CRIT_TEMP_IDX		0
-#define MT7999_MAX_TEMP_IDX		1
-#define MT7999_CRIT_TEMP		110
-#define MT7999_MAX_TEMP			120
+#define MT7999_TT_CRIT			110
+#define MT7999_TT_MAX			120
+#define MT7999_TT_RADIO_OFF		125
 #define MT7999_DUMMY_BUFF_SIZE		16
+
+enum mt7999_throttle_temp_idx {
+	TTI_CRIT,
+	TTI_MAX,
+	TTI_RADIO_OFF,
+	TTI_NUM
+};
 
 #define MT7999_MAX_HIF_RXD_IN_PG	5
 #define MT7999_RRO_MSDU_PG_HASH_SIZE	127
@@ -673,7 +679,7 @@ struct mt7999_phy {
 	struct thermal_cooling_device *cdev;
 	u8 cdev_state;
 	u8 throttle_state;
-	u32 throttle_temp[2]; /* 0: critical high, 1: maximum */
+	u32 throttle_temp[TTI_NUM];
 	u8 throttle_level[4];
 
 	u64 omac_mask;
