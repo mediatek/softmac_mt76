@@ -814,6 +814,7 @@ struct mt7999_dev {
 	u8 q_id[MT7999_MAX_QUEUE];
 	bool q_valid[MT7999_MAX_QUEUE];
 	u32 q_int_mask[MT7999_MAX_QUEUE];
+	u32 def_irq_mask;
 
 	u64 mld_idx_mask;
 	u64 mld_remap_idx_mask;

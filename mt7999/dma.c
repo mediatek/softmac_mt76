@@ -181,6 +181,8 @@ void mt7999_dma_start(struct mt7999_dev *dev, bool reset, bool wed_reset)
 	}
 
 	irq_mask |= MT_INT_MCU_CMD;
+	dev->def_irq_mask = irq_mask;
+
 	if (mtk_wed_device_active(wed) && wed_reset) {
 		mt76_wr(dev, MT_INT_MASK_CSR, irq_mask);
 		mtk_wed_device_start(wed, irq_mask);
@@ -291,16 +293,11 @@ static void mt7999_dma_enable(struct mt7999_dev *dev, bool reset)
 
 void mt7999_dma_rro_start(struct mt7999_dev *dev)
 {
-	u32 irq_mask;
-
 	if (mtk_wed_device_active(&dev->mt76.mmio.wed)) {
-		irq_mask = dev->mt76.mmio.irqmask |
-			   MT_INT_TX_DONE_BAND2;
-
-		mt76_wr(dev, MT_INT_MASK_CSR, irq_mask);
-		mtk_wed_device_start_hw_rro(&dev->mt76.mmio.wed, irq_mask,
+		mt76_wr(dev, MT_INT_MASK_CSR, dev->def_irq_mask);
+		mtk_wed_device_start_hw_rro(&dev->mt76.mmio.wed, dev->def_irq_mask,
 					    false);
-		mt7999_irq_enable(dev, irq_mask);
+		mt7999_irq_enable(dev, dev->def_irq_mask);
 		return;
 	}
 

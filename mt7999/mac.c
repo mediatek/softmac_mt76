@@ -2455,10 +2455,10 @@ mt7999_mac_restart(struct mt7999_dev *dev)
 
 	set_bit(MT76_STATE_MCU_RUNNING, &dev->mphy.state);
 
-	mt76_wr(dev, MT_INT_MASK_CSR, dev->mt76.mmio.irqmask);
+	mt76_wr(dev, MT_INT_MASK_CSR, dev->def_irq_mask);
 	mt76_wr(dev, MT_INT_SOURCE_CSR, ~0);
 	if (dev->hif2) {
-		mt76_wr(dev, MT_INT1_MASK_CSR, dev->mt76.mmio.irqmask);
+		mt76_wr(dev, MT_INT1_MASK_CSR, dev->def_irq_mask);
 		mt76_wr(dev, MT_INT1_SOURCE_CSR, ~0);
 	}
 
@@ -2472,13 +2472,10 @@ mt7999_mac_restart(struct mt7999_dev *dev)
 
 	if (mtk_wed_device_active(&dev->mt76.mmio.wed) &&
 	    mt7999_has_hwrro(dev)) {
-		u32 wed_irq_mask = dev->mt76.mmio.irqmask |
-				   MT_INT_TX_DONE_BAND2;
-
-		mt76_wr(dev, MT_INT_MASK_CSR, wed_irq_mask);
-		mtk_wed_device_start_hw_rro(&dev->mt76.mmio.wed, wed_irq_mask,
+		mt76_wr(dev, MT_INT_MASK_CSR, dev->def_irq_mask);
+		mtk_wed_device_start_hw_rro(&dev->mt76.mmio.wed, dev->def_irq_mask,
 					    false);
-		mt7999_irq_enable(dev, wed_irq_mask);
+		mt7999_irq_enable(dev, dev->def_irq_mask);
 		mt7999_irq_disable(dev, 0);
 	}
 
@@ -2748,14 +2745,11 @@ void mt7999_mac_reset_work(struct work_struct *work)
 		mt76_wr(dev, MT_RRO_OUTPUT_DELAY_CTRL, MT_RRO_OUTPUT_DELAY_CTRL_REQ_EN);
 
 	if (mtk_wed_device_active(&dev->mt76.mmio.wed)) {
-		u32 wed_irq_mask = MT_INT_TX_DONE_BAND2 |
-				   dev->mt76.mmio.irqmask;
-
-		mt76_wr(dev, MT_INT_MASK_CSR, wed_irq_mask);
-		mtk_wed_device_start_hw_rro(&dev->mt76.mmio.wed, wed_irq_mask,
+		mt76_wr(dev, MT_INT_MASK_CSR, dev->def_irq_mask);
+		mtk_wed_device_start_hw_rro(&dev->mt76.mmio.wed, dev->def_irq_mask,
 					    true);
 
-		mt7999_irq_enable(dev, wed_irq_mask);
+		mt7999_irq_enable(dev, dev->def_irq_mask);
 		mt7999_irq_disable(dev, 0);
 	}
 
