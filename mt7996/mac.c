@@ -957,6 +957,9 @@ void mt7996_mac_write_txwi(struct mt7996_dev *dev, __le32 *txwi,
 	else if (is_8023 || !ieee80211_is_mgmt(hdr->frame_control))
 		val |= FIELD_PREP(MT_TXD6_MSDU_CNT_V2, 1);
 
+	if (is_mt7990(&dev->mt76) && !wcid->sta)
+		val |= MT_TXD6_DIS_RTS;
+
 	txwi[6] = cpu_to_le32(val);
 	txwi[7] = 0;
 
