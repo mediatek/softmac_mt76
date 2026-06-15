@@ -321,12 +321,10 @@ static int mt7999_mmio_wed_reset(struct mtk_wed_device *wed)
 	if (ret)
 		goto out;
 
-	rtnl_unlock();
 	if (!wait_for_completion_timeout(&mdev->mmio.wed_reset, 20 * HZ)) {
 		dev_err(mdev->dev, "wed reset timeout\n");
 		ret = -ETIMEDOUT;
 	}
-	rtnl_lock();
 out:
 	clear_bit(MT76_STATE_WED_RESET, &mphy->state);
 
