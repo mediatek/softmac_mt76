@@ -1744,14 +1744,14 @@ static int mt7999_vendor_dfs_tx_mode_ctrl(struct wiphy *wiphy,
 	u8 radio_idx, dfs_tx_mode;
 	int err, rdd_idx;
 
-	if (!tb[MTK_VENDOR_ATTR_DFS_TX_CTRL_MODE] ||
-	    !tb[MTK_VENDOR_ATTR_DFS_TX_CTRL_RADIO_IDX])
-		return -EINVAL;
-
 	err = nla_parse(tb, MTK_VENDOR_ATTR_DFS_TX_CTRL_MAX, data, data_len,
 			dfs_tx_ctrl_policy, NULL);
 	if (err)
 		return err;
+
+	if (!tb[MTK_VENDOR_ATTR_DFS_TX_CTRL_MODE] ||
+	    !tb[MTK_VENDOR_ATTR_DFS_TX_CTRL_RADIO_IDX])
+		return -EINVAL;
 
 	radio_idx = nla_get_u8(tb[MTK_VENDOR_ATTR_DFS_TX_CTRL_RADIO_IDX]);
 	if (!mt7999_radio_valid(dev, radio_idx))
