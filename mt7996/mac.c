@@ -3592,11 +3592,19 @@ void mt7996_mac_add_twt_setup(struct ieee80211_hw *hw,
 	struct mt7996_twt_flow *flow;
 	u8 flowid, table_id, exp;
 
+	if (sta->mlo) {
+		mt76_dbg(&dev->mt76, MT76_DBG_STA,
+			 "iTWT setup is not supported for a non-AP MLD");
+		goto out;
+	}
+
 	if (mt7996_mac_check_twt_req(twt))
 		goto out;
 
 	mutex_lock(&dev->mt76.mutex);
-	msta_link = mt76_dereference(msta->link[0], &dev->mt76);
+	msta_link = mt76_dereference(msta->link[msta->deflink_id], &dev->mt76);
+	if (!msta_link)
+		goto unlock;
 
 	if (dev->twt.n_agrt == MT7996_MAX_TWT_AGRT)
 		goto unlock;

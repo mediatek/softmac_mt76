@@ -2622,9 +2622,16 @@ mt7996_twt_teardown_request(struct ieee80211_hw *hw,
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
 
 	mutex_lock(&dev->mt76.mutex);
-	msta_link = mt76_dereference(msta->link[0], &dev->mt76);
-	link = mt7996_vif_link(dev, vif, 0);
+	msta_link = mt76_dereference(msta->link[msta->deflink_id], &dev->mt76);
+	if (!msta_link)
+		goto unlock;
+
+	link = mt7996_vif_link(dev, vif, msta->deflink_id);
+	if (!link)
+		goto unlock;
+
 	mt7996_mac_twt_teardown_flow(dev, link, msta_link, flowid);
+unlock:
 	mutex_unlock(&dev->mt76.mutex);
 }
 
