@@ -1508,9 +1508,6 @@ mt7999_tm_txbf_init(struct mt7999_phy *phy, u16 *val)
 
 			td->tx_antenna_mask = width == NL80211_CHAN_WIDTH_160 ? 5 : 1;
 		}
-
-		if (td->tx_rate_mode == MT76_TM_TX_MODE_EHT_MU)
-			td->tx_rate_mode = MT76_TM_TX_MODE_EHT_SU;
 	}
 	mt76_testmode_param_set(td, MT76_TM_ATTR_TX_ANTENNA);
 
@@ -1544,14 +1541,8 @@ mt7999_tm_txbf_phase_copy(struct mt7999_dev *dev, void *des, void *src, int grou
 {
 	int phase_size;
 
-	if (group && get_ibf_version(dev) == IBF_VER_1)
-		phase_size = sizeof(struct mt7999_txbf_phase_info_5g);
-	else if (get_ibf_version(dev) == IBF_VER_1)
-		phase_size = sizeof(struct mt7999_txbf_phase_info_2g);
-	else if (group)
-		phase_size = sizeof(struct mt7992_txbf_phase_info_5g);
-	else
-		phase_size = sizeof(struct mt7992_txbf_phase_info_2g);
+	phase_size = group ? sizeof(struct mt7999_txbf_phase_info_5g) :
+			     sizeof(struct mt7999_txbf_phase_info_2g);
 
 	memcpy(des, src, phase_size);
 }
@@ -1704,7 +1695,6 @@ mt7999_tm_txbf_profile_update(struct mt7999_phy *phy, u16 *val, bool ebf)
 	u8 rate, pfmu_idx = val[0], nc = val[2], nr;
 	u8 dbw = phy->mt76->chandef.width;
 	int ret;
-	bool is_atenl = val[5];
 
 	if (!tag)
 		return -EINVAL;
@@ -1757,21 +1747,18 @@ mt7999_tm_txbf_profile_update(struct mt7999_phy *phy, u16 *val, bool ebf)
 	if (ret)
 		return ret;
 
-	if (!is_atenl && !td->ibf) {
+	if (!td->ibf) {
 		mt76_set(dev, MT_ARB_TQSAXM0(phy->mt76->band_idx), MT_ARB_TQSAXM_ALTX_START_MASK);
 		mt76_tm_dbg(&dev->mt76, "set TX queue start CR for AX management (0x%x) = 0x%x",
 			    MT_ARB_TQSAXM0(phy->mt76->band_idx),
 			    mt76_rr(dev, MT_ARB_TQSAXM0(phy->mt76->band_idx)));
-	} else if (!is_atenl && td->ibf && ebf) {
+	} else if (td->ibf && ebf) {
 		/* iBF's ebf profile update */
 		mt76_set(dev, MT_ARB_TQSAXM0(phy->mt76->band_idx), MT_ARB_IBF_ENABLE);
 		mt76_tm_dbg(&dev->mt76, "set TX queue start CR for AX management (0x%x) = 0x%x",
 			    MT_ARB_TQSAXM0(phy->mt76->band_idx),
 			    mt76_rr(dev, MT_ARB_TQSAXM0(phy->mt76->band_idx)));
 	}
-
-	if (!ebf && is_atenl)
-		return mt7999_tm_txbf_apply_tx(phy, 1, false, true, true);
 
 	return 0;
 }
@@ -1885,17 +1872,15 @@ mt7999_tm_txbf_profile_update_all(struct mt7999_phy *phy, u16 *val)
 static int
 mt7999_tm_txbf_e2p_update(struct mt7999_phy *phy)
 {
-#define TXBF_PHASE_EEPROM_START_OFFSET		0xc00
-#define TXBF_PHASE_GROUP_EEPROM_OFFSET_VER_1	46
-#define TXBF_PHASE_G0_EEPROM_OFFSET_VER_2	29
-#define TXBF_PHASE_GX_EEPROM_OFFSET_VER_2	sizeof(struct mt7992_txbf_phase_info_5g)
+#define TXBF_PHASE_G0_EEPROM_START_OFFSET	0xdc0
+#define TXBF_PHASE_GX_EEPROM_START_OFFSET	0xe00
+#define TXBF_PHASE_GX_EEPROM_OFFSET		sizeof(struct mt7999_txbf_phase_info_5g)
 	struct mt7999_txbf_phase *phase, *p;
 	struct mt7999_dev *dev = phy->dev;
 	u8 *eeprom = dev->mt76.eeprom.data;
 	u16 offset;
 	int i;
 
-	offset = TXBF_PHASE_EEPROM_START_OFFSET;
 	phase = (struct mt7999_txbf_phase *)dev->test.txbf_phase_cal;
 	if (!phase)
 		return -EINVAL;
@@ -1903,15 +1888,15 @@ mt7999_tm_txbf_e2p_update(struct mt7999_phy *phy)
 	for (i = 0; i < MAX_PHASE_GROUP_NUM; i++) {
 		p = &phase[i];
 
+		if (i)
+			offset = TXBF_PHASE_GX_EEPROM_START_OFFSET +
+				 (i - 1) * TXBF_PHASE_GX_EEPROM_OFFSET;
+		else
+			offset = TXBF_PHASE_G0_EEPROM_START_OFFSET;
+
 		/* copy valid phase cal data to eeprom */
 		if (p->status)
 			mt7999_tm_txbf_phase_copy(dev, eeprom + offset, p->buf, i);
-
-		if (get_ibf_version(dev) == IBF_VER_1)
-			offset += TXBF_PHASE_GROUP_EEPROM_OFFSET_VER_1;
-		else
-			offset += i ? TXBF_PHASE_GX_EEPROM_OFFSET_VER_2 :
-				      TXBF_PHASE_G0_EEPROM_OFFSET_VER_2;
 	}
 
 	return 0;

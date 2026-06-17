@@ -426,48 +426,28 @@ mt7999_ibf_phase_assign(struct mt7999_dev *dev,
 {
 	/* fw return ibf calibrated data with
 	 * the mt7999_txbf_phase_info_5g struct for both 2G and 5G.
-	 * (return struct mt7992_txbf_phase_info_5g for ibf 2.0)
 	 * Therefore, memcpy cannot be used here.
 	 */
-	if (get_ibf_version(dev) != IBF_VER_2) {
-		phase_assign(cal->group, v1, m_t0_h, true);
-		phase_assign(cal->group, v1, m_t1_h, true);
-		phase_assign(cal->group, v1, m_t2_h, true);
-		phase_assign(cal->group, v1, m_t2_h_sx2, false);
-		phase_assign_rx_v1(cal->group, v1, r0);
-		phase_assign_rx_v1(cal->group, v1, r1);
-		phase_assign_rx_v1(cal->group, v1, r2);
-		phase_assign_rx_v1(cal->group, v1, r3);
-		phase_assign_rx(cal->group, v1, r2_sx2, false);
-		phase_assign_rx(cal->group, v1, r3_sx2, false);
-		phase_assign(cal->group, v1, r0_reserved, false);
-		phase_assign(cal->group, v1, r1_reserved, false);
-		phase_assign(cal->group, v1, r2_reserved, false);
-		phase_assign(cal->group, v1, r3_reserved, false);
-		phase_assign(cal->group, v1, r2_sx2_reserved, false);
-		phase_assign(cal->group, v1, r3_sx2_reserved, false);
-	} else {
-		phase_assign(cal->group, v2, m_t0_h, true);
-		phase_assign(cal->group, v2, m_t1_h, true);
-		phase_assign(cal->group, v2, m_t2_h, true);
-		if (cal->group) {
-			phase->v2.phase_5g.m_t3_h = cal->v2.phase_5g.m_t3_h;
-			mt76_tm_dbg(&dev->mt76, "m_t3_h = %d", phase->v2.phase_5g.m_t3_h);
-		}
-		phase_assign_rx_ext(cal->group, v2, r0, true);
-		phase_assign_rx_ext(cal->group, v2, r1, true);
-		phase_assign_rx_ext(cal->group, v2, r2, true);
-		phase_assign_rx_ext(cal->group, v2, r3, true);
-		if (cal->group) {
-			memcpy(&phase->v2.phase_5g.r4, &cal->v2.phase_5g.r4,
-			       sizeof(struct txbf_rx_phase_ext));
-			mt76_tm_dbg(&dev->mt76, "r4.rx_uh = %d", phase->v2.phase_5g.r4.rx_uh);
-			mt76_tm_dbg(&dev->mt76, "r4.rx_h = %d", phase->v2.phase_5g.r4.rx_h);
-			mt76_tm_dbg(&dev->mt76, "r4.rx_mh = %d", phase->v2.phase_5g.r4.rx_mh);
-			mt76_tm_dbg(&dev->mt76, "r4.rx_m = %d", phase->v2.phase_5g.r4.rx_m);
-			mt76_tm_dbg(&dev->mt76, "r4.rx_l = %d", phase->v2.phase_5g.r4.rx_l);
-			mt76_tm_dbg(&dev->mt76, "r4.rx_ul = %d", phase->v2.phase_5g.r4.rx_ul);
-		}
+	phase_assign(cal->group, m_t0_h);
+	phase_assign(cal->group, m_t1_h);
+	phase_assign(cal->group, m_t2_h);
+	if (cal->group) {
+		phase->phase_5g.m_t3_h = cal->phase_5g.m_t3_h;
+		mt76_tm_dbg(&dev->mt76, "m_t3_h = %d", phase->phase_5g.m_t3_h);
+	}
+	phase_assign_rx(cal->group, r0);
+	phase_assign_rx(cal->group, r1);
+	phase_assign_rx(cal->group, r2);
+	phase_assign_rx(cal->group, r3);
+	if (cal->group) {
+		memcpy(&phase->phase_5g.r4, &cal->phase_5g.r4,
+		       sizeof(struct txbf_rx_phase));
+		mt76_tm_dbg(&dev->mt76, "r4.rx_uh = %d", phase->phase_5g.r4.rx_uh);
+		mt76_tm_dbg(&dev->mt76, "r4.rx_h = %d", phase->phase_5g.r4.rx_h);
+		mt76_tm_dbg(&dev->mt76, "r4.rx_mh = %d", phase->phase_5g.r4.rx_mh);
+		mt76_tm_dbg(&dev->mt76, "r4.rx_m = %d", phase->phase_5g.r4.rx_m);
+		mt76_tm_dbg(&dev->mt76, "r4.rx_l = %d", phase->phase_5g.r4.rx_l);
+		mt76_tm_dbg(&dev->mt76, "r4.rx_ul = %d", phase->phase_5g.r4.rx_ul);
 	}
 }
 
@@ -768,17 +748,11 @@ mt7999_mcu_rx_bf_event(struct mt7999_dev *dev, struct sk_buff *skb)
 	case UNI_EVENT_BF_CAL_PHASE: {
 		struct mt7999_ibf_cal_info *cal;
 		struct mt7999_txbf_phase *phase;
-		union {
-			struct mt7999_txbf_phase_out v1;
-			struct mt7992_txbf_phase_out v2;
-		} phase_out;
-		int phase_out_size = sizeof(struct mt7999_txbf_phase_out);
+		struct mt7999_txbf_phase_out phase_out;
 
 		cal = (struct mt7999_ibf_cal_info *)skb->data;
 		phase = (struct mt7999_txbf_phase *)dev->test.txbf_phase_cal;
-		if (get_ibf_version(dev) == IBF_VER_2)
-			phase_out_size = sizeof(struct mt7992_txbf_phase_out);
-		memcpy(&phase_out, &cal->buf, phase_out_size);
+		memcpy(&phase_out, &cal->buf, sizeof(struct mt7999_txbf_phase_out));
 		switch (cal->cal_type) {
 		case IBF_PHASE_CAL_NORMAL:
 		case IBF_PHASE_CAL_NORMAL_INSTRUMENT:
@@ -799,39 +773,26 @@ mt7999_mcu_rx_bf_event(struct mt7999_dev *dev, struct sk_buff *skb)
 			break;
 		}
 
-		if (get_ibf_version(dev) == IBF_VER_2) {
-			mt76_tm_dbg(&dev->mt76, "c0_uh = %d, c1_uh = %d, c2_uh = %d, c3_uh = %d c4_uh = %d",
-				    phase_out.v2.c0_uh, phase_out.v2.c1_uh, phase_out.v2.c2_uh,
-				    phase_out.v2.c3_uh, phase_out.v2.c4_uh);
-			mt76_tm_dbg(&dev->mt76, "c0_h = %d, c1_h = %d, c2_h = %d, c3_h = %d c4_h = %d",
-				    phase_out.v2.c0_h, phase_out.v2.c1_h, phase_out.v2.c2_h,
-				    phase_out.v2.c3_h, phase_out.v2.c4_h);
-			mt76_tm_dbg(&dev->mt76, "c0_mh = %d, c1_mh = %d, c2_mh = %d, c3_mh = %d c4_mh = %d",
-				    phase_out.v2.c0_mh, phase_out.v2.c1_mh, phase_out.v2.c2_mh,
-				    phase_out.v2.c3_mh, phase_out.v2.c4_mh);
-			mt76_tm_dbg(&dev->mt76, "c0_m = %d, c1_m = %d, c2_m = %d, c3_m = %d c4_m = %d",
-				    phase_out.v2.c0_m, phase_out.v2.c1_m, phase_out.v2.c2_m,
-				    phase_out.v2.c3_m, phase_out.v2.c4_m);
-			mt76_tm_dbg(&dev->mt76, "c0_l = %d, c1_l = %d, c2_l = %d, c3_l = %d c4_l = %d",
-				    phase_out.v2.c0_l, phase_out.v2.c1_l, phase_out.v2.c2_l,
-				    phase_out.v2.c3_l, phase_out.v2.c4_l);
-		} else {
-			mt76_tm_dbg(&dev->mt76, "c0_uh = %d, c1_uh = %d, c2_uh = %d, c3_uh = %d",
-				    phase_out.v1.c0_uh, phase_out.v1.c1_uh,
-				    phase_out.v1.c2_uh, phase_out.v1.c3_uh);
-			mt76_tm_dbg(&dev->mt76, "c0_h = %d, c1_h = %d, c2_h = %d, c3_h = %d",
-				    phase_out.v1.c0_h, phase_out.v1.c1_h,
-				    phase_out.v1.c2_h, phase_out.v1.c3_h);
-			mt76_tm_dbg(&dev->mt76, "c0_mh = %d, c1_mh = %d, c2_mh = %d, c3_mh = %d",
-				    phase_out.v1.c0_mh, phase_out.v1.c1_mh,
-				    phase_out.v1.c2_mh, phase_out.v1.c3_mh);
-			mt76_tm_dbg(&dev->mt76, "c0_m = %d, c1_m = %d, c2_m = %d, c3_m = %d",
-				    phase_out.v1.c0_m, phase_out.v1.c1_m,
-				    phase_out.v1.c2_m, phase_out.v1.c3_m);
-			mt76_tm_dbg(&dev->mt76, "c0_l = %d, c1_l = %d, c2_l = %d, c3_l = %d",
-				    phase_out.v1.c0_l, phase_out.v1.c1_l,
-				    phase_out.v1.c2_l, phase_out.v1.c3_l);
-		}
+		mt76_tm_dbg(&dev->mt76,
+			    "c0_uh = %d, c1_uh = %d, c2_uh = %d, c3_uh = %d c4_uh = %d",
+			    phase_out.c0_uh, phase_out.c1_uh, phase_out.c2_uh,
+			    phase_out.c3_uh, phase_out.c4_uh);
+		mt76_tm_dbg(&dev->mt76,
+			    "c0_h = %d, c1_h = %d, c2_h = %d, c3_h = %d c4_h = %d",
+			    phase_out.c0_h, phase_out.c1_h, phase_out.c2_h,
+			    phase_out.c3_h, phase_out.c4_h);
+		mt76_tm_dbg(&dev->mt76,
+			    "c0_mh = %d, c1_mh = %d, c2_mh = %d, c3_mh = %d c4_mh = %d",
+			    phase_out.c0_mh, phase_out.c1_mh, phase_out.c2_mh,
+			    phase_out.c3_mh, phase_out.c4_mh);
+		mt76_tm_dbg(&dev->mt76,
+			    "c0_m = %d, c1_m = %d, c2_m = %d, c3_m = %d c4_m = %d",
+			    phase_out.c0_m, phase_out.c1_m, phase_out.c2_m,
+			    phase_out.c3_m, phase_out.c4_m);
+		mt76_tm_dbg(&dev->mt76,
+			    "c0_l = %d, c1_l = %d, c2_l = %d, c3_l = %d c4_l = %d",
+			    phase_out.c0_l, phase_out.c1_l, phase_out.c2_l,
+			    phase_out.c3_l, phase_out.c4_l);
 
 		break;
 	}
