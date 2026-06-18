@@ -104,9 +104,9 @@ static u8 mt7999_tm_rate_mapping(u8 tx_rate_mode, enum rate_mapping_type type)
 		[MT76_TM_TX_MODE_EHT_SU] = {TM_PHY_MODE_EHT_SU, BF_LM_EHT},
 		[MT76_TM_TX_MODE_EHT_TRIG] = {TM_PHY_MODE_EHT_TRIG, BF_LM_EHT},
 		[MT76_TM_TX_MODE_EHT_MU] = {TM_PHY_MODE_EHT_MU, BF_LM_EHT},
-		[MT76_TM_TX_MODE_UHR_SU] = {TM_PHY_MODE_UHR_SU, 0},
-		[MT76_TM_TX_MODE_UHR_MU] = {TM_PHY_MODE_UHR_MU, 0},
-		[MT76_TM_TX_MODE_UHR_TRIG] = {TM_PHY_MODE_UHR_TRIG, 0},
+		[MT76_TM_TX_MODE_UHR_SU] = {TM_PHY_MODE_UHR_SU, BF_LM_UHR},
+		[MT76_TM_TX_MODE_UHR_MU] = {TM_PHY_MODE_UHR_MU, BF_LM_UHR},
+		[MT76_TM_TX_MODE_UHR_TRIG] = {TM_PHY_MODE_UHR_TRIG, BF_LM_UHR},
 	};
 
 	if (tx_rate_mode > MT76_TM_TX_MODE_MAX)
@@ -2736,6 +2736,9 @@ mt7999_tm_dump_seg_list(struct mt7999_phy *phy)
 		[MT76_TM_TX_MODE_EHT_SU] = "eht_su",
 		[MT76_TM_TX_MODE_EHT_TRIG] = "eht_tb",
 		[MT76_TM_TX_MODE_EHT_MU] = "eht_mu",
+		[MT76_TM_TX_MODE_UHR_SU] = "uhr_su",
+		[MT76_TM_TX_MODE_UHR_MU] = "uhr_mu",
+		[MT76_TM_TX_MODE_UHR_TRIG] = "uhr_tb",
 	};
 	int i, cbw, dbw;
 

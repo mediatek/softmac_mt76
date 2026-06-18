@@ -283,7 +283,7 @@ mt76_testmode_tx_config_check(struct mt76_phy *phy)
 		[INVALID_TYPE_TX_PP_BITMAP] = "tx pp bitmap",
 	};
 	u32 max_tx_len;
-	int i;
+	int i, max_mcs;
 
 	max_tx_len = mt76_testmode_max_mpdu_len(phy, td->tx_rate_mode);
 	if (max_tx_len < td->tx_mpdu_len ||
@@ -375,11 +375,13 @@ mt76_testmode_tx_config_check(struct mt76_phy *phy)
 		}
 		break;
 	case MT76_TM_TX_MODE_EHT_SU:
+	case MT76_TM_TX_MODE_UHR_SU:
+		max_mcs = td->tx_rate_mode == MT76_TM_TX_MODE_UHR_SU ? 23 : 15;
 		if (td->tx_rate_nss > max_nss) {
 			type = INVALID_TYPE_RATE_NSS;
 			goto fail;
 		}
-		if (td->tx_rate_idx > 15) {
+		if (td->tx_rate_idx > max_mcs) {
 			type = INVALID_TYPE_RATE_IDX;
 			goto fail;
 		}
@@ -395,6 +397,9 @@ mt76_testmode_tx_config_check(struct mt76_phy *phy)
 		break;
 	case MT76_TM_TX_MODE_EHT_TRIG:
 	case MT76_TM_TX_MODE_EHT_MU:
+	case MT76_TM_TX_MODE_UHR_MU:
+	case MT76_TM_TX_MODE_UHR_TRIG:
+		max_mcs = td->tx_rate_mode >= MT76_TM_TX_MODE_UHR_MU ? 23 : 15;
 		if (!td->ru_sta_num) {
 			type = INVALID_TYPE_RU_STA_NUM;
 			goto fail;
@@ -412,7 +417,7 @@ mt76_testmode_tx_config_check(struct mt76_phy *phy)
 				type = INVALID_TYPE_RATE_NSS;
 				goto fail;
 			}
-			if (ru_sta->tx_rate_idx > 15) {
+			if (ru_sta->tx_rate_idx > max_mcs) {
 				type = INVALID_TYPE_RATE_IDX;
 				goto fail;
 			}

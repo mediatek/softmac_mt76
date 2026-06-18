@@ -552,6 +552,7 @@ enum bf_lm_type {
 	BF_LM_VHT,
 	BF_LM_HE,
 	BF_LM_EHT,
+	BF_LM_UHR,
 };
 
 struct mt7999_txbf_phase_out {
