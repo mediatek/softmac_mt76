@@ -3044,6 +3044,12 @@ mt7996_set_radar_background(struct ieee80211_hw *hw,
 
 	mutex_lock(&dev->mt76.mutex);
 
+	/* ignore disable background radar when cert mode is on */
+	if (phy->dfs_tx_mode && !chandef) {
+		ret = 0;
+		goto out;
+	}
+
 	if (dev->mt76.region == NL80211_DFS_UNSET)
 		goto out;
 
