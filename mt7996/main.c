@@ -2944,6 +2944,12 @@ mt7996_set_radar_background(struct ieee80211_hw *hw,
 
 	mutex_lock(&dev->mt76.mutex);
 
+	if (phy->dfs_tx_mode && !chandef) {
+		dev_warn(dev->mt76.dev, "Ignore bkg RDD disable when cert mode is on\n");
+		ret = 0;
+		goto out;
+	}
+
 	if (dev->mt76.region == NL80211_DFS_UNSET)
 		goto out;
 

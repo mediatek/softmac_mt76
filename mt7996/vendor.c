@@ -1743,27 +1743,42 @@ static int mt7996_vendor_dfs_tx_mode_ctrl(struct wiphy *wiphy,
 	u8 radio_idx, dfs_tx_mode;
 	int err, rdd_idx;
 
-	if (!tb[MTK_VENDOR_ATTR_DFS_TX_CTRL_MODE] ||
-	    !tb[MTK_VENDOR_ATTR_DFS_TX_CTRL_RADIO_IDX])
-		return -EINVAL;
-
 	err = nla_parse(tb, MTK_VENDOR_ATTR_DFS_TX_CTRL_MAX, data, data_len,
 			dfs_tx_ctrl_policy, NULL);
 	if (err)
-		return err;
+		goto out;
+
+	if (!tb[MTK_VENDOR_ATTR_DFS_TX_CTRL_MODE] ||
+	    !tb[MTK_VENDOR_ATTR_DFS_TX_CTRL_RADIO_IDX]) {
+		err = -EINVAL;
+		goto out;
+	}
 
 	radio_idx = nla_get_u8(tb[MTK_VENDOR_ATTR_DFS_TX_CTRL_RADIO_IDX]);
-	if (!mt7996_radio_valid(dev, radio_idx))
-		return -EINVAL;
+	if (!mt7996_radio_valid(dev, radio_idx)) {
+		dev_err(dev->mt76.dev, "Invalid radio idx %d\n", radio_idx);
+		err = -EINVAL;
+		goto out;
+	}
 
 	phy = dev->radio_phy[radio_idx];
 	rdd_idx = mt7996_get_rdd_idx(phy, false);
-	if (rdd_idx < 0)
-		return -EINVAL;
+	if (rdd_idx < 0) {
+		dev_err(dev->mt76.dev, "Invalid rdd idx %d\n", rdd_idx);
+		err = -EINVAL;
+		goto out;
+	}
 
 	dfs_tx_mode = nla_get_u8(tb[MTK_VENDOR_ATTR_DFS_TX_CTRL_MODE]);
 
-	return mt7996_mcu_rdd_cmd(dev, RDD_DET_MODE, rdd_idx, dfs_tx_mode);
+	err = mt7996_mcu_rdd_cmd(dev, RDD_DET_MODE, rdd_idx, dfs_tx_mode);
+	if (err)
+		goto out;
+
+	phy->dfs_tx_mode = dfs_tx_mode;
+
+out:
+	return err;
 }
 
 static const struct wiphy_vendor_command mt7996_vendor_commands[] = {
