@@ -732,6 +732,8 @@ struct mt7999_phy {
 		u32 interval;
 		u32 last_record;
 	} csi;
+
+	u8 dfs_tx_mode;
 #endif
 
 	bool sr_enable:1;
