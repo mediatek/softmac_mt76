@@ -3872,8 +3872,12 @@ static int mt7996_mac_itwt_setup(struct ieee80211_hw *hw,
 	/* the firmware does not support iTWT agreements with MLD peers, and
 	 * driver TWT state is only tracked on the default link
 	 */
-	if (sta->mlo)
+	if (sta->mlo) {
+		mt76_dev_dbg(&dev->mt76,
+			     "iTWT setup is not supported for a non-AP MLD");
+		ret = -EOPNOTSUPP;
 		goto out;
+	}
 
 	if (mt7996_mac_check_twt_req(twt))
 		goto out;
@@ -3964,20 +3968,8 @@ int mt7996_mac_add_twt_setup(struct ieee80211_hw *hw,
 			     struct ieee80211_sta *sta, u8 link_id,
 			     struct ieee80211_twt_setup *twt)
 {
-	struct mt7996_dev *dev = mt7996_hw_dev(hw);
-
-	if (link_id >= IEEE80211_LINK_UNSPECIFIED)
-		return -EINVAL;
-
 	if (twt->control & IEEE80211_TWT_CONTROL_NEG_TYPE_BROADCAST)
 		return mt7996_mac_btwt_setup(hw, sta, link_id, twt);
-
-	/* FIXME: Do not support MLO iTWT yet */
-	if (sta->mlo) {
-		mt76_dev_dbg(&dev->mt76,
-			     "FIXME: iTWT setup is not supported for a non-AP MLD");
-		return -EOPNOTSUPP;
-	}
 
 	return mt7996_mac_itwt_setup(hw, sta, link_id, twt);
 }
