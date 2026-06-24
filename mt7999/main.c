@@ -350,6 +350,9 @@ int mt7999_vif_link_add(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 
 	if ((mvif->mt76.valid_links & BIT(link_conf->link_id)) &&
 	    !mlink->offchannel) {
+		if (mvif->mt76.deflink_id == IEEE80211_LINK_UNSPECIFIED)
+			mvif->mt76.deflink_id = link_conf->link_id;
+
 		if (ieee80211_vif_is_mld(vif) && vif->type == NL80211_IFTYPE_AP)
 			return mt7999_mcu_mld_link_oper(dev, link_conf, link,
 							true);
