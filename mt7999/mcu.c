@@ -549,6 +549,7 @@ mt7999_mcu_update_rate(struct rate_info *rate, struct ieee80211_supported_band *
 		       u8 mode, u8 bw, u8 mcs, u8 nss, u8 stbc, u8 gi)
 {
 	struct rate_info tmp_rate = {};
+	int ret = 0;
 
 	tmp_rate.mcs = mcs;
 	tmp_rate.nss = (stbc && nss > 1) ? nss / 2 : nss;
@@ -556,15 +557,19 @@ mt7999_mcu_update_rate(struct rate_info *rate, struct ieee80211_supported_band *
 	switch (mode) {
 	case MT_PHY_TYPE_CCK:
 	case MT_PHY_TYPE_OFDM:
-		if (mcs >= sband->n_bitrates)
-			return -EINVAL;
+		if (mcs >= sband->n_bitrates) {
+			ret = -EINVAL;
+			goto out;
+		}
 
 		tmp_rate.legacy = sband->bitrates[mcs].bitrate;
 		break;
 	case MT_PHY_TYPE_HT:
 	case MT_PHY_TYPE_HT_GF:
-		if (mcs > 31)
-			return -EINVAL;
+		if (mcs > 31) {
+			ret = -EINVAL;
+			goto out;
+		}
 
 		tmp_rate.flags |= RATE_INFO_FLAGS_MCS;
 		if (gi)
@@ -572,8 +577,10 @@ mt7999_mcu_update_rate(struct rate_info *rate, struct ieee80211_supported_band *
 		break;
 	case MT_PHY_TYPE_VHT:
 		/* FW will use VHT 1024-QAM if the peer can receive */
-		if (mcs > 11)
-			return -EINVAL;
+		if (mcs > 11) {
+			ret = -EINVAL;
+			goto out;
+		}
 
 		tmp_rate.flags |= RATE_INFO_FLAGS_VHT_MCS;
 		if (gi)
@@ -586,8 +593,10 @@ mt7999_mcu_update_rate(struct rate_info *rate, struct ieee80211_supported_band *
 	case MT_PHY_TYPE_HE_TB:
 	case MT_PHY_TYPE_HE_MU:
 		tmp_rate.mcs = mcs & CMDRPT_TX_RATE_HE;
-		if (tmp_rate.mcs > 13 || gi > NL80211_RATE_INFO_HE_GI_3_2)
-			return -EINVAL;
+		if (tmp_rate.mcs > 13 || gi > NL80211_RATE_INFO_HE_GI_3_2) {
+			ret = -EINVAL;
+			goto out;
+		}
 
 		tmp_rate.flags |= RATE_INFO_FLAGS_HE_MCS;
 		tmp_rate.he_gi = gi;
@@ -597,8 +606,10 @@ mt7999_mcu_update_rate(struct rate_info *rate, struct ieee80211_supported_band *
 	case MT_PHY_TYPE_EHT_TRIG:
 	case MT_PHY_TYPE_EHT_MU:
 		tmp_rate.mcs = mcs & CMDRPT_TX_RATE_EHT;
-		if (tmp_rate.mcs > 15 || gi > NL80211_RATE_INFO_EHT_GI_3_2)
-			return -EINVAL;
+		if (tmp_rate.mcs > 15 || gi > NL80211_RATE_INFO_EHT_GI_3_2) {
+			ret = -EINVAL;
+			goto out;
+		}
 
 		tmp_rate.flags |= RATE_INFO_FLAGS_EHT_MCS;
 		tmp_rate.eht_gi = gi;
@@ -606,7 +617,8 @@ mt7999_mcu_update_rate(struct rate_info *rate, struct ieee80211_supported_band *
 	case MT_PHY_TYPE_UNKNOWN:
 		return 0;
 	default:
-		return -EINVAL;
+		ret = -EINVAL;
+		goto out;
 	}
 
 	switch (bw) {
@@ -626,7 +638,8 @@ mt7999_mcu_update_rate(struct rate_info *rate, struct ieee80211_supported_band *
 		tmp_rate.bw = RATE_INFO_BW_320;
 		break;
 	default:
-		return -EINVAL;
+		ret = -EINVAL;
+		goto out;
 	}
 
 	if (mode == MT_PHY_TYPE_HE_EXT_SU && mcs & PRXV_TX_RATE_HE_ER_SU_106T) {
@@ -635,7 +648,12 @@ mt7999_mcu_update_rate(struct rate_info *rate, struct ieee80211_supported_band *
 	}
 	*rate = tmp_rate;
 
-	return 0;
+out:
+	if (ret)
+		pr_err("Invalid rate (mode=%u nss=%u mcs=%u gi=%u bw=%u)",
+		       mode, nss, mcs, gi, bw);
+
+	return ret;
 }
 
 static int
