@@ -1005,6 +1005,7 @@ struct mt7999_dev {
 #ifdef CONFIG_MTK_VENDOR
 	u8 cert_mode;
 	u8 coding_type;
+	u8 nusers_ofdma_type;
 #endif
 
 #if defined CONFIG_NL80211_TESTMODE || defined CONFIG_MTK_DEBUG

@@ -1202,33 +1202,28 @@ void mt7999_mcu_set_ppdu_tx_type(struct mt7999_dev *dev, u8 ppdu_type)
 
 void mt7999_mcu_set_nusers_ofdma(struct mt7999_dev *dev, u8 band_idx, u8 user_cnt)
 {
-	struct mt76_phy *mphy;
-	struct mt7999_phy *phy;
 	int enable_su = 0;
-	u8 type;
 
 	if (!mt7999_band_valid(dev, band_idx)) {
 		dev_err(dev->mt76.dev, "Invalid band_idx\n");
 		return;
 	}
 
-	mphy = dev->mt76.phys[band_idx];
-	if (!mphy)
+	if (!dev->mt76.phys[band_idx])
 		return;
 
-	phy = (struct mt7999_phy *)mphy->priv;
+	if (!dev->nusers_ofdma_type) {
+		dev_warn(dev->mt76.dev,
+			 "OFDMA direction (UL or DL) is not configured\n");
+		return;
+	}
 
 	mt7999_mcu_set_muru_cmd(dev, UNI_MURU_SUTX_CTRL, enable_su);
 	mt7999_mcu_set_muru_cmd(dev, UNI_MURU_SET_MUDL_ACK_POLICY,
 				MU_DL_ACK_POLICY_SU_BAR);
 	mt7999_mcu_muru_set_prot_frame_thr(dev, 9999);
 
-	if (phy->muru_onoff & OFDMA_UL)
-		type = MU_CTRL_UL_USER_CNT;
-	else
-		type = MU_CTRL_DL_USER_CNT;
-
-	mt7999_set_muru_cfg(dev, type, user_cnt);
+	mt7999_set_muru_cfg(dev, dev->nusers_ofdma_type, user_cnt);
 }
 
 void mt7999_mcu_set_mimo(struct mt7999_phy *phy)

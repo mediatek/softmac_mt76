@@ -9,6 +9,7 @@
 #include "mcu.h"
 #include "mac.h"
 #include "eeprom.h"
+#include "mtk_mcu.h"
 #include "mt7999_trace.h"
 #include "muldf.h"
 
@@ -9310,6 +9311,8 @@ void mt7999_set_wireless_vif(void *data, u8 *mac, struct ieee80211_vif *vif)
 			phy->muru_onoff |= OFDMA_DL;
 		else
 			phy->muru_onoff |= val;
+		dev->nusers_ofdma_type = (val == OFDMA_UL) ? MU_CTRL_UL_USER_CNT
+							   : MU_CTRL_DL_USER_CNT;
 		break;
 	case RATE_PARAM_FIXED_MIMO:
 		if (val == 0)
