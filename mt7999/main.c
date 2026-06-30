@@ -1353,14 +1353,6 @@ void mt7999_mac_sta_remove_link(struct mt7999_dev *dev,
 
 	mt76_wcid_cleanup(&dev->mt76, &msta_link->wcid);
 
-	if (msta_link->wcid.link_valid || !sta->valid_links) {
-		struct mt7999_phy *phy;
-
-		phy = __mt7999_phy(dev, msta_link->wcid.phy_idx);
-		if (phy)
-			phy->mt76->num_sta--;
-	}
-
 	if (msta_link->wcid.link_valid) {
 		if (msta->deflink_id == link_id) {
 			msta->deflink_id = msta->seclink_id;
@@ -1387,6 +1379,12 @@ void mt7999_mac_sta_remove_link(struct mt7999_dev *dev,
 	}
 
 	if (flush) {
+		struct mt7999_phy *phy =
+			__mt7999_phy(dev, msta_link->wcid.phy_idx);
+
+		if (phy)
+			phy->mt76->num_sta--;
+
 		rcu_assign_pointer(msta->link[link_id], NULL);
 		rcu_assign_pointer(dev->mt76.wcid[msta_link->wcid.idx], NULL);
 		mt76_wcid_mask_clear(dev->mt76.wcid_mask, msta_link->wcid.idx);
