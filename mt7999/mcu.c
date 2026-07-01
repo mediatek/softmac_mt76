@@ -795,7 +795,7 @@ static void mt7999_update_txop_stats(struct mt7999_dev *dev, u8 type,
 
 	msta = (struct mt7999_sta *)sta->drv_priv;
 	vif = container_of((void *)msta_link->sta->vif, struct ieee80211_vif, drv_priv);
-	wmm_idx = vif->type == NL80211_IFTYPE_AP ? 0 : 3;
+	wmm_idx = vif->type == NL80211_IFTYPE_AP ? 0 : 1;
 	valid_links = sta->valid_links ?: BIT(0);
 
 	for_each_set_bit(link_id, &valid_links, IEEE80211_MLD_MAX_NUM_LINKS) {

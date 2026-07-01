@@ -4400,7 +4400,7 @@ static ssize_t mt7999_be_txop_set(struct file *file,
 	if (!strncmp(role, "ap", 2))
 		ofs = MT_WF_TMAC_WMM0_OFFSET;
 	else if (!strncmp(role, "sta", 3))
-		ofs = MT_WF_TMAC_WMM3_OFFSET;
+		ofs = MT_WF_TMAC_WMM1_OFFSET;
 	else
 		goto err;
 
@@ -4439,7 +4439,7 @@ static ssize_t mt7999_be_txop_dump(struct file *file, char __user *user_buf,
 	if (!buf)
 		return -ENOMEM;
 
-	len += scnprintf(buf + len, size - len, "Band\tAP (WMM0)\t\tSTA (WMM3)\n");
+	len += scnprintf(buf + len, size - len, "Band\tAP (WMM0)\t\tSTA (WMM1)\n");
 
 	for (i = 0; i < __MT_MAX_BAND; i++) {
 		u32 txop[MAX_IF_TYPE], tx_burst[MAX_IF_TYPE];
@@ -4454,7 +4454,7 @@ do {										\
 	tx_burst[role] = tx_burst[role] ? ((tx_burst[role] << 5) - 16) / 100 : 0;\
 } while (0)
 		MT7999_READ_TXOP(AP, MT_WF_TMAC_WMM0_OFFSET);
-		MT7999_READ_TXOP(STA, MT_WF_TMAC_WMM3_OFFSET);
+		MT7999_READ_TXOP(STA, MT_WF_TMAC_WMM1_OFFSET);
 #undef MT7999_READ_TXOP
 
 		len += scnprintf(buf + len, size - len,

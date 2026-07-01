@@ -3343,10 +3343,7 @@ static void mt7999_mac_dynamic_txop(struct mt7999_dev *dev)
 		return;
 
 	mt7999_for_each_phy(dev, phy) {
-		for (i = 0; i < MT7999_MAX_WMM_SETS; i++) {
-			if (i == 1 || i == 2)
-				continue;
-
+		for (i = 0; i < MT7999_USED_WMM_SETS; i++) {
 			if (mt7999_mac_prefer_ul(phy, i)) {
 				if (phy->txop[i] != MT7999_TXOP_PREFER_UL)
 					update_txop = true;

@@ -16,6 +16,7 @@
 #define MT7999_MAX_INTERFACES		19	/* per-band */
 #define MT7999_MAX_AP_INTERFACES	16	/* per-band */
 #define MT7999_MAX_WMM_SETS		4
+#define MT7999_USED_WMM_SETS		2
 #define MT7999_MAX_MBSSID		16
 #define MT7999_WTBL_BMC_SIZE		64
 #define MT7999_WTBL_RESERVED		(mt7999_wtbl_size(dev) - 1)

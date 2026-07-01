@@ -399,7 +399,7 @@ int mt7999_vif_link_add(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 	link->phy = phy;
 	mlink->omac_idx = idx;
 	mlink->band_idx = band_idx;
-	mlink->wmm_idx = vif->type == NL80211_IFTYPE_AP ? 0 : 3;
+	mlink->wmm_idx = vif->type == NL80211_IFTYPE_AP ? 0 : 1;
 	mlink->wcid = &msta_link->wcid;
 	mlink->wcid->offchannel = mlink->offchannel;
 
