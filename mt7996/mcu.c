@@ -6074,6 +6074,8 @@ static int mt7996_mcu_wa_red_config(struct mt7996_dev *dev)
 		sizeof(struct mt7996_wa_params) + 604;
 
 	data = kzalloc(len, GFP_KERNEL);
+	if (!data)
+		return -ENOMEM;
 
 	if (is_mt7990(&dev->mt76)) {
 		struct mt7996_red_config_hdr *hdr = (struct mt7996_red_config_hdr *)data;
