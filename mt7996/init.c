@@ -1305,17 +1305,6 @@ static int mt7996_wed_rro_init(struct mt7996_dev *dev)
 		dev->wed_rro.emi_rings_dma.ptr = ptr;
 	}
 
-	for (i = 0; i < MT7996_RRO_MSDU_PG_CR_CNT; i++) {
-		ptr = dmam_alloc_coherent(dev->mt76.dma_dev, MT7996_RRO_MSDU_PG_SIZE_PER_CR,
-					  &dev->wed_rro.msdu_pg[i].phy_addr,
-					  GFP_KERNEL);
-		if (!ptr)
-			return -ENOMEM;
-		dev->wed_rro.msdu_pg[i].ptr = ptr;
-
-		memset(dev->wed_rro.msdu_pg[i].ptr, 0, MT7996_RRO_MSDU_PG_SIZE_PER_CR);
-	}
-
 	ptr = dmam_alloc_coherent(dev->mt76.dma_dev,
 				  MT7996_RRO_WINDOW_MAX_LEN * sizeof(*addr),
 				  &dev->wed_rro.session.phy_addr,
