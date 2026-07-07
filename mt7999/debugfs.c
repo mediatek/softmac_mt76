@@ -2206,7 +2206,6 @@ mt7999_vif_links_info_show(struct seq_file *s, void *data)
 	struct mt7999_dev *dev = mvif->deflink.phy->dev;
 	struct mt7999_vif_link *mconf;
 	struct mt7999_sta_link *msta_link;
-	struct mt76_txq *mtxq = (struct mt76_txq *) vif->txq->drv_priv;
 	unsigned long valid_links;
 	u8 link_id, i;
 
@@ -2227,7 +2226,11 @@ mt7999_vif_links_info_show(struct seq_file *s, void *data)
 	seq_printf(s, "mld remap id = %d\n", mvif->mld_remap_idx);
 
 	seq_printf(s, "valid links = 0x%x\n", vif->valid_links);
-	seq_printf(s, "mtxq->wcid = %d\n", mtxq->wcid);
+	if (vif->txq) {
+		struct mt76_txq *mtxq = (struct mt76_txq *)vif->txq->drv_priv;
+
+		seq_printf(s, "mtxq->wcid = %d\n", mtxq->wcid);
+	}
 	for (i = 0; i < __MT_MAX_BAND; i++)
 		seq_printf(s, "band%d_link_id = %d\n", i, mvif->mt76.band_to_link[i]);
 
