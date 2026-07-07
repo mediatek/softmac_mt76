@@ -1605,6 +1605,15 @@ mt7996_mac_sta_event(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 		}
 		break;
 	case MT76_STA_EVENT_DISASSOC:
+		for_each_set_bit(link_id, &add, IEEE80211_MLD_MAX_NUM_LINKS) {
+			struct mt7996_sta_link *msta_link =
+				mt76_dereference(msta->link[link_id], &dev->mt76);
+
+			if (!msta_link)
+				continue;
+
+			msta_link->wcid.tx_info &= ~MT_WCID_TX_INFO_SET;
+		}
 		ieee80211_iterate_stations_atomic(dev->mt76.hw, mt7996_check_mld_sta,
 						  &has_mld_sta);
 		if (!has_mld_sta)
