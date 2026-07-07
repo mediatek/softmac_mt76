@@ -543,9 +543,11 @@ mt7996_vendor_amnt_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 
 	err = nla_parse_nested(tb2, MTK_VENDOR_ATTR_AMNT_SET_MAX,
 		tb1[MTK_VENDOR_ATTR_AMNT_CTRL_SET], amnt_set_policy, NULL);
+	if (err)
+		return err;
 
 	if (!tb2[MTK_VENDOR_ATTR_AMNT_SET_INDEX] ||
-		!tb2[MTK_VENDOR_ATTR_AMNT_SET_MACADDR])
+	    !tb2[MTK_VENDOR_ATTR_AMNT_SET_MACADDR])
 		return -EINVAL;
 
 	index = nla_get_u8(tb2[MTK_VENDOR_ATTR_AMNT_SET_INDEX]);
@@ -598,7 +600,10 @@ mt7996_amnt_dump(struct mt7996_phy *phy, struct sk_buff *skb,
 	data.idx = amnt_idx;
 	data.last_seen = last_seen;
 
-	nla_put(skb, (*attrtype)++, sizeof(struct mt7996_amnt_data), &data);
+	if (nla_put(skb, *attrtype, sizeof(struct mt7996_amnt_data), &data))
+		return 0;
+
+	(*attrtype)++;
 
 	return 1;
 }
@@ -665,9 +670,12 @@ mt7996_vendor_amnt_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
 
 	nla_nest_end(skb, b);
 
-	nla_put_u8(skb, MTK_VENDOR_ATTR_AMNT_DUMP_LEN, len);
+	err = nla_put_u8(skb, MTK_VENDOR_ATTR_AMNT_DUMP_LEN, len);
 
 	nla_nest_end(skb, a);
+
+	if (err)
+		return err;
 
 	return len + 1;
 }
