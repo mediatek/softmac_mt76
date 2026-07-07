@@ -957,6 +957,9 @@ void mt7999_init_work_reset(struct mt7999_dev *dev)
 	mt7999_mac_init(dev);
 	mt7999_txbf_init(dev);
 
+	if (dev->testmode_enable)
+		lp_ctrl = 0;
+
 	mt7999_low_power_config(dev);
 	mt7999_set_pcie_l1ss(dev, lp_ctrl & BIT(LOW_POWER_PCIE_L1SS));
 	mt7999_mcu_ba_trigger_enable(dev, true);
