@@ -315,7 +315,7 @@ u16 mt76_connac2_mac_tx_rate_val(struct mt76_phy *mphy,
 		goto legacy;
 
 	mvif = mt76_vif_conf_link(mphy->dev, conf->vif, conf);
-	chandef = mvif->ctx ? &mvif->ctx->def : &mphy->chandef;
+	chandef = mvif && mvif->ctx ? &mvif->ctx->def : &mphy->chandef;
 	band = chandef->chan->band;
 
 	if (is_connac2(mphy->dev)) {
@@ -1002,6 +1002,9 @@ int mt76_connac2_reverse_frag0_hdr_trans(struct ieee80211_vif *vif,
 		return -EINVAL;
 
 	if (!(le32_to_cpu(rxd[1]) & MT_RXD1_NORMAL_GROUP_4))
+		return -EINVAL;
+
+	if (!status->wcid)
 		return -EINVAL;
 
 	sta = container_of((void *)status->wcid, struct ieee80211_sta, drv_priv);

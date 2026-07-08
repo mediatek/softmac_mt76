@@ -111,8 +111,8 @@ static int mt7996_reverse_frag0_hdr_trans(struct sk_buff *skb, u16 hdr_gap)
 {
 	struct mt76_rx_status *status = (struct mt76_rx_status *)skb->cb;
 	struct ethhdr *eth_hdr = (struct ethhdr *)(skb->data + hdr_gap);
-	struct mt7996_sta_link *msta_link = (void *)status->wcid;
-	struct mt7996_sta *msta = msta_link->sta;
+	struct mt7996_sta_link *msta_link;
+	struct mt7996_sta *msta;
 	struct ieee80211_bss_conf *link_conf;
 	__le32 *rxd = (__le32 *)skb->data;
 	struct ieee80211_sta *sta;
@@ -127,13 +127,19 @@ static int mt7996_reverse_frag0_hdr_trans(struct sk_buff *skb, u16 hdr_gap)
 	if (!(le32_to_cpu(rxd[1]) & MT_RXD1_NORMAL_GROUP_4))
 		return -EINVAL;
 
+	if (!status->wcid)
+		return -EINVAL;
+
+	msta_link = (void *)status->wcid;
+	msta = msta_link->sta;
+
 	if (!msta || !msta->vif)
 		return -EINVAL;
 
 	sta = wcid_to_sta(status->wcid);
 	vif = container_of((void *)msta->vif, struct ieee80211_vif, drv_priv);
 	link_conf = rcu_dereference(vif->link_conf[msta_link->wcid.link_id]);
-	if (!link_conf)
+	if (!sta || !link_conf)
 		return -EINVAL;
 
 	/* store the info from RXD and ethhdr to avoid being overridden */

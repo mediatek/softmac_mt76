@@ -4436,7 +4436,7 @@ mt7996_tx_drop_show(struct seq_file *s, void *data)
 {
 	struct mt7996_dev *dev = s->private;
 	struct mt76_dev *mdev = &dev->mt76;
-	struct mt76_tx_debug *phy_stats[__MT_MAX_BAND];
+	struct mt76_tx_debug *phy_stats[__MT_MAX_BAND] = {};
 	int i = 0;
 
 	for (i = 0; i < __MT_MAX_BAND; i++) {
@@ -4505,7 +4505,7 @@ mt7996_rx_drop_show(struct seq_file *s, void *data)
 {
 	struct mt7996_dev *dev = s->private;
 	struct mt76_dev *mdev = &dev->mt76;
-	struct mt76_rx_debug *stats[__MT_MAX_BAND];
+	struct mt76_rx_debug *stats[__MT_MAX_BAND] = {};
 	struct mt76_queue *q[2];
 	int i = 0;
 

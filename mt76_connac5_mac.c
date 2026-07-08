@@ -19,7 +19,7 @@ u16 mt76_connac5_mac_tx_rate_val(struct mt76_phy *mphy,
 		goto legacy;
 
 	mvif = mt76_vif_conf_link(mphy->dev, conf->vif, conf);
-	chandef = mvif->ctx ? &mvif->ctx->def : &mphy->chandef;
+	chandef = mvif && mvif->ctx ? &mvif->ctx->def : &mphy->chandef;
 	band = chandef->chan->band;
 
 	if (beacon) {

@@ -964,7 +964,7 @@ mt7999_get_rates_table(struct mt7999_phy *phy, struct ieee80211_bss_conf *conf,
 		if ((mt76_rates[i].hw_value & GENMASK(7, 0)) == idx)
 			return MT7999_BASIC_RATES_TBL + 2 * i;
 
-	return mvif->basic_rates_idx;
+	return mvif ? mvif->basic_rates_idx : MT7999_BASIC_RATES_TBL;
 }
 
 static void
@@ -2543,15 +2543,20 @@ static void mt7999_ethtool_worker(void *wi_data, struct ieee80211_sta *sta)
 	struct mt76_ethtool_worker_info *wi = wi_data;
 	struct mt7999_sta *msta = (struct mt7999_sta *)sta->drv_priv;
 	struct mt7999_vif *mvif = msta->vif;
-	struct mt7999_dev *dev = mvif->deflink.phy->dev;
+	struct mt7999_dev *dev;
 	struct mt7999_sta_link *msta_link;
 	struct mt7999_vif_link *mconf;
-	struct ieee80211_vif *vif = container_of((void *)mvif, struct ieee80211_vif, drv_priv);
+	struct ieee80211_vif *vif;
 
+	if (!mvif)
+		return;
+
+	dev = mvif->deflink.phy->dev;
+	vif = container_of((void *)mvif, struct ieee80211_vif, drv_priv);
 	msta_link = mt7999_sta_link_protected(dev, msta, msta->deflink_id);
 	mconf = mt7999_vif_link(dev, vif, msta->deflink_id);
 
-	if (mconf->mt76.idx != wi->idx)
+	if (!msta_link || !mconf || mconf->mt76.idx != wi->idx)
 		return;
 
 	mt76_ethtool_worker(wi, &msta_link->wcid.stats, true);
@@ -2578,7 +2583,11 @@ void mt7999_get_et_stats(struct ieee80211_hw *hw,
 
 	mutex_lock(&dev->mt76.mutex);
 	mconf = mt7999_vif_link(dev, vif, mvif->mt76.deflink_id);
-	wi.idx = mconf->mt76.idx,
+	if (!mconf) {
+		mutex_unlock(&dev->mt76.mutex);
+		return;
+	}
+	wi.idx = mconf->mt76.idx;
 
 	mt7999_mac_update_stats(phy);
 

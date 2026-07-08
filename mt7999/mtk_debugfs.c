@@ -3363,12 +3363,18 @@ static void mt7999_show_txcmd(struct seq_file *s, u32 fid)
 	num = (txcmd_bytes >> 2) + ((txcmd_bytes % 4) ? 1 : 0);
 
 	regval = kzalloc(sizeof(u32) * num, GFP_KERNEL);
+	if (!regval)
+		return;
+
 	if (dev->ple_query_cr) {
 		for (i = 0; i < num; i++)
 			regval[i] = mt76_rr(dev, addr + 4 * i);
 
 	} else {
 		regidx = kzalloc(sizeof(u32) * num, GFP_KERNEL);
+		if (!regidx)
+			goto out;
+
 		for (i = 0; i < num; i++)
 			regidx[i] = addr + 4 * i;
 
@@ -3561,7 +3567,7 @@ mt7999_tx_drop_show(struct seq_file *s, void *data)
 {
 	struct mt7999_dev *dev = s->private;
 	struct mt76_dev *mdev = &dev->mt76;
-	struct mt76_tx_debug *phy_stats[__MT_MAX_BAND];
+	struct mt76_tx_debug *phy_stats[__MT_MAX_BAND] = {};
 	int i = 0;
 
 	for (i = 0; i < __MT_MAX_BAND; i++) {
@@ -3630,7 +3636,7 @@ mt7999_rx_drop_show(struct seq_file *s, void *data)
 {
 	struct mt7999_dev *dev = s->private;
 	struct mt76_dev *mdev = &dev->mt76;
-	struct mt76_rx_debug *stats[__MT_MAX_BAND];
+	struct mt76_rx_debug *stats[__MT_MAX_BAND] = {};
 	struct mt76_queue *q[2];
 	int i = 0;
 
