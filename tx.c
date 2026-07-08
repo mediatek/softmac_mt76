@@ -104,9 +104,6 @@ __mt76_tx_status_skb_done(struct mt76_dev *dev, struct sk_buff *skb, u8 flags,
 	if ((flags & done) != done)
 		return;
 
-	memset(&info->status, 0, sizeof(info->status) -
-				 sizeof(*info->status.status_driver_data));
-
 	/* Tx status can be unreliable. if it fails, mark the frame as ACKed */
 	if (flags & MT_TX_CB_TXS_FAILED &&
 	    (dev->drv->drv_flags & MT_DRV_IGNORE_TXS_FAILED)) {
@@ -179,14 +176,20 @@ struct sk_buff *
 mt76_tx_status_skb_get(struct mt76_dev *dev, struct mt76_wcid *wcid, int pktid,
 		       struct sk_buff_head *list)
 {
+	struct ieee80211_tx_info *info;
 	struct sk_buff *skb;
 	int id;
 
 	lockdep_assert_held(&dev->status_lock);
 
 	skb = idr_remove(&wcid->pktid, pktid);
-	if (skb)
+	if (skb) {
+		info = IEEE80211_SKB_CB(skb);
+
+		memset(&info->status, 0, sizeof(info->status) -
+					 sizeof(info->status.status_driver_data));
 		goto out;
+	}
 
 	/* look for stale entries in the wcid idr queue */
 	idr_for_each_entry(&wcid->pktid, skb, id) {
@@ -205,6 +208,9 @@ mt76_tx_status_skb_get(struct mt76_dev *dev, struct mt76_wcid *wcid, int pktid,
 		 * and stop waiting for TXS callback.
 		 */
 		idr_remove(&wcid->pktid, cb->pktid);
+		info = IEEE80211_SKB_CB(skb);
+		memset(&info->status, 0, sizeof(info->status) -
+					 sizeof(info->status.status_driver_data));
 		__mt76_tx_status_skb_done(dev, skb, MT_TX_CB_TXS_FAILED |
 						    MT_TX_CB_TXS_DONE, list);
 	}
@@ -311,7 +317,7 @@ void __mt76_tx_complete_skb(struct mt76_dev *dev, u16 wcid_idx, struct sk_buff *
 		struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
 
 		memset(&info->status, 0, sizeof(info->status) -
-					 sizeof(*info->status.status_driver_data));
+					 sizeof(info->status.status_driver_data));
 
 		hw = mt76_tx_status_get_hw(dev, skb);
 		status.sta = wcid_to_sta(wcid);
