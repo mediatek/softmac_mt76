@@ -688,7 +688,7 @@ amnt_ctrl_policy[NUM_MTK_VENDOR_ATTRS_AMNT_CTRL] = {
 static const struct nla_policy
 amnt_set_policy[NUM_MTK_VENDOR_ATTRS_AMNT_SET] = {
 	[MTK_VENDOR_ATTR_AMNT_SET_INDEX] = {.type = NLA_U8 },
-	[MTK_VENDOR_ATTR_AMNT_SET_MACADDR] = { .type = NLA_NESTED },
+	[MTK_VENDOR_ATTR_AMNT_SET_MACADDR] = NLA_POLICY_EXACT_LEN_WARN(ETH_ALEN),
 };
 
 static const struct nla_policy
@@ -811,10 +811,15 @@ mt7915_vendor_amnt_set_addr(struct mt7915_phy *phy, u8 index, u8 *addr)
 {
 	struct mt7915_air_monitor_ctrl *amnt_ctrl = &phy->amnt_ctrl;
 	struct mt7915_air_monitor_group *group;
-	struct mt7915_air_monitor_entry *entry = &amnt_ctrl->entry[index];
+	struct mt7915_air_monitor_entry *entry;
 	const u8 zero_addr[ETH_ALEN] = {};
 	int enable = !ether_addr_equal(addr, zero_addr);
 	int ret, i, j;
+
+	if (index >= MT7915_AIR_MONITOR_MAX_ENTRY)
+		return -EINVAL;
+
+	entry = &amnt_ctrl->entry[index];
 
 	if (enable == 1 && entry->enable == 1) {
 		ether_addr_copy(entry->addr, addr);
@@ -917,10 +922,9 @@ mt7915_vendor_amnt_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 	struct mt7915_phy *phy = mt7915_hw_phy(hw);
 	struct nlattr *tb1[NUM_MTK_VENDOR_ATTRS_AMNT_CTRL];
 	struct nlattr *tb2[NUM_MTK_VENDOR_ATTRS_AMNT_SET];
-	struct nlattr *cur;
-	u8 index = 0, i = 0;
+	u8 index = 0;
 	u8 mac_addr[ETH_ALEN] = {};
-	int err, rem;
+	int err;
 
 	err = nla_parse(tb1, MTK_VENDOR_ATTR_AMNT_CTRL_MAX, data, data_len,
 			amnt_ctrl_policy, NULL);
@@ -932,15 +936,15 @@ mt7915_vendor_amnt_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 
 	err = nla_parse_nested(tb2, MTK_VENDOR_ATTR_AMNT_SET_MAX,
 		tb1[MTK_VENDOR_ATTR_AMNT_CTRL_SET], amnt_set_policy, NULL);
+	if (err)
+		return err;
 
 	if (!tb2[MTK_VENDOR_ATTR_AMNT_SET_INDEX] ||
-		!tb2[MTK_VENDOR_ATTR_AMNT_SET_MACADDR])
+	    !tb2[MTK_VENDOR_ATTR_AMNT_SET_MACADDR])
 		return -EINVAL;
 
 	index = nla_get_u8(tb2[MTK_VENDOR_ATTR_AMNT_SET_INDEX]);
-	nla_for_each_nested(cur, tb2[MTK_VENDOR_ATTR_AMNT_SET_MACADDR], rem) {
-		mac_addr[i++] = nla_get_u8(cur);
-	}
+	memcpy(mac_addr, nla_data(tb2[MTK_VENDOR_ATTR_AMNT_SET_MACADDR]), ETH_ALEN);
 
 	return mt7915_vendor_amnt_set_addr(phy, index, mac_addr);
 }
@@ -967,7 +971,10 @@ mt7915_amnt_dump(struct mt7915_phy *phy, struct sk_buff *skb,
 	data.rssi[3] = entry->rssi[3];
 	data.last_seen = last_seen;
 
-	nla_put(skb, (*attrtype)++, sizeof(struct mt7915_amnt_data), &data);
+	if (nla_put(skb, *attrtype, sizeof(struct mt7915_amnt_data), &data))
+		return 0;
+
+	(*attrtype)++;
 
 	return 1;
 }
