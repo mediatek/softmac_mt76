@@ -4399,7 +4399,7 @@ void mt7999_beacon_mon_work(struct work_struct *work)
 			if (!tx_paused) {
 				ret = mt7999_beacon_mon_send_probe(phy, mvif, conf, link_id);
 				if (!ret) {
-					timeout = MT7999_MAX_PROBE_TIMEOUT +
+					timeout = msecs_to_jiffies(MT7999_MAX_PROBE_TIMEOUT) +
 						  mvif->probe_send_time[band_idx];
 					mt76_bss_dbg(vif, "link %d: send nullfunc to AP %pM, try %d/%d",
 						     link_id, conf->bssid,
