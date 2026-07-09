@@ -124,82 +124,95 @@ out_put_node:
 }
 EXPORT_SYMBOL_GPL(mt76_get_of_data_from_mtd);
 
-static void mt76_get_nvmem_part(struct mt76_dev *dev)
+static int mt76_get_nvmem_cell(struct mt76_dev *dev, const char *cell_name,
+			       u32 *offset, u32 *size)
 {
+	struct device_node *cell_np, *np = dev->dev->of_node;
 #ifdef CONFIG_NL80211_TESTMODE
-	struct device_node *np = dev->dev->of_node;
-	const __be32 *list;
+	struct device_node *parent;
 	const char *part;
-	phandle phandle;
-	int offset, size;
+#endif
+	int index, ret = 0;
 	u32 reg[2];
 
-	list = of_get_property(np, "nvmem-cells", NULL);
-	if (!list)
-		return;
+	index = of_property_match_string(np, "nvmem-cell-names", cell_name);
+	if (index < 0)
+		return index;
 
-	phandle = be32_to_cpup(list++);
-	if (!phandle)
-		return;
+	cell_np = of_parse_phandle(np, "nvmem-cells", index);
+	if (!cell_np)
+		return -ENODEV;
 
-	np = of_find_node_by_phandle(phandle);
-	if (!np)
-		return;
+	if (of_property_read_u32_array(cell_np, "reg", reg, 2)) {
+		ret = -EINVAL;
+		goto out;
+	}
 
-	if (of_property_read_u32_array(np, "reg", reg, 2))
-		return;
+	*offset = reg[0];
+	*size = reg[1];
 
-	offset = reg[0];
-	size = reg[1];
+#ifdef CONFIG_NL80211_TESTMODE
+	if (*size != dev->eeprom.size)
+		goto out;
 
-	np = of_get_parent(of_get_parent(np));
-	if (!np)
-		return;
+	parent = of_get_parent(cell_np);
+	np = of_get_parent(parent);
+	of_node_put(parent);
+	if (!np) {
+		ret = -ENOENT;
+		goto out;
+	}
 
 	part = of_get_property(np, "partname", NULL);
 	if (!part)
 		part = of_get_property(np, "volname", NULL);
-	if (!part)
-		return;
 
-	if (size != dev->eeprom.size)
-		return;
+	if (!part) {
+		ret = -EINVAL;
+		of_node_put(np);
+		goto out;
+	}
 
 	dev->test_mtd.name = devm_kstrdup(dev->dev, part, GFP_KERNEL);
-	dev->test_mtd.offset = offset;
+	dev->test_mtd.offset = *offset;
+	of_node_put(np);
 #endif
+
+out:
+	of_node_put(cell_np);
+	return ret;
 }
 
 int mt76_get_of_data_from_nvmem(struct mt76_dev *dev, void *eep,
 				const char *cell_name, int len)
 {
-	struct device_node *np = dev->dev->of_node;
-	struct nvmem_cell *cell;
-	const void *data;
-	size_t retlen;
-	int ret = 0;
+	struct nvmem_device *nvmem_dev;
+	u32 offset = 0, size = 0;
+	ssize_t retlen;
+	int ret;
 
-	cell = of_nvmem_cell_get(np, cell_name);
-	if (IS_ERR(cell))
-		return PTR_ERR(cell);
-
-	mt76_get_nvmem_part(dev);
-
-	data = nvmem_cell_read(cell, &retlen);
-	nvmem_cell_put(cell);
-
-	if (IS_ERR(data))
-		return PTR_ERR(data);
-
-	if (retlen < len) {
-		ret = -EINVAL;
-		goto exit;
+	ret = mt76_get_nvmem_cell(dev, cell_name, &offset, &size);
+	if (ret) {
+		dev_err(dev->dev, "Failed to get cell offset and size: %d\n", ret);
+		return ret;
 	}
 
-	memcpy(eep, data, len);
+	if (size > len || (!strcmp(cell_name, "eeprom") && size != len)) {
+		dev_err(dev->dev, "Get invalid size %u for %s\n", size, cell_name);
+		return -EINVAL;
+	}
 
-exit:
-	kfree(data);
+	nvmem_dev = nvmem_device_get(dev->dev, "factory");
+	if (IS_ERR(nvmem_dev))
+		return PTR_ERR(nvmem_dev);
+
+	retlen = nvmem_device_read(nvmem_dev, offset, size, eep);
+	if (retlen < 0 || retlen < size) {
+		ret = retlen < 0 ? retlen : -EIO;
+		dev_err(dev->dev, "nvmem_device_read failed: %zd\n", retlen);
+	}
+
+	nvmem_device_put(nvmem_dev);
 
 	return ret;
 }
