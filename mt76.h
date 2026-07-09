@@ -867,7 +867,6 @@ struct mt76_testmode_ops {
 	void (*reset_rx_stats)(struct mt76_phy *phy);
 	void (*tx_stop)(struct mt76_phy *phy);
 	int (*set_eeprom)(struct mt76_phy *phy, u32 offset, u8 *val, u8 action);
-	int (*dump_precal)(struct mt76_phy *mphy, struct sk_buff *msg, int flag, int type);
 	int (*set_list_mode)(struct mt76_phy *phy, int seg_idx,
 			     enum mt76_testmode_list_act list_act);
 	int (*set_sta_ru_info)(struct mt76_phy *phy, bool init);
@@ -1309,6 +1308,8 @@ struct mt76_dev {
 	struct debugfs_blob_wrapper eeprom;
 	struct debugfs_blob_wrapper otp;
 	struct debugfs_blob_wrapper ext_eeprom;
+	struct debugfs_blob_wrapper cal;
+	struct dentry *cal_dentry;
 
 	char alpha2[3];
 	enum nl80211_dfs_regions region;
@@ -1686,6 +1687,8 @@ int mt76_queues_read(struct seq_file *s, void *data);
 void mt76_seq_puts_array(struct seq_file *file, const char *str,
 			 s8 *val, int len);
 
+int mt76_eeprom_precal_alloc(struct mt76_dev *dev);
+int mt76_eeprom_precal_free(struct mt76_dev *dev);
 int mt76_eeprom_init(struct mt76_dev *dev, int len);
 int mt76_eeprom_override(struct mt76_phy *phy);
 int mt76_get_of_data_from_mtd(struct mt76_dev *dev, void *eep, int offset, int len);

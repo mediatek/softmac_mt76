@@ -1333,27 +1333,6 @@ static const struct file_operations mt7996_ext_eeprom_ops = {
 	.llseek = default_llseek,
 };
 
-static ssize_t
-mt7996_precal_get(struct file *file, char __user *user_buf,
-		  size_t count, loff_t *ppos)
-{
-	struct mt7996_dev *dev = file->private_data;
-
-	if (!dev->cal.data || !dev->cal.size) {
-		dev_info(dev->mt76.dev, "No precal data available\n");
-		return 0;
-	}
-
-	return simple_read_from_buffer(user_buf, count, ppos,
-				       dev->cal.data, dev->cal.size);
-}
-
-static const struct file_operations mt7996_precal_ops = {
-	.read = mt7996_precal_get,
-	.open = simple_open,
-	.llseek = default_llseek,
-};
-
 static int
 mt7996_airtime_read(struct seq_file *s, void *data)
 {
@@ -1550,7 +1529,6 @@ int mt7996_init_dev_debugfs(struct mt7996_phy *phy)
 	debugfs_create_devm_seqfile(dev->mt76.dev, "efuse_free_block", dir,
 				    mt7996_efuse_get_free_block);
 	debugfs_create_file("ext_eeprom", 0400, dir, dev, &mt7996_ext_eeprom_ops);
-	debugfs_create_file("precal", 0400, dir, dev, &mt7996_precal_ops);
 	debugfs_create_devm_seqfile(dev->mt76.dev, "airtime", dir,
 	                            mt7996_airtime_read);
 

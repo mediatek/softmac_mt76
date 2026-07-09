@@ -1656,18 +1656,6 @@ int mt76_testmode_dump(struct ieee80211_hw *hw, struct sk_buff *msg,
 		td = &phy->test;
 	}
 
-	if (tb[MT76_TM_ATTR_PRECAL] || tb[MT76_TM_ATTR_PRECAL_INFO]) {
-		int flag, type;
-
-		err = -EINVAL;
-		flag = tb[MT76_TM_ATTR_PRECAL] ? 1 : 0;
-		type = flag ? nla_get_u8(tb[MT76_TM_ATTR_PRECAL_INFO]) : 0;
-		if (dev->test_ops->dump_precal)
-			err = dev->test_ops->dump_precal(phy, msg, flag, type);
-
-		goto out;
-	}
-
 	/* the dump order follows the order of nla_put for each attribute */
 	if (tb[MT76_TM_ATTR_STATS]) {
 		err = -EINVAL;

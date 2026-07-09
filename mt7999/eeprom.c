@@ -378,22 +378,23 @@ int mt7999_eeprom_init(struct mt7999_dev *dev)
 }
 
 static int
-mt7999_eeprom_load_precal_binfile(struct mt7999_dev *dev, u32 offs, u32 size)
+mt7999_eeprom_precal_load_binfile(struct mt7999_dev *dev)
 {
+	struct mt76_dev *mdev = &dev->mt76;
 	const struct firmware *fw = NULL;
 	int ret;
 
-	ret = request_firmware(&fw, dev->mt76.bin_file_name, dev->mt76.dev);
+	ret = request_firmware(&fw, mdev->bin_file_name, mdev->dev);
 	if (ret)
 		return ret;
 
 	if (!fw || !fw->data) {
-		dev_err(dev->mt76.dev, "Invalid bin (bin file mode), load precal fail\n");
+		dev_err(mdev->dev, "Invalid bin (bin file mode), load precal fail\n");
 		ret = -EINVAL;
 		goto out;
 	}
 
-	memcpy(dev->cal.data, fw->data + offs, size);
+	memcpy(mdev->cal.data, fw->data + MT_EE_PRECAL, mdev->cal.size);
 
 out:
 	release_firmware(fw);
@@ -401,11 +402,10 @@ out:
 	return ret;
 }
 
-static int mt7999_eeprom_load_precal(struct mt7999_dev *dev)
+static int mt7999_eeprom_precal_load(struct mt7999_dev *dev)
 {
 	struct mt76_dev *mdev = &dev->mt76;
 	u8 *eeprom = mdev->eeprom.data;
-	u32 offs = MT_EE_PRECAL;
 	int ret, i, val = 0;
 
 	for (i = MT_BAND0; i < __MT_MAX_BAND; i++)
@@ -413,31 +413,30 @@ static int mt7999_eeprom_load_precal(struct mt7999_dev *dev)
 	if (!val)
 		return 0;
 
-	dev->cal.data = kvzalloc(dev->cal.size, GFP_KERNEL);
-	if (!dev->cal.data) {
-		ret = -ENOMEM;
+	ret = mt76_eeprom_precal_alloc(mdev);
+	if (ret)
 		goto fail;
-	}
 
 	if (dev->eeprom_mode == EEPROM_MODE_BIN) {
-		ret = mt7999_eeprom_load_precal_binfile(dev, offs, dev->cal.size);
+		ret = mt7999_eeprom_precal_load_binfile(dev);
 		if (ret)
 			goto fail;
 		return 0;
 	}
 
-	ret = mt76_get_of_data_from_mtd(mdev, dev->cal.data, offs, dev->cal.size);
+	ret = mt76_get_of_data_from_mtd(mdev, mdev->cal.data,
+					MT_EE_PRECAL, mdev->cal.size);
 	if (!ret)
 		return 0;
 
-	ret = mt76_get_of_data_from_nvmem(mdev, dev->cal.data, "precal", dev->cal.size);
+	ret = mt76_get_of_data_from_nvmem(mdev, mdev->cal.data,
+					  "precal", mdev->cal.size);
 	if (!ret)
 		return 0;
 
 fail:
-	dev_warn(dev->mt76.dev, "Failed to load precal data: %d\n", ret);
-	kvfree(dev->cal.data);
-	dev->cal.data = NULL;
+	dev_warn(mdev->dev, "Failed to load precal data: %d\n", ret);
+	mt76_eeprom_precal_free(mdev);
 
 	return ret;
 }
@@ -485,10 +484,10 @@ int mt7999_eeprom_get_prek_block_header(struct mt7999_phy *phy, bool group)
 	int category;
 	u8 *p, *end;
 
-	p = dev->cal.data;
-	end = p + dev->cal.size;
+	p = dev->mt76.cal.data;
+	end = p + dev->mt76.cal.size;
 
-	dev->prek.cur_hdr = (struct prek_block_header *)dev->cal.data;
+	dev->prek.cur_hdr = (struct prek_block_header *)dev->mt76.cal.data;
 	category = mt7999_eeprom_get_prek_category(phy, group);
 	while (p < end) {
 		u32 length;
@@ -532,11 +531,11 @@ mt7999_eeprom_get_dpd_ch_header(struct mt7999_phy *phy, u16 channel,
 }
 
 static void
-mt7999_eeprom_parse_precal(struct mt7999_dev *dev)
+mt7999_eeprom_precal_parse(struct mt7999_dev *dev)
 {
 	int band;
 
-	if (!dev->cal.data)
+	if (!dev->mt76.cal.data)
 		return;
 
 	for (band = MT_BAND0; band < __MT_MAX_BAND; band++) {
@@ -569,7 +568,7 @@ mt7999_eeprom_parse_precal(struct mt7999_dev *dev)
 	dev->prek.cur_hdr = NULL;
 }
 
-int mt7999_eeprom_init_precal(struct mt7999_dev *dev)
+int mt7999_eeprom_precal_init(struct mt7999_dev *dev)
 {
 	struct dpd_ch dpd_2g_ch_list_bw20[] = {
 		DPD_CH(1), DPD_CH(2), DPD_CH(3), DPD_CH(4),
@@ -671,8 +670,8 @@ int mt7999_eeprom_init_precal(struct mt7999_dev *dev)
 		break;
 	}
 
-	dev->cal.size = 0;
-	dev->cal.data = NULL;
+	dev->mt76.cal.size = 0;
+	dev->mt76.cal.data = NULL;
 	for (band = MT_BAND0; band < __MT_MAX_BAND; band++) {
 		dev->prek.dpd_size[band] = 0;
 		dev->prek.dpd_ch_num[band] = 0;
@@ -715,12 +714,12 @@ int mt7999_eeprom_init_precal(struct mt7999_dev *dev)
 			set_dpd_ch(2, 40);
 		}
 
-		dev->cal.size += dev->prek.group_size[band] + dev->prek.dpd_size[band];
+		dev->mt76.cal.size += dev->prek.group_size[band] + dev->prek.dpd_size[band];
 	}
 #undef set_ch_list
 
-	mt7999_eeprom_load_precal(dev);
-	mt7999_eeprom_parse_precal(dev);
+	mt7999_eeprom_precal_load(dev);
+	mt7999_eeprom_precal_parse(dev);
 
 	return 0;
 }

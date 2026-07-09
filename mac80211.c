@@ -797,6 +797,8 @@ void mt76_unregister_device(struct mt76_dev *dev)
 	if (!test_bit(MT76_STATE_REGISTERED, &dev->phy.state))
 		return;
 
+	mt76_eeprom_precal_free(dev);
+
 	if (IS_ENABLED(CONFIG_MT76_LEDS))
 		mt76_led_cleanup(&dev->phy);
 	mt76_tx_status_check(dev, true);

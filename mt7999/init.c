@@ -1995,11 +1995,11 @@ int mt7999_register_device(struct mt7999_dev *dev)
 	if (ret)
 		goto error;
 
-	ret = mt7999_eeprom_init_precal(dev);
+	ret = mt7999_eeprom_precal_init(dev);
 	if (ret)
 		goto error;
 
-	if (dev->cal.data) {
+	if (dev->mt76.cal.data) {
 		ret = mt7999_mcu_apply_group_cal(dev);
 		if (ret)
 			goto error;
@@ -2048,9 +2048,6 @@ error:
 
 void mt7999_unregister_device(struct mt7999_dev *dev)
 {
-	kvfree(dev->cal.data);
-	dev->cal.data = NULL;
-
 	cancel_work_sync(&dev->dump_work);
 	cancel_work_sync(&dev->wed_rro.work);
 	cancel_work_sync(&dev->twt.event_work);

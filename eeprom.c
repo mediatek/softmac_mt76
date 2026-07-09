@@ -649,6 +649,47 @@ mt76_eeprom_init(struct mt76_dev *dev, int len)
 }
 EXPORT_SYMBOL_GPL(mt76_eeprom_init);
 
+int mt76_eeprom_precal_alloc(struct mt76_dev *dev)
+{
+	struct inode *inode;
+
+	if (dev->cal.data || !dev->cal.size)
+		return 0;
+
+	dev->cal.data = kvzalloc(dev->cal.size, GFP_KERNEL);
+	if (!dev->cal.data)
+		return -ENOMEM;
+
+	if (!dev->cal_dentry)
+		return 0;
+
+	inode = d_inode(dev->cal_dentry);
+	i_size_write(inode, dev->cal.size);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(mt76_eeprom_precal_alloc);
+
+int mt76_eeprom_precal_free(struct mt76_dev *dev)
+{
+	struct inode *inode;
+
+	if (!dev->cal.data || !dev->cal.size)
+		return 0;
+
+	kvfree(dev->cal.data);
+	dev->cal.data = NULL;
+
+	if (!dev->cal_dentry)
+		return 0;
+
+	inode = d_inode(dev->cal_dentry);
+	i_size_write(inode, 0);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(mt76_eeprom_precal_free);
+
 /* read power table from filesystem */
 
 static int mt76_parse_list(const char *str, void *arr, int max,

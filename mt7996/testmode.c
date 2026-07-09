@@ -596,7 +596,7 @@ mt7996_tm_group_prek(struct mt7996_phy *phy, enum mt76_testmode_state state)
 			.op.rf.param.cal_param.band_idx = phy->mt76->band_idx,
 		},
 	};
-	u32 group_size, dpd_size, size, offs, *pre_cal;
+	u32 group_size, offs, *pre_cal;
 	u32 wait_on_prek_offset;
 	u8 *eeprom, do_precal = 0;
 	int ret = 0;
@@ -610,8 +610,6 @@ mt7996_tm_group_prek(struct mt7996_phy *phy, enum mt76_testmode_state state)
 	eeprom = mdev->eeprom.data;
 	dev->cur_prek_offset = 0;
 	group_size = MT_EE_CAL_GROUP_SIZE;
-	dpd_size = MT_EE_CAL_DPD_SIZE;
-	size = group_size + dpd_size;
 	offs = MT_EE_DO_PRE_CAL;
 
 	if (mt7996_band_phy(dev, NL80211_BAND_2GHZ))
@@ -624,10 +622,10 @@ mt7996_tm_group_prek(struct mt7996_phy *phy, enum mt76_testmode_state state)
 	/* For 7990, the flash memory layout uses the old definitions,
 	 * but the valid size follows the new one
 	 */
-	if (is_mt7990(&dev->mt76))
+	if (is_mt7990(mdev))
 		wait_on_prek_offset = PREK(GROUP_SIZE_2G_V2) + PREK(ADCDCOC_SIZE_2G) +
 				      PREK(GROUP_SIZE_ABAND_V2) + PREK(ADCDCOC_SIZE_5G);
-	else if (is_mt7992(&dev->mt76))
+	else if (is_mt7992(mdev))
 		wait_on_prek_offset = PREK(GROUP_SIZE_2G) + PREK(ADCDCOC_SIZE_2G) +
 				      max(PREK(GROUP_SIZE_5G) + PREK(ADCDCOC_SIZE_5G),
 					  PREK(GROUP_SIZE_6G) + PREK(ADCDCOC_SIZE_6G));
@@ -636,15 +634,11 @@ mt7996_tm_group_prek(struct mt7996_phy *phy, enum mt76_testmode_state state)
 
 	switch (state) {
 	case MT76_TM_STATE_GROUP_PREK:
-		if (!dev->cal.data) {
-			dev->cal.data = devm_kzalloc(mdev->dev, size, GFP_KERNEL);
-			if (!dev->cal.data)
-				return -ENOMEM;
+		ret = mt76_eeprom_precal_alloc(mdev);
+		if (ret)
+			return ret;
 
-			dev->cal.size = size;
-		}
-
-		ret = mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(TESTMODE_CTRL), &req,
+		ret = mt76_mcu_send_msg(mdev, MCU_WM_UNI_CMD(TESTMODE_CTRL), &req,
 					sizeof(req), false);
 		wait_event_timeout(mdev->mcu.wait,
 				   dev->cur_prek_offset == wait_on_prek_offset,
@@ -657,7 +651,7 @@ mt7996_tm_group_prek(struct mt7996_phy *phy, enum mt76_testmode_state state)
 			eeprom[offs] |= do_precal;
 		break;
 	case MT76_TM_STATE_GROUP_PREK_CLEAN:
-		pre_cal = (u32 *)dev->cal.data;
+		pre_cal = (u32 *)mdev->cal.data;
 		if (!pre_cal)
 			return ret;
 		memset(pre_cal, 0, group_size);
@@ -739,7 +733,7 @@ mt7996_tm_dpd_prek(struct mt7996_phy *phy, enum mt76_testmode_state state)
 			.op.rf.param.cal_param.band_idx = mphy->band_idx,
 		},
 	};
-	u32 group_size, dpd_size, size, offs, *pre_cal;
+	u32 group_size, dpd_size, offs, *pre_cal;
 	u32 func_data, wait_on_prek_offset = 0;
 	u8 do_precal, *eeprom;
 	int ret = 0;
@@ -754,15 +748,12 @@ mt7996_tm_dpd_prek(struct mt7996_phy *phy, enum mt76_testmode_state state)
 	dev->cur_prek_offset = 0;
 	group_size = MT_EE_CAL_GROUP_SIZE;
 	dpd_size = MT_EE_CAL_DPD_SIZE;
-	size = group_size + dpd_size;
 	offs = MT_EE_DO_PRE_CAL;
 
-	if (!dev->cal.data && state < MT76_TM_STATE_DPD_CLEAN) {
-		dev->cal.data = devm_kzalloc(mdev->dev, size, GFP_KERNEL);
-		if (!dev->cal.data)
-			return -ENOMEM;
-
-		dev->cal.size = size;
+	if (state < MT76_TM_STATE_DPD_CLEAN) {
+		ret = mt76_eeprom_precal_alloc(mdev);
+		if (ret)
+			return ret;
 	}
 
 	switch (state) {
@@ -855,7 +846,7 @@ mt7996_tm_dpd_prek(struct mt7996_phy *phy, enum mt76_testmode_state state)
 		do_precal = MT_EE_WIFI_CAL_DPD_6G;
 		break;
 	case MT76_TM_STATE_DPD_CLEAN:
-		pre_cal = (u32 *)dev->cal.data;
+		pre_cal = (u32 *)mdev->cal.data;
 		if (!pre_cal)
 			return ret;
 		memset(pre_cal + (group_size / sizeof(u32)), 0, dpd_size);
@@ -870,113 +861,6 @@ mt7996_tm_dpd_prek(struct mt7996_phy *phy, enum mt76_testmode_state state)
 		eeprom[offs] |= do_precal;
 
 	return ret;
-}
-
-static int
-mt7996_tm_dump_precal(struct mt76_phy *mphy, struct sk_buff *msg, int flag, int type)
-{
-#define DPD_PER_CHAN_SIZE_MASK		GENMASK(31, 30)
-#define DPD_2G_RATIO_MASK		GENMASK(29, 20)
-#define DPD_5G_RATIO_MASK		GENMASK(19, 10)
-#define DPD_6G_RATIO_MASK		GENMASK(9, 0)
-	struct mt7996_phy *phy = mphy->priv;
-	struct mt7996_dev *dev = phy->dev;
-	u32 i, group_size, dpd_size, total_size, size, dpd_info = 0;
-	u32 dpd_size_2g, dpd_size_5g, dpd_size_6g;
-	u32 base, offs, transmit_size = 1000;
-	u8 *pre_cal, *eeprom;
-	void *precal;
-	enum prek_ops {
-		PREK_GET_INFO,
-		PREK_SYNC_ALL,
-		PREK_SYNC_GROUP,
-		PREK_SYNC_DPD_2G,
-		PREK_SYNC_DPD_5G,
-		PREK_SYNC_DPD_6G,
-		PREK_CLEAN_GROUP,
-		PREK_CLEAN_DPD,
-	};
-
-	if (!dev->cal.data) {
-		dev_err(dev->mt76.dev, "%s: no pre-cal found\n", __func__);
-		return 0;
-	}
-
-	group_size = MT_EE_CAL_GROUP_SIZE;
-	dpd_size = MT_EE_CAL_DPD_SIZE;
-	total_size = group_size + dpd_size;
-	pre_cal = dev->cal.data;
-	eeprom = dev->mt76.eeprom.data;
-	offs = MT_EE_DO_PRE_CAL;
-
-	dpd_size_2g = MT_EE_CAL_DPD_SIZE_2G;
-	dpd_size_5g = MT_EE_CAL_DPD_SIZE_5G;
-	dpd_size_6g = MT_EE_CAL_DPD_SIZE_6G;
-
-	switch (type) {
-	case PREK_SYNC_ALL:
-		base = 0;
-		size = total_size;
-		break;
-	case PREK_SYNC_GROUP:
-		base = 0;
-		size = group_size;
-		break;
-	case PREK_SYNC_DPD_2G:
-		base = group_size;
-		size = dpd_size_2g;
-		break;
-	case PREK_SYNC_DPD_5G:
-		base = group_size + dpd_size_2g;
-		size = dpd_size_5g;
-		break;
-	case PREK_SYNC_DPD_6G:
-		base = group_size + dpd_size_2g + dpd_size_5g;
-		size = dpd_size_6g;
-		break;
-	case PREK_GET_INFO:
-		break;
-	default:
-		return 0;
-	}
-
-	if (!flag) {
-		if (eeprom[offs] & MT_EE_WIFI_CAL_DPD) {
-			dpd_info |= u32_encode_bits(1, DPD_PER_CHAN_SIZE_MASK) |
-				    u32_encode_bits(dpd_size_2g / MT_EE_CAL_UNIT,
-						    DPD_2G_RATIO_MASK) |
-				    u32_encode_bits(dpd_size_5g / MT_EE_CAL_UNIT,
-						    DPD_5G_RATIO_MASK) |
-				    u32_encode_bits(dpd_size_6g / MT_EE_CAL_UNIT,
-						    DPD_6G_RATIO_MASK);
-		}
-		dev->cur_prek_offset = 0;
-		precal = nla_nest_start(msg, MT76_TM_ATTR_PRECAL_INFO);
-		if (!precal)
-			return -ENOMEM;
-		nla_put_u32(msg, 0, group_size);
-		nla_put_u32(msg, 1, dpd_size);
-		nla_put_u32(msg, 2, dpd_info);
-		nla_put_u32(msg, 3, transmit_size);
-		nla_put_u32(msg, 4, eeprom[offs]);
-		nla_nest_end(msg, precal);
-	} else {
-		precal = nla_nest_start(msg, MT76_TM_ATTR_PRECAL);
-		if (!precal)
-			return -ENOMEM;
-
-		transmit_size = (dev->cur_prek_offset + transmit_size < size) ?
-				transmit_size : (size - dev->cur_prek_offset);
-		for (i = 0; i < transmit_size; i++) {
-			if (nla_put_u8(msg, i, pre_cal[base + dev->cur_prek_offset + i]))
-				return -ENOMEM;
-		}
-		dev->cur_prek_offset += transmit_size;
-
-		nla_nest_end(msg, precal);
-	}
-
-	return 0;
 }
 
 static int
@@ -1046,7 +930,7 @@ static void
 mt7996_tm_re_cal_event(struct mt7996_dev *dev, struct mt7996_tm_rf_test_data *data, u32 len)
 {
 	u32 base, cal_idx, cal_type;
-	u8 *cal = dev->cal.data;
+	u8 *cal = dev->mt76.cal.data;
 
 	cal_idx = le32_to_cpu(data->cal_idx);
 	cal_type = le32_to_cpu(data->cal_type);
@@ -3042,7 +2926,6 @@ const struct mt76_testmode_ops mt7996_testmode_ops = {
 	.reset_rx_stats = mt7996_tm_reset_trx_stats,
 	.tx_stop = mt7996_tm_tx_stop,
 	.set_eeprom = mt7996_tm_set_eeprom,
-	.dump_precal = mt7996_tm_dump_precal,
 	.set_list_mode = mt7996_tm_set_list_mode,
 	.set_sta_ru_info = mt7996_tm_set_sta_ru_info,
 	.dump_tb_info = mt7996_tm_dump_tb_info,

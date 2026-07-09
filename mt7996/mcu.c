@@ -6949,7 +6949,7 @@ static int mt7996_mcu_set_pre_cal(struct mt7996_dev *dev, u32 idx,
 
 int mt7996_mcu_apply_group_cal(struct mt7996_dev *dev)
 {
-	u8 *cal = dev->cal.data, *eeprom = dev->mt76.eeprom.data;
+	u8 *cal = dev->mt76.cal.data, *eeprom = dev->mt76.eeprom.data;
 	u32 idx = 0, total_idx = MT_EE_CAL_GROUP_SIZE / MT_EE_CAL_UNIT;
 	u32 offs = MT_EE_DO_PRE_CAL;
 	int ret = 0;
@@ -6981,7 +6981,7 @@ int mt7996_mcu_apply_tx_dpd(struct mt7996_phy *phy)
 	u32 cal_id, chan_list_size, base_offset = 0, offs = MT_EE_DO_PRE_CAL;
 	u32 per_chan_size = DPD_PER_CH_BW20_SIZE;
 	u16 channel = ieee80211_frequency_to_channel(chandef->center_freq1);
-	u8 dpd_mask, *cal = dev->cal.data, *eeprom = dev->mt76.eeprom.data;
+	u8 dpd_mask, *cal = dev->mt76.cal.data, *eeprom = dev->mt76.eeprom.data;
 	int idx, i, ret;
 	bool has_skip_ch = (band == NL80211_BAND_5GHZ);
 

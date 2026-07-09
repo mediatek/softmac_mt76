@@ -367,7 +367,7 @@ int mt7915_set_channel(struct mt76_phy *mphy)
 	struct mt7915_dev *dev = phy->dev;
 	int ret;
 
-	if (dev->cal) {
+	if (dev->mt76.cal.data) {
 		ret = mt7915_mcu_apply_tx_dpd(phy);
 		if (ret)
 			goto out;

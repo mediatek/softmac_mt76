@@ -11,22 +11,23 @@ module_param(enable_6ghz, bool, 0644);
 MODULE_PARM_DESC(enable_6ghz, "Enable 6 GHz instead of 5 GHz on hardware that supports both");
 
 static int
-mt7915_eeprom_load_precal_binfile(struct mt7915_dev *dev, u32 offs, u32 size)
+mt7915_eeprom_precal_load_binfile(struct mt7915_dev *dev, u32 offs)
 {
+	struct mt76_dev *mdev = &dev->mt76;
 	const struct firmware *fw = NULL;
 	int ret;
 
-	ret = request_firmware(&fw, dev->mt76.bin_file_name, dev->mt76.dev);
+	ret = request_firmware(&fw, mdev->bin_file_name, mdev->dev);
 	if (ret)
 		return ret;
 
 	if (!fw || !fw->data) {
-		dev_err(dev->mt76.dev, "Invalid bin (bin file mode), load precal fail\n");
+		dev_err(mdev->dev, "Invalid bin (bin file mode), load precal fail\n");
 		ret = -EINVAL;
 		goto out;
 	}
 
-	memcpy(dev->cal, fw->data + offs, size);
+	memcpy(mdev->cal.data, fw->data + offs, mdev->cal.size);
 
 out:
 	release_firmware(fw);
@@ -34,47 +35,55 @@ out:
 	return ret;
 }
 
-static int mt7915_eeprom_load_precal(struct mt7915_dev *dev)
+static int mt7915_eeprom_precal_load(struct mt7915_dev *dev)
 {
 	struct mt76_dev *mdev = &dev->mt76;
 	u8 *eeprom = mdev->eeprom.data;
 	u32 offs = is_mt7915(&dev->mt76) ? MT_EE_DO_PRE_CAL : MT_EE_DO_PRE_CAL_V2;
-	u32 size, val = eeprom[offs];
+	u32 val = eeprom[offs];
 	int ret;
 
-	if (!dev->flash_mode || !val)
+	if (!val)
 		return 0;
 
-	size = mt7915_get_cal_group_size(dev) + mt7915_get_cal_dpd_size(dev);
-
-	dev->cal = devm_kzalloc(mdev->dev, size, GFP_KERNEL);
-	if (!dev->cal)
-		return -ENOMEM;
+	ret = mt76_eeprom_precal_alloc(mdev);
+	if (ret)
+		goto out;
 
 	offs = is_mt7915(&dev->mt76) ? MT_EE_PRECAL : MT_EE_PRECAL_V2;
 
 	if (dev->bin_file_mode) {
-		ret = mt7915_eeprom_load_precal_binfile(dev, offs, size);
+		ret = mt7915_eeprom_precal_load_binfile(dev, offs);
 		if (ret)
 			goto out;
 
 		return 0;
 	}
 
-	ret = mt76_get_of_data_from_mtd(mdev, dev->cal, offs, size);
+	ret = mt76_get_of_data_from_mtd(mdev, mdev->cal.data, offs, mdev->cal.size);
 	if (!ret)
 		return ret;
 
-	ret = mt76_get_of_data_from_nvmem(mdev, dev->cal, "precal", size);
+	ret = mt76_get_of_data_from_nvmem(mdev, mdev->cal.data, "precal", mdev->cal.size);
 	if (!ret)
 		return ret;
 
 out:
-	dev_warn(mdev->dev, "missing precal data, size=%d\n", size);
-	devm_kfree(mdev->dev, dev->cal);
-	dev->cal = NULL;
+	dev_warn(mdev->dev, "missing precal data, size=%ld\n", mdev->cal.size);
+	mt76_eeprom_precal_free(mdev);
 
 	return ret;
+}
+
+int mt7915_eeprom_precal_init(struct mt7915_dev *dev)
+{
+	if (!dev->flash_mode)
+		return 0;
+
+	dev->mt76.cal.size = mt7915_get_cal_group_size(dev) + mt7915_get_cal_dpd_size(dev);
+	mt7915_eeprom_precal_load(dev);
+
+	return 0;
 }
 
 static int mt7915_check_eeprom(struct mt7915_dev *dev)
@@ -569,7 +578,7 @@ int mt7915_eeprom_init(struct mt7915_dev *dev)
 			return ret;
 	}
 
-	mt7915_eeprom_load_precal(dev);
+	mt7915_eeprom_precal_load(dev);
 	ret = mt7915_apply_cal_free_data(dev);
 	if (ret)
 		return ret;

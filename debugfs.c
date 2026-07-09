@@ -100,6 +100,48 @@ void mt76_seq_puts_array(struct seq_file *file, const char *str,
 }
 EXPORT_SYMBOL_GPL(mt76_seq_puts_array);
 
+static ssize_t
+mt76_eeprom_read(struct file *file, char __user *user_buf,
+		 size_t count, loff_t *ppos)
+{
+	struct mt76_dev *dev = file->private_data;
+
+	if (!dev->eeprom.data || !dev->eeprom.size) {
+		dev_info(dev->dev, "No eeprom data available\n");
+		return 0;
+	}
+
+	return simple_read_from_buffer(user_buf, count, ppos,
+				       dev->eeprom.data, dev->eeprom.size);
+}
+
+static const struct file_operations mt76_eeprom_ops = {
+	.read = mt76_eeprom_read,
+	.open = simple_open,
+	.llseek = default_llseek,
+};
+
+static ssize_t
+mt76_precal_read(struct file *file, char __user *user_buf,
+		 size_t count, loff_t *ppos)
+{
+	struct mt76_dev *dev = file->private_data;
+
+	if (!dev->cal.data || !dev->cal.size) {
+		dev_info(dev->dev, "No precal data available\n");
+		return 0;
+	}
+
+	return simple_read_from_buffer(user_buf, count, ppos,
+				       dev->cal.data, dev->cal.size);
+}
+
+static const struct file_operations mt76_precal_ops = {
+	.read = mt76_precal_read,
+	.open = simple_open,
+	.llseek = default_llseek,
+};
+
 struct dentry *
 mt76_register_debugfs_fops(struct mt76_phy *phy,
 			   const struct file_operations *ops)
@@ -115,11 +157,9 @@ mt76_register_debugfs_fops(struct mt76_phy *phy,
 	debugfs_create_file_unsafe("regval", 0600, dir, dev, fops);
 	debugfs_create_file_unsafe("napi_threaded", 0600, dir, dev,
 				   &fops_napi_threaded);
-	debugfs_create_blob("eeprom", 0400, dir, &dev->eeprom);
-	if (dev->otp.data)
-		debugfs_create_blob("otp", 0400, dir, &dev->otp);
-	if (dev->ext_eeprom.data)
-		debugfs_create_blob("ext_eeprom", 0400, dir, &dev->ext_eeprom);
+	debugfs_create_file_size("eeprom", 0400, dir, dev,
+				 &mt76_eeprom_ops, dev->eeprom.size);
+	dev->cal_dentry = debugfs_create_file("precal", 0400, dir, dev, &mt76_precal_ops);
 	debugfs_create_devm_seqfile(dev->dev, "rx-queues", dir,
 				    mt76_rx_queues_read);
 

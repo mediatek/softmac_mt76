@@ -1549,12 +1549,6 @@ static int mt7996_init_hardware(struct mt7996_dev *dev)
 	if (ret < 0)
 		return ret;
 
-	if (dev->cal.data) {
-		ret = mt7996_mcu_apply_group_cal(dev);
-		if (ret)
-			return ret;
-	}
-
 	/* Beacon and mgmt frames should occupy wcid 0 */
 	idx = mt76_wcid_alloc(dev->mt76.wcid_mask, MT7996_WTBL_STA);
 	if (idx)
@@ -2097,6 +2091,16 @@ int mt7996_register_device(struct mt7996_dev *dev)
 	ret = mt7996_init_dev_debugfs(&dev->phy);
 	if (ret)
 		goto error;
+
+	ret = mt7996_eeprom_precal_init(dev);
+	if (ret)
+		goto error;
+
+	if (dev->mt76.cal.data) {
+		ret = mt7996_mcu_apply_group_cal(dev);
+		if (ret)
+			goto error;
+	}
 
 	mt7996_init_pbc(dev);
 

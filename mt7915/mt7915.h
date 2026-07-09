@@ -472,7 +472,6 @@ struct mt7915_dev {
 	struct dentry *debugfs_dir;
 	struct rchan *relay_fwlog;
 
-	void *cal;
 	u32 cur_prek_offset;
 	u8 dpd_chan_num_2g;
 	u8 dpd_chan_num_5g;
@@ -654,6 +653,7 @@ u32 mt7915_wed_init_buf(void *ptr, dma_addr_t phys, int token_id);
 int mt7915_register_device(struct mt7915_dev *dev);
 void mt7915_unregister_device(struct mt7915_dev *dev);
 int mt7915_eeprom_init(struct mt7915_dev *dev);
+int mt7915_eeprom_precal_init(struct mt7915_dev *dev);
 void mt7915_eeprom_parse_hw_cap(struct mt7915_dev *dev,
 				struct mt7915_phy *phy);
 int mt7915_eeprom_get_target_power(struct mt7915_dev *dev,

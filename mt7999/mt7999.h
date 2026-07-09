@@ -978,7 +978,6 @@ struct mt7999_dev {
 	struct rchan *relay_fwlog;
 	struct rchan *relay_idxlog;
 
-	struct debugfs_blob_wrapper cal;
 	struct {
 		const u32 *rev;
 		u32 group_size[__MT_MAX_BAND];
@@ -1300,7 +1299,7 @@ int mt7999_eeprom_get_prek_category(struct mt7999_phy *phy, bool group);
 int mt7999_eeprom_get_prek_block_header(struct mt7999_phy *phy, bool group);
 struct prek_dpd_ch_header *mt7999_eeprom_get_dpd_ch_header(struct mt7999_phy *phy,
 							   u16 channel, enum dpd_ch_bw bw);
-int mt7999_eeprom_init_precal(struct mt7999_dev *dev);
+int mt7999_eeprom_precal_init(struct mt7999_dev *dev);
 int mt7999_eeprom_check_fw_mode(struct mt7999_dev *dev);
 int mt7999_eeprom_parse_hw_cap(struct mt7999_dev *dev, struct mt7999_phy *phy);
 int mt7999_eeprom_get_target_power(struct mt7999_dev *dev,

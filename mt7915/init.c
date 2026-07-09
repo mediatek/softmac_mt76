@@ -903,12 +903,6 @@ mt7915_init_hardware(struct mt7915_dev *dev, struct mt7915_phy *phy2)
 	if (ret < 0)
 		return ret;
 
-	if (dev->cal) {
-		ret = mt7915_mcu_apply_group_cal(dev);
-		if (ret)
-			return ret;
-	}
-
 	/* Beacon and mgmt frames should occupy wcid 0 */
 	idx = mt76_wcid_alloc(dev->mt76.wcid_mask, MT7915_WTBL_STA);
 	if (idx)
@@ -1350,6 +1344,16 @@ int mt7915_register_device(struct mt7915_dev *dev)
 				   ARRAY_SIZE(mt76_rates));
 	if (ret)
 		goto stop_hw;
+
+	ret = mt7915_eeprom_precal_init(dev);
+	if (ret)
+		goto unreg_dev;
+
+	if (dev->mt76.cal.data) {
+		ret = mt7915_mcu_apply_group_cal(dev);
+		if (ret)
+			goto unreg_dev;
+	}
 
 	ret = mt7915_thermal_init(&dev->phy);
 	if (ret)

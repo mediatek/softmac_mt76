@@ -483,22 +483,23 @@ int mt7996_eeprom_parse_hw_cap(struct mt7996_dev *dev, struct mt7996_phy *phy)
 }
 
 static int
-mt7996_eeprom_load_precal_binfile(struct mt7996_dev *dev, u32 offs, u32 size)
+mt7996_eeprom_precal_load_binfile(struct mt7996_dev *dev)
 {
+	struct mt76_dev *mdev = &dev->mt76;
 	const struct firmware *fw = NULL;
 	int ret;
 
-	ret = request_firmware(&fw, dev->mt76.bin_file_name, dev->mt76.dev);
+	ret = request_firmware(&fw, mdev->bin_file_name, mdev->dev);
 	if (ret)
 		return ret;
 
 	if (!fw || !fw->data) {
-		dev_err(dev->mt76.dev, "Invalid bin (bin file mode), load precal fail\n");
+		dev_err(mdev->dev, "Invalid bin (bin file mode), load precal fail\n");
 		ret = -EINVAL;
 		goto out;
 	}
 
-	memcpy(dev->cal.data, fw->data + offs, size);
+	memcpy(mdev->cal.data, fw->data + MT_EE_PRECAL, mdev->cal.size);
 
 out:
 	release_firmware(fw);
@@ -506,10 +507,50 @@ out:
 	return ret;
 }
 
-static void mt7996_eeprom_init_precal(struct mt7996_dev *dev)
+static int mt7996_eeprom_precal_load(struct mt7996_dev *dev)
+{
+	struct mt76_dev *mdev = &dev->mt76;
+	u8 *eeprom = mdev->eeprom.data;
+	u32 val = eeprom[MT_EE_DO_PRE_CAL];
+	int ret;
+
+	if (!val)
+		return 0;
+
+	ret = mt76_eeprom_precal_alloc(mdev);
+	if (ret)
+		goto fail;
+
+	if (dev->eeprom_mode == EEPROM_MODE_BIN) {
+		ret = mt7996_eeprom_precal_load_binfile(dev);
+		if (ret)
+			goto fail;
+		return 0;
+	}
+
+	ret = mt76_get_of_data_from_mtd(mdev, mdev->cal.data, MT_EE_PRECAL, mdev->cal.size);
+	if (!ret)
+		return 0;
+
+	ret = mt76_get_of_data_from_nvmem(mdev, mdev->cal.data, "precal", mdev->cal.size);
+	if (!ret)
+		return 0;
+
+fail:
+	dev_warn(mdev->dev, "Failed to load precal data: %d\n", ret);
+	mt76_eeprom_precal_free(mdev);
+
+	return ret;
+}
+
+int mt7996_eeprom_precal_init(struct mt7996_dev *dev)
 {
 #define MT76_CHANNELS_5GHZ_SIZE		36	/* ARRAY_SIZE(mt76_channels_5ghz) */
 #define MT76_CHANNELS_6GHZ_SIZE		59	/* ARRAY_SIZE(mt76_channels_6ghz) */
+
+	if (dev->eeprom_mode != EEPROM_MODE_FLASH &&
+	    dev->eeprom_mode != EEPROM_MODE_BIN)
+		return 0;
 
 	dev->prek.dpd_ch_num[DPD_CH_NUM_BW20_2G] = ARRAY_SIZE(dpd_2g_ch_list_bw20);
 	dev->prek.dpd_ch_num[DPD_CH_NUM_BW20_5G_SKIP] = ARRAY_SIZE(dpd_5g_skip_ch_list);
@@ -542,51 +583,11 @@ static void mt7996_eeprom_init_precal(struct mt7996_dev *dev)
 		dev->prek.rev = mt7996_prek_rev;
 		break;
 	}
-}
 
-static int mt7996_eeprom_load_precal(struct mt7996_dev *dev)
-{
-	struct mt76_dev *mdev = &dev->mt76;
-	u8 *eeprom = mdev->eeprom.data;
-	u32 val = eeprom[MT_EE_DO_PRE_CAL];
-	u32 offs = MT_EE_PRECAL;
-	int ret;
+	dev->mt76.cal.size = MT_EE_CAL_GROUP_SIZE + MT_EE_CAL_DPD_SIZE;
+	mt7996_eeprom_precal_load(dev);
 
-	mt7996_eeprom_init_precal(dev);
-
-	if ((dev->eeprom_mode != EEPROM_MODE_FLASH &&
-	     dev->eeprom_mode != EEPROM_MODE_BIN) || !val)
-		return 0;
-
-	dev->cal.size = MT_EE_CAL_GROUP_SIZE + MT_EE_CAL_DPD_SIZE;
-	dev->cal.data = devm_kzalloc(mdev->dev, dev->cal.size, GFP_KERNEL);
-	if (!dev->cal.data) {
-		ret = -ENOMEM;
-		goto fail;
-	}
-
-	if (dev->eeprom_mode == EEPROM_MODE_BIN) {
-		ret = mt7996_eeprom_load_precal_binfile(dev, offs, dev->cal.size);
-		if (ret)
-			goto fail;
-		return 0;
-	}
-
-	ret = mt76_get_of_data_from_mtd(mdev, dev->cal.data, offs, dev->cal.size);
-	if (!ret)
-		return 0;
-
-	ret = mt76_get_of_data_from_nvmem(mdev, dev->cal.data, "precal", dev->cal.size);
-	if (!ret)
-		return 0;
-
-fail:
-	dev_warn(dev->mt76.dev, "Failed to load precal data: %d\n", ret);
-	devm_kfree(dev->mt76.dev, dev->cal.data);
-	dev->cal.data = NULL;
-	dev->cal.size = 0;
-
-	return ret;
+	return 0;
 }
 
 int mt7996_eeprom_init(struct mt7996_dev *dev)
@@ -596,8 +597,6 @@ int mt7996_eeprom_init(struct mt7996_dev *dev)
 	ret = mt7996_eeprom_load(dev);
 	if (ret)
 		return ret;
-
-	mt7996_eeprom_load_precal(dev);
 
 	ret = mt7996_eeprom_parse_hw_cap(dev, &dev->phy);
 	if (ret < 0)

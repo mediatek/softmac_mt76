@@ -707,15 +707,16 @@ mt7999_tm_set_prek_block_header(struct mt7999_phy *phy, bool group)
 static void
 mt7999_tm_prek_clear_all(struct mt7999_dev *dev)
 {
+	struct mt76_dev *mdev = &dev->mt76;
 	int band, offs;
 	u8 *eeprom;
 
-	if (!dev->cal.data)
+	if (!mdev->cal.data)
 		return;
 
 	/* clear all blocks, including group & dpd */
-	memset(dev->cal.data, 0, dev->cal.size);
-	eeprom = dev->mt76.eeprom.data;
+	memset(mdev->cal.data, 0, mdev->cal.size);
+	eeprom = mdev->eeprom.data;
 	for (band = MT_BAND0; band < __MT_MAX_BAND; band++) {
 		offs = MT_EE_DO_PRE_CAL(band);
 		eeprom[offs] = 0;
@@ -726,6 +727,7 @@ static int
 mt7999_tm_group_prek(struct mt7999_phy *phy, enum mt76_testmode_state state)
 {
 	struct mt7999_dev *dev = phy->dev;
+	struct mt76_dev *mdev = &dev->mt76;
 	struct mt7999_tm_req req = {
 		.rf_test = {
 			.tag = cpu_to_le16(UNI_RF_TEST_CTRL),
@@ -742,7 +744,7 @@ mt7999_tm_group_prek(struct mt7999_phy *phy, enum mt76_testmode_state state)
 
 	if (dev->eeprom_mode != EEPROM_MODE_FLASH &&
 	    dev->eeprom_mode != EEPROM_MODE_BIN) {
-		dev_err(dev->mt76.dev,
+		dev_err(mdev->dev,
 			"%s: currently not in FLASH or BIN FILE mode, return\n",
 			__func__);
 		return -EOPNOTSUPP;
@@ -752,14 +754,12 @@ mt7999_tm_group_prek(struct mt7999_phy *phy, enum mt76_testmode_state state)
 
 	switch (state) {
 	case MT76_TM_STATE_GROUP_PREK:
-		if (!dev->cal.data) {
-			dev->cal.data = kvzalloc(dev->cal.size, GFP_KERNEL);
-			if (!dev->cal.data)
-				return -ENOMEM;
-		}
+		ret = mt76_eeprom_precal_alloc(mdev);
+		if (ret)
+			return ret;
 
 		if (!mt7999_eeprom_get_prek_block_header(phy, true)) {
-			mt76_tm_dbg(&dev->mt76,
+			mt76_tm_dbg(mdev,
 				    "Band %d has valid group prek data, ignore\n",
 				    phy->mt76->band_idx);
 			return 0;
@@ -770,14 +770,14 @@ mt7999_tm_group_prek(struct mt7999_phy *phy, enum mt76_testmode_state state)
 		wait_on_prek_offset = le32_to_cpu(dev->prek.cur_hdr->length) -
 				      le32_to_cpu(dev->prek.cur_hdr->data_offset);
 
-		ret = mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(TESTMODE_CTRL), &req,
+		ret = mt76_mcu_send_msg(mdev, MCU_WM_UNI_CMD(TESTMODE_CTRL), &req,
 					sizeof(req), false);
 		if (ret) {
-			dev_err(dev->mt76.dev, "%s: failed to send mcu msg (%pe)\n",
+			dev_err(mdev->dev, "%s: failed to send mcu msg (%pe)\n",
 				__func__, ERR_PTR(ret));
 			break;
 		}
-		ret = wait_event_timeout(dev->mt76.mcu.wait,
+		ret = wait_event_timeout(mdev->mcu.wait,
 					 dev->prek.cur_offs == wait_on_prek_offset,
 					 30 * HZ);
 		ret = ret ? 0 : -ETIMEDOUT;
@@ -921,12 +921,13 @@ static int
 mt7999_tm_dpd_prek(struct mt7999_phy *phy, enum mt76_testmode_state state)
 {
 	struct mt7999_dev *dev = phy->dev;
+	struct mt76_dev *mdev = &dev->mt76;
 	u32 wait_on_prek_offset;
 	int ret, band_idx;
 
 	if (dev->eeprom_mode != EEPROM_MODE_FLASH &&
 	    dev->eeprom_mode != EEPROM_MODE_BIN) {
-		dev_err(dev->mt76.dev,
+		dev_err(mdev->dev,
 			"%s: currently not in FLASH or BIN FILE mode, return\n",
 			__func__);
 		return -EOPNOTSUPP;
@@ -934,16 +935,16 @@ mt7999_tm_dpd_prek(struct mt7999_phy *phy, enum mt76_testmode_state state)
 
 	dev->prek.cur_offs = 0;
 
-	if (!dev->cal.data && state < MT76_TM_STATE_DPD_CLEAN) {
-		dev->cal.data = kvzalloc(dev->cal.size, GFP_KERNEL);
-		if (!dev->cal.data)
-			return -ENOMEM;
+	if (state < MT76_TM_STATE_DPD_CLEAN) {
+		ret = mt76_eeprom_precal_alloc(mdev);
+		if (ret)
+			return ret;
 	}
 
 	band_idx = phy->mt76->band_idx;
 	if (!mt7999_eeprom_get_prek_block_header(phy, false)) {
-		mt76_tm_dbg(&dev->mt76,
-			    "Band %d has valid dpd prek data, ignore\n", band_idx);
+		mt76_tm_dbg(mdev, "Band %d has valid dpd prek data, ignore\n",
+			    band_idx);
 		return 0;
 	}
 
@@ -952,19 +953,19 @@ mt7999_tm_dpd_prek(struct mt7999_phy *phy, enum mt76_testmode_state state)
 	switch (state) {
 	case MT76_TM_STATE_DPD_2G:
 		if (!phy->mt76->cap.has_2ghz) {
-			dev_err(dev->mt76.dev, "Wrong band for 2G DPD calibration\n");
+			dev_err(mdev->dev, "Wrong band for 2G DPD calibration\n");
 			return -EINVAL;
 		}
 		break;
 	case MT76_TM_STATE_DPD_5G:
 		if (!phy->mt76->cap.has_5ghz) {
-			dev_err(dev->mt76.dev, "Wrong band for 5G DPD calibration\n");
+			dev_err(mdev->dev, "Wrong band for 5G DPD calibration\n");
 			return -EINVAL;
 		}
 		break;
 	case MT76_TM_STATE_DPD_6G:
 		if (!phy->mt76->cap.has_6ghz) {
-			dev_err(dev->mt76.dev, "Wrong band for 6G DPD calibration\n");
+			dev_err(mdev->dev, "Wrong band for 6G DPD calibration\n");
 			return -EINVAL;
 		}
 		break;
@@ -981,7 +982,7 @@ mt7999_tm_dpd_prek(struct mt7999_phy *phy, enum mt76_testmode_state state)
 
 	wait_on_prek_offset = le32_to_cpu(dev->prek.cur_hdr->length) -
 			      le32_to_cpu(dev->prek.cur_hdr->data_offset);
-	ret = wait_event_timeout(dev->mt76.mcu.wait,
+	ret = wait_event_timeout(mdev->mcu.wait,
 				 dev->prek.cur_offs == wait_on_prek_offset,
 				 5 * HZ * dev->prek.dpd_ch_num[band_idx]);
 	ret = ret ? 0 : -ETIMEDOUT;
@@ -990,85 +991,6 @@ out:
 	mt7999_tm_prek_finish(phy, !ret, false);
 
 	return ret;
-}
-
-static int
-mt7999_tm_dump_precal(struct mt76_phy *mphy, struct sk_buff *msg, int flag, int type)
-{
-	struct mt7999_phy *phy = mphy->priv;
-	struct mt7999_dev *dev = phy->dev;
-	u32 transmit_size = 16 * MT_EE_CAL_UNIT;
-	u8 *cal, *eeprom;
-	void *precal;
-	enum prek_ops {
-		PREK_GET_INFO,
-		PREK_SYNC_ALL
-	};
-	int i, band;
-
-	if (!dev->cal.data) {
-		dev_err(dev->mt76.dev, "%s: no pre-cal data found\n", __func__);
-		return 0;
-	}
-
-	cal = dev->cal.data;
-	eeprom = dev->mt76.eeprom.data;
-
-	switch (type) {
-	case PREK_SYNC_ALL:
-	case PREK_GET_INFO:
-		break;
-	default:
-		return -EOPNOTSUPP;
-	}
-
-	if (!flag) {
-		dev->prek.cur_offs = 0;
-		precal = nla_nest_start(msg, MT76_TM_ATTR_PRECAL_INFO);
-		if (!precal)
-			return -ENOMEM;
-
-		if (nla_put_u32(msg, 0, transmit_size))
-			return -EMSGSIZE;
-		for (band = MT_BAND0, i = 0; band < __MT_MAX_BAND; band++) {
-			u32 group_size = 0, dpd_size = 0, indicator = 0;
-			int ret;
-
-			phy = __mt7999_phy(dev, band);
-			if (phy) {
-				indicator = eeprom[MT_EE_DO_PRE_CAL(band)];
-				ret = mt7999_eeprom_get_prek_block_header(phy, true);
-				if (!ret)
-					group_size = dev->prek.cur_hdr->length;
-
-				ret = mt7999_eeprom_get_prek_block_header(phy, false);
-				if (!ret)
-					dpd_size = dev->prek.cur_hdr->length;
-			}
-
-			if (nla_put_u32(msg, ++i, indicator) ||
-			    nla_put_u32(msg, ++i, group_size) ||
-			    nla_put_u32(msg, ++i, dpd_size))
-				return -EMSGSIZE;
-		}
-		nla_nest_end(msg, precal);
-	} else {
-		precal = nla_nest_start(msg, MT76_TM_ATTR_PRECAL);
-		if (!precal)
-			return -ENOMEM;
-
-		transmit_size = (dev->prek.cur_offs + transmit_size < dev->cal.size) ?
-				transmit_size : (dev->cal.size - dev->prek.cur_offs);
-		for (i = 0; i < transmit_size; i++) {
-			if (nla_put_u8(msg, i, cal[dev->prek.cur_offs + i]))
-				return -ENOMEM;
-		}
-		dev->prek.cur_offs += transmit_size;
-
-		nla_nest_end(msg, precal);
-	}
-
-	return 0;
 }
 
 static int
@@ -3177,7 +3099,6 @@ const struct mt76_testmode_ops mt7999_testmode_ops = {
 	.reset_rx_stats = mt7999_tm_reset_trx_stats,
 	.tx_stop = mt7999_tm_tx_stop,
 	.set_eeprom = mt7999_tm_set_eeprom,
-	.dump_precal = mt7999_tm_dump_precal,
 	.set_list_mode = mt7999_tm_set_list_mode,
 	.set_sta_ru_info = mt7999_tm_set_sta_ru_info,
 	.dump_tb_info = mt7999_tm_dump_tb_info,

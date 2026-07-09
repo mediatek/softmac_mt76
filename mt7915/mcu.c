@@ -3238,7 +3238,7 @@ static int mt7915_mcu_set_pre_cal(struct mt7915_dev *dev, u8 idx,
 
 int mt7915_mcu_apply_group_cal(struct mt7915_dev *dev)
 {
-	u8 idx = 0, *cal = dev->cal, *eep = dev->mt76.eeprom.data;
+	u8 idx = 0, *cal = dev->mt76.cal.data, *eep = dev->mt76.eeprom.data;
 	u32 total = mt7915_get_cal_group_size(dev);
 	u32 offs = is_mt7915(&dev->mt76) ? MT_EE_DO_PRE_CAL : MT_EE_DO_PRE_CAL_V2;
 
@@ -3362,7 +3362,7 @@ int mt7915_mcu_apply_tx_dpd(struct mt7915_phy *phy)
 	enum nl80211_band band = chandef->chan->band;
 	u32 offs = is_mt7915(&dev->mt76) ? MT_EE_DO_PRE_CAL : MT_EE_DO_PRE_CAL_V2;
 	u16 center_freq = chandef->center_freq1;
-	u8 *cal = dev->cal, *eep = dev->mt76.eeprom.data;
+	u8 *cal = dev->mt76.cal.data, *eep = dev->mt76.eeprom.data;
 	u8 dpd_mask, cal_num = is_mt7915(&dev->mt76) ? 2 : 3;
 	int idx;
 

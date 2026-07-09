@@ -1154,27 +1154,6 @@ static const struct file_operations mt7999_ext_eeprom_ops = {
 	.llseek = default_llseek,
 };
 
-static ssize_t
-mt7999_precal_get(struct file *file, char __user *user_buf,
-		  size_t count, loff_t *ppos)
-{
-	struct mt7999_dev *dev = file->private_data;
-
-	if (!dev->cal.data || !dev->cal.size) {
-		dev_info(dev->mt76.dev, "No precal data available\n");
-		return 0;
-	}
-
-	return simple_read_from_buffer(user_buf, count, ppos,
-				       dev->cal.data, dev->cal.size);
-}
-
-static const struct file_operations mt7999_precal_ops = {
-	.read = mt7999_precal_get,
-	.open = simple_open,
-	.llseek = default_llseek,
-};
-
 static int
 mt7999_precal_info_show(struct seq_file *file, void *data)
 {
@@ -1209,6 +1188,7 @@ mt7999_precal_info_show(struct seq_file *file, void *data)
 		[DPD_CH_BW_320] = "320"
 	};
 	u8 *eeprom = dev->mt76.eeprom.data;
+	u8 *cal = dev->mt76.cal.data;
 	int band;
 
 	if (dev->eeprom_mode != EEPROM_MODE_FLASH &&
@@ -1217,7 +1197,7 @@ mt7999_precal_info_show(struct seq_file *file, void *data)
 		return 0;
 	}
 
-	if (!dev->cal.data || !dev->cal.size) {
+	if (!cal || !dev->mt76.cal.size) {
 		seq_puts(file, "No precal data available\n");
 		return 0;
 	}
@@ -1239,7 +1219,7 @@ mt7999_precal_info_show(struct seq_file *file, void *data)
 		if (ret != -ENODATA) {
 			struct prek_block_header *hdr = dev->prek.cur_hdr;
 
-			offs = (u8 *)hdr - (u8 *)dev->cal.data;
+			offs = (u8 *)hdr - cal;
 			if (ret)
 				seq_puts(file, "\tGroup precal: No valid data\n");
 			else
@@ -1266,7 +1246,7 @@ mt7999_precal_info_show(struct seq_file *file, void *data)
 			struct prek_block_header *hdr = dev->prek.cur_hdr;
 			int bw, i;
 
-			offs = (u8 *)hdr - (u8 *)dev->cal.data;
+			offs = (u8 *)hdr - cal;
 			if (ret)
 				seq_puts(file, "\tDPD precal: No valid data\n");
 			else
@@ -1307,11 +1287,11 @@ mt7999_precal_info_show(struct seq_file *file, void *data)
 						continue;
 					}
 
-					offs = (u8 *)ch_hdr - (u8 *)dev->cal.data;
+					offs = (u8 *)ch_hdr - cal;
 					seq_printf(file, ", header offset: [0x%lx, 0x%lx]",
 						   offs, offs + sizeof(*ch_hdr) - 1);
-					offs = (u8 *)hdr - (u8 *)dev->cal.data +
-					       data_offset + le32_to_cpu(ch_hdr->ch_data_offs);
+					offs = (u8 *)hdr - cal + data_offset +
+					       le32_to_cpu(ch_hdr->ch_data_offs);
 					seq_printf(file,
 						   ", data offset: [0x%lx, 0x%lx]\n",
 						   offs, offs + PREK(DPD_PER_CH_SIZE) - 1);
@@ -1636,7 +1616,6 @@ int mt7999_init_dev_debugfs(struct mt7999_phy *phy)
 	debugfs_create_devm_seqfile(dev->mt76.dev, "efuse_free_block", dir,
 				    mt7999_efuse_get_free_block);
 	debugfs_create_file("ext_eeprom", 0400, dir, dev, &mt7999_ext_eeprom_ops);
-	debugfs_create_file("precal", 0400, dir, dev, &mt7999_precal_ops);
 	debugfs_create_file("precal_info", 0400, dir, dev, &mt7999_precal_info_fops);
 	debugfs_create_devm_seqfile(dev->mt76.dev, "vow_info", dir,
 				    mt7999_vow_info_read);

@@ -1232,6 +1232,7 @@ void mt7996_vif_link_remove(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 			    struct mt76_vif_link *mlink);
 const char *mt7996_eeprom_name(struct mt7996_dev *dev);
 int mt7996_eeprom_init(struct mt7996_dev *dev);
+int mt7996_eeprom_precal_init(struct mt7996_dev *dev);
 int mt7996_eeprom_check_fw_mode(struct mt7996_dev *dev);
 int mt7996_eeprom_parse_hw_cap(struct mt7996_dev *dev, struct mt7996_phy *phy);
 int mt7996_eeprom_get_target_power(struct mt7996_dev *dev,
