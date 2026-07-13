@@ -49,7 +49,7 @@ amnt_ctrl_policy[NUM_MTK_VENDOR_ATTRS_AMNT_CTRL] = {
 static const struct nla_policy
 amnt_set_policy[NUM_MTK_VENDOR_ATTRS_AMNT_SET] = {
 	[MTK_VENDOR_ATTR_AMNT_SET_INDEX] = {.type = NLA_U8 },
-	[MTK_VENDOR_ATTR_AMNT_SET_MACADDR] = NLA_POLICY_EXACT_LEN_WARN(ETH_ALEN),
+	[MTK_VENDOR_ATTR_AMNT_SET_MACADDR] = NLA_POLICY_ETH_ADDR,
 };
 
 static const struct nla_policy
@@ -155,7 +155,7 @@ csi_ctrl_policy[NUM_MTK_VENDOR_ATTRS_CSI_CTRL] = {
 	[MTK_VENDOR_ATTR_CSI_CTRL_CFG_TYPE] = { .type = NLA_U8 },
 	[MTK_VENDOR_ATTR_CSI_CTRL_CFG_VAL1] = { .type = NLA_U8 },
 	[MTK_VENDOR_ATTR_CSI_CTRL_CFG_VAL2] = { .type = NLA_U32 },
-	[MTK_VENDOR_ATTR_CSI_CTRL_MAC_ADDR] = { .type = NLA_NESTED },
+	[MTK_VENDOR_ATTR_CSI_CTRL_MAC_ADDR] = NLA_POLICY_ETH_ADDR,
 	[MTK_VENDOR_ATTR_CSI_CTRL_DUMP_NUM] = { .type = NLA_U16 },
 	[MTK_VENDOR_ATTR_CSI_CTRL_DATA] = { .type = NLA_NESTED },
 };
@@ -420,7 +420,7 @@ mt7999_vendor_amnt_muar(struct mt7999_phy *phy, u8 muar_idx, u8 *addr)
 		u8 hw_bss_index;
 		u8 muar_idx;
 		u8 entry_add;
-		u8 mac_addr[6];
+		u8 mac_addr[ETH_ALEN];
 		u8 padding[2];
 	} __packed req = {
 		.band = phy->mt76->band_idx,
@@ -551,7 +551,7 @@ mt7999_vendor_amnt_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 		return -EINVAL;
 
 	index = nla_get_u8(tb2[MTK_VENDOR_ATTR_AMNT_SET_INDEX]);
-	memcpy(mac_addr, nla_data(tb2[MTK_VENDOR_ATTR_AMNT_SET_MACADDR]), ETH_ALEN);
+	nla_memcpy(mac_addr, tb2[MTK_VENDOR_ATTR_AMNT_SET_MACADDR], ETH_ALEN);
 
 	return mt7999_vendor_amnt_set_addr(phy, index, mac_addr);
 }
@@ -1415,13 +1415,9 @@ static int mt7999_vendor_csi_ctrl(struct wiphy *wiphy,
 			};
 		}
 
-		if (tb[MTK_VENDOR_ATTR_CSI_CTRL_MAC_ADDR]) {
-			u8 idx = 0;
-
-			nla_for_each_nested(cur, tb[MTK_VENDOR_ATTR_CSI_CTRL_MAC_ADDR], rem) {
-				mac_addr[idx++] = nla_get_u8(cur);
-			}
-		}
+		if (tb[MTK_VENDOR_ATTR_CSI_CTRL_MAC_ADDR])
+			nla_memcpy(mac_addr,
+				   tb[MTK_VENDOR_ATTR_CSI_CTRL_MAC_ADDR], ETH_ALEN);
 
 		err = mt7999_mcu_set_csi(phy, mode, type, v1, v2, mac_addr);
 		if (err < 0)
@@ -1527,14 +1523,8 @@ mt7999_vendor_csi_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
 		    nla_put_u32(skb, MTK_VENDOR_ATTR_CSI_DATA_TS, csi->ts))
 			goto out;
 
-		b = nla_nest_start(skb, MTK_VENDOR_ATTR_CSI_DATA_TA);
-		if (!b)
+		if (nla_put(skb, MTK_VENDOR_ATTR_CSI_DATA_TA, ETH_ALEN, csi->ta))
 			goto out;
-
-		for (i = 0; i < ARRAY_SIZE(csi->ta); i++)
-			if (nla_put_u8(skb, i, csi->ta[i]))
-				goto out;
-		nla_nest_end(skb, b);
 
 		if (nla_put_u32(skb, MTK_VENDOR_ATTR_CSI_DATA_NUM, csi->data_num))
 			goto out;
