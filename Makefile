@@ -13,7 +13,7 @@ obj-$(CONFIG_MT792x_USB) += mt792x-usb.o
 
 mt76-y := \
 	mmio.o util.o trace.o dma.o mac80211.o debugfs.o eeprom.o \
-	tx.o agg-rx.o mcu.o wed.o scan.o channel.o debug.o
+	tx.o agg-rx.o mcu.o wed.o scan.o channel.o debug.o vendor.o
 
 mt76-$(CONFIG_MT76_NPU) += npu.o
 mt76-$(CONFIG_PCI) += pci.o
@@ -26,6 +26,7 @@ CFLAGS_trace.o := -I$(src)
 CFLAGS_usb_trace.o := -I$(src)
 CFLAGS_mt76x02_trace.o := -I$(src)
 CFLAGS_mt792x_trace.o := -I$(src)
+CFLAGS_vendor.o := -DCONFIG_MTK_VENDOR
 
 mt76x02-lib-y := mt76x02_util.o mt76x02_mac.o mt76x02_mcu.o \
 		 mt76x02_eeprom.o mt76x02_phy.o mt76x02_mmio.o \

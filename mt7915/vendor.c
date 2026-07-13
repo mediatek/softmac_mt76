@@ -7,7 +7,7 @@
 
 #include "mt7915.h"
 #include "mcu.h"
-#include "vendor.h"
+#include "../vendor.h"
 
 static const struct nla_policy
 csi_ctrl_policy[NUM_MTK_VENDOR_ATTRS_CSI_CTRL] = {
@@ -16,7 +16,7 @@ csi_ctrl_policy[NUM_MTK_VENDOR_ATTRS_CSI_CTRL] = {
 	[MTK_VENDOR_ATTR_CSI_CTRL_CFG_TYPE] = { .type = NLA_U8 },
 	[MTK_VENDOR_ATTR_CSI_CTRL_CFG_VAL1] = { .type = NLA_U8 },
 	[MTK_VENDOR_ATTR_CSI_CTRL_CFG_VAL2] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_CSI_CTRL_MAC_ADDR] = { .type = NLA_NESTED },
+	[MTK_VENDOR_ATTR_CSI_CTRL_MAC_ADDR] = NLA_POLICY_ETH_ADDR,
 	[MTK_VENDOR_ATTR_CSI_CTRL_INTERVAL] = { .type = NLA_U32 },
 	[MTK_VENDOR_ATTR_CSI_CTRL_STA_INTERVAL] = { .type = NLA_U32 },
 	[MTK_VENDOR_ATTR_CSI_CTRL_DUMP_NUM] = { .type = NLA_U16 },
@@ -52,22 +52,6 @@ mu_ctrl_policy[NUM_MTK_VENDOR_ATTRS_MU_CTRL] = {
 };
 
 static const struct nla_policy
-three_wire_ctrl_policy[NUM_MTK_VENDOR_ATTRS_3WIRE_CTRL] = {
-	[MTK_VENDOR_ATTR_3WIRE_CTRL_MODE] = {.type = NLA_U8 },
-};
-
-static const struct nla_policy
-rfeature_ctrl_policy[NUM_MTK_VENDOR_ATTRS_RFEATURE_CTRL] = {
-	[MTK_VENDOR_ATTR_RFEATURE_CTRL_HE_GI] = {.type = NLA_U8 },
-	[MTK_VENDOR_ATTR_RFEATURE_CTRL_HE_LTF] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_RFEATURE_CTRL_TRIG_TYPE_CFG] = { .type = NLA_NESTED },
-	[MTK_VENDOR_ATTR_RFEATURE_CTRL_TRIG_TYPE_EN] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_RFEATURE_CTRL_TRIG_TYPE] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_RFEATURE_CTRL_ACK_PLCY] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_RFEATURE_CTRL_TRIG_TXBF] = { .type = NLA_U8 },
-};
-
-static const struct nla_policy
 phy_capa_ctrl_policy[NUM_MTK_VENDOR_ATTRS_PHY_CAPA_CTRL] = {
 	[MTK_VENDOR_ATTR_PHY_CAPA_CTRL_SET] = { .type = NLA_NESTED },
 	[MTK_VENDOR_ATTR_PHY_CAPA_CTRL_DUMP] = { .type = NLA_NESTED },
@@ -80,43 +64,11 @@ phy_capa_dump_policy[NUM_MTK_VENDOR_ATTRS_PHY_CAPA_DUMP] = {
 };
 
 static const struct nla_policy
-edcca_ctrl_policy[NUM_MTK_VENDOR_ATTRS_EDCCA_CTRL] = {
-       [MTK_VENDOR_ATTR_EDCCA_CTRL_MODE] = { .type = NLA_U8 },
-       [MTK_VENDOR_ATTR_EDCCA_CTRL_PRI20_VAL] = { .type = NLA_U8 },
-       [MTK_VENDOR_ATTR_EDCCA_CTRL_SEC20_VAL] = { .type = NLA_U8 },
-       [MTK_VENDOR_ATTR_EDCCA_CTRL_SEC40_VAL] = { .type = NLA_U8 },
-       [MTK_VENDOR_ATTR_EDCCA_CTRL_SEC80_VAL] = { .type = NLA_U8 },
-       [MTK_VENDOR_ATTR_EDCCA_CTRL_COMPENSATE] = { .type = NLA_S8 },
-};
-
-static const struct nla_policy
 edcca_dump_policy[NUM_MTK_VENDOR_ATTRS_EDCCA_DUMP] = {
        [MTK_VENDOR_ATTR_EDCCA_DUMP_MODE] = { .type = NLA_U8 },
        [MTK_VENDOR_ATTR_EDCCA_DUMP_PRI20_VAL] = { .type = NLA_U8 },
        [MTK_VENDOR_ATTR_EDCCA_DUMP_SEC40_VAL] = { .type = NLA_U8 },
        [MTK_VENDOR_ATTR_EDCCA_DUMP_SEC80_VAL] = { .type = NLA_U8 },
-};
-
-static const struct nla_policy
-ibf_ctrl_policy[NUM_MTK_VENDOR_ATTRS_IBF_CTRL] = {
-	[MTK_VENDOR_ATTR_IBF_CTRL_ENABLE] = { .type = NLA_U8 },
-};
-
-static struct nla_policy
-bss_color_ctrl_policy[NUM_MTK_VENDOR_ATTRS_BSS_COLOR_CTRL] = {
-	[MTK_VENDOR_ATTR_AVAL_BSS_COLOR_BMP] = { .type = NLA_U64 },
-};
-
-static struct nla_policy
-txpower_ctrl_policy[NUM_MTK_VENDOR_ATTRS_TXPOWER_CTRL] = {
-	[MTK_VENDOR_ATTR_TXPOWER_CTRL_LPI_ENABLE] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_IDX] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_TXPOWER_CTRL_BCN_DUP] = { .type = NLA_U8 },
-};
-
-static const struct nla_policy
-beacon_ctrl_policy[NUM_MTK_VENDOR_ATTRS_BEACON_CTRL] = {
-		[MTK_VENDOR_ATTR_BEACON_CTRL_MODE] = { .type = NLA_U8 },
 };
 
 struct csi_null_tone {
@@ -382,11 +334,8 @@ static int mt7915_vendor_csi_ctrl(struct wiphy *wiphy,
 		}
 
 		if (tb[MTK_VENDOR_ATTR_CSI_CTRL_MAC_ADDR]) {
-			int idx = 0;
-
-			nla_for_each_nested(cur, tb[MTK_VENDOR_ATTR_CSI_CTRL_MAC_ADDR], rem) {
-				mac_addr[idx++] = nla_get_u8(cur);
-			}
+			nla_memcpy(mac_addr,
+				   tb[MTK_VENDOR_ATTR_CSI_CTRL_MAC_ADDR], ETH_ALEN);
 
 			/* when configure mac filter, add interval for report interval per sta */
 			if (tb[MTK_VENDOR_ATTR_CSI_CTRL_STA_INTERVAL])
@@ -644,11 +593,8 @@ mt7915_vendor_csi_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
 		    nla_put_u32(skb, MTK_VENDOR_ATTR_CSI_DATA_TS, csi->ts))
 			goto out;
 
-		b = nla_nest_start(skb, MTK_VENDOR_ATTR_CSI_DATA_TA);
-		for (i = 0; i < ARRAY_SIZE(csi->ta); i++)
-			if (nla_put_u8(skb, i, csi->ta[i]))
-				goto out;
-		nla_nest_end(skb, b);
+		if (nla_put(skb, MTK_VENDOR_ATTR_CSI_DATA_TA, ETH_ALEN, csi->ta))
+			goto out;
 
 		if (nla_put_u32(skb, MTK_VENDOR_ATTR_CSI_DATA_NUM, csi->data_num))
 			goto out;
@@ -678,25 +624,6 @@ out:
 
 	return err;
 }
-
-static const struct nla_policy
-amnt_ctrl_policy[NUM_MTK_VENDOR_ATTRS_AMNT_CTRL] = {
-	[MTK_VENDOR_ATTR_AMNT_CTRL_SET] = {.type = NLA_NESTED },
-	[MTK_VENDOR_ATTR_AMNT_CTRL_DUMP] = { .type = NLA_NESTED },
-};
-
-static const struct nla_policy
-amnt_set_policy[NUM_MTK_VENDOR_ATTRS_AMNT_SET] = {
-	[MTK_VENDOR_ATTR_AMNT_SET_INDEX] = {.type = NLA_U8 },
-	[MTK_VENDOR_ATTR_AMNT_SET_MACADDR] = { .type = NLA_NESTED },
-};
-
-static const struct nla_policy
-amnt_dump_policy[NUM_MTK_VENDOR_ATTRS_AMNT_DUMP] = {
-	[MTK_VENDOR_ATTR_AMNT_DUMP_INDEX] = {.type = NLA_U8 },
-	[MTK_VENDOR_ATTR_AMNT_DUMP_LEN] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_AMNT_DUMP_RESULT] = { .type = NLA_NESTED },
-};
 
 struct mt7915_amnt_data {
 	u8 idx;
@@ -917,13 +844,12 @@ mt7915_vendor_amnt_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 	struct mt7915_phy *phy = mt7915_hw_phy(hw);
 	struct nlattr *tb1[NUM_MTK_VENDOR_ATTRS_AMNT_CTRL];
 	struct nlattr *tb2[NUM_MTK_VENDOR_ATTRS_AMNT_SET];
-	struct nlattr *cur;
-	u8 index = 0, i = 0;
+	u8 index = 0;
 	u8 mac_addr[ETH_ALEN] = {};
-	int err, rem;
+	int err;
 
 	err = nla_parse(tb1, MTK_VENDOR_ATTR_AMNT_CTRL_MAX, data, data_len,
-			amnt_ctrl_policy, NULL);
+			mt76_vendor_amnt_ctrl_policy, NULL);
 	if (err)
 		return err;
 
@@ -931,16 +857,15 @@ mt7915_vendor_amnt_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 		return -EINVAL;
 
 	err = nla_parse_nested(tb2, MTK_VENDOR_ATTR_AMNT_SET_MAX,
-		tb1[MTK_VENDOR_ATTR_AMNT_CTRL_SET], amnt_set_policy, NULL);
+		tb1[MTK_VENDOR_ATTR_AMNT_CTRL_SET], mt76_vendor_amnt_set_policy,
+		NULL);
 
 	if (!tb2[MTK_VENDOR_ATTR_AMNT_SET_INDEX] ||
 		!tb2[MTK_VENDOR_ATTR_AMNT_SET_MACADDR])
 		return -EINVAL;
 
 	index = nla_get_u8(tb2[MTK_VENDOR_ATTR_AMNT_SET_INDEX]);
-	nla_for_each_nested(cur, tb2[MTK_VENDOR_ATTR_AMNT_SET_MACADDR], rem) {
-		mac_addr[i++] = nla_get_u8(cur);
-	}
+	nla_memcpy(mac_addr, tb2[MTK_VENDOR_ATTR_AMNT_SET_MACADDR], ETH_ALEN);
 
 	return mt7915_vendor_amnt_set_addr(phy, index, mac_addr);
 }
@@ -990,7 +915,7 @@ mt7915_vendor_amnt_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
 	*storage = 1;
 
 	err = nla_parse(tb1, MTK_VENDOR_ATTR_AMNT_CTRL_MAX, data, data_len,
-			amnt_ctrl_policy, NULL);
+			mt76_vendor_amnt_ctrl_policy, NULL);
 	if (err)
 		return err;
 
@@ -999,7 +924,7 @@ mt7915_vendor_amnt_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
 
 	err = nla_parse_nested(tb2, MTK_VENDOR_ATTR_AMNT_DUMP_MAX,
 			       tb1[MTK_VENDOR_ATTR_AMNT_CTRL_DUMP],
-			       amnt_dump_policy, NULL);
+			       mt76_vendor_amnt_dump_policy, NULL);
 	if (err)
 		return err;
 
@@ -1041,7 +966,7 @@ static int mt7915_vendor_rfeature_ctrl(struct wiphy *wiphy,
 	u32 val;
 
 	err = nla_parse(tb, MTK_VENDOR_ATTR_RFEATURE_CTRL_MAX, data, data_len,
-			rfeature_ctrl_policy, NULL);
+			mt76_vendor_rfeature_ctrl_policy, NULL);
 	if (err)
 		return err;
 
@@ -1300,7 +1225,7 @@ static int mt7915_vendor_edcca_ctrl(struct wiphy *wiphy,
 	u8 edcca_value[EDCCA_THRES_NUM] = {0};
 
 	err = nla_parse(tb, MTK_VENDOR_ATTR_EDCCA_CTRL_MAX, data, data_len,
-			edcca_ctrl_policy, NULL);
+			mt76_vendor_edcca_ctrl_policy, NULL);
 	if (err)
 		return err;
 
@@ -1364,7 +1289,7 @@ mt7915_vendor_edcca_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
 	*storage = 1;
 
 	err = nla_parse(tb, MTK_VENDOR_ATTR_EDCCA_CTRL_MAX, data, data_len,
-			edcca_ctrl_policy, NULL);
+			mt76_vendor_edcca_ctrl_policy, NULL);
 	if (err)
 		return err;
 
@@ -1398,89 +1323,19 @@ static int mt7915_vendor_3wire_ctrl(struct wiphy *wiphy,
 	struct mt7915_phy *phy = mt7915_hw_phy(hw);
 	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_3WIRE_CTRL];
 	int err;
-	u8 three_wire_mode;
+	u8 ext_sel;
 
 	err = nla_parse(tb, MTK_VENDOR_ATTR_3WIRE_CTRL_MAX, data, data_len,
-			three_wire_ctrl_policy, NULL);
+			mt76_vendor_3wire_ctrl_policy, NULL);
 	if (err)
 		return err;
 
-	if (!tb[MTK_VENDOR_ATTR_3WIRE_CTRL_MODE])
+	if (!tb[MTK_VENDOR_ATTR_3WIRE_EXT_SEL])
 		return -EINVAL;
 
-	three_wire_mode = nla_get_u8(tb[MTK_VENDOR_ATTR_3WIRE_CTRL_MODE]);
+	ext_sel = nla_get_u8(tb[MTK_VENDOR_ATTR_3WIRE_EXT_SEL]);
 
-	return mt7915_mcu_set_cfg(phy, CFGINFO_3WIRE_EN_CFG, three_wire_mode);
-}
-
-static int mt7915_vendor_ibf_ctrl(struct wiphy *wiphy,
-				  struct wireless_dev *wdev,
-				  const void *data,
-				  int data_len)
-{
-	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
-	struct mt7915_phy *phy = mt7915_hw_phy(hw);
-	struct mt7915_dev *dev = phy->dev;
-	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_IBF_CTRL];
-	int err;
-	u8 val;
-
-	err = nla_parse(tb, MTK_VENDOR_ATTR_IBF_CTRL_MAX, data, data_len,
-			ibf_ctrl_policy, NULL);
-	if (err)
-		return err;
-
-	if (tb[MTK_VENDOR_ATTR_IBF_CTRL_ENABLE]) {
-		val = nla_get_u8(tb[MTK_VENDOR_ATTR_IBF_CTRL_ENABLE]);
-
-		dev->ibf = !!val;
-
-		err = mt7915_mcu_set_txbf(dev, MT_BF_TYPE_UPDATE);
-		if (err)
-			return err;
-	}
-	return 0;
-}
-
-static int
-mt7915_vendor_ibf_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
-			     struct sk_buff *skb, const void *data, int data_len,
-			     unsigned long *storage)
-{
-	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
-	struct mt7915_phy *phy = mt7915_hw_phy(hw);
-	struct mt7915_dev *dev = phy->dev;
-
-	if (*storage == 1)
-		return -ENOENT;
-	*storage = 1;
-
-	if (nla_put_u8(skb, MTK_VENDOR_ATTR_IBF_DUMP_ENABLE, dev->ibf))
-		return -ENOMEM;
-
-	return 1;
-}
-
-static int
-mt7915_vendor_bss_color_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
-			     struct sk_buff *skb, const void *data, int data_len,
-			     unsigned long *storage)
-{
-	struct ieee80211_vif *vif = wdev_to_ieee80211_vif(wdev);
-	struct ieee80211_bss_conf *bss_conf = &vif->bss_conf;
-	int len = 0;
-
-	if (*storage == 1)
-		return -ENOENT;
-	*storage = 1;
-
-	if (nla_put_u64_64bit(skb,
-	    MTK_VENDOR_ATTR_AVAL_BSS_COLOR_BMP,
-	    ~bss_conf->used_color_bitmap, NL80211_ATTR_PAD))
-		return -ENOMEM;
-	len += 1;
-
-	return len;
+	return mt7915_mcu_set_cfg(phy, CFGINFO_3WIRE_EN_CFG, ext_sel);
 }
 
 static int mt7915_vendor_txpower_ctrl(struct wiphy *wiphy,
@@ -1497,7 +1352,7 @@ static int mt7915_vendor_txpower_ctrl(struct wiphy *wiphy,
 	u8 val;
 
 	err = nla_parse(tb, MTK_VENDOR_ATTR_TXPOWER_CTRL_MAX, data, data_len,
-			txpower_ctrl_policy, NULL);
+			mt76_vendor_txpower_ctrl_policy, NULL);
 	if (err)
 		return err;
 
@@ -1551,7 +1406,7 @@ static int mt7915_vendor_beacon_ctrl(struct wiphy *wiphy,
 	u8 val8;
 
 	err = nla_parse(tb, MTK_VENDOR_ATTR_BEACON_CTRL_MAX, data, data_len,
-			beacon_ctrl_policy, NULL);
+			mt76_vendor_beacon_ctrl_policy, NULL);
 	if (err)
 		return err;
 
@@ -1565,6 +1420,16 @@ static int mt7915_vendor_beacon_ctrl(struct wiphy *wiphy,
 }
 
 static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
+	{
+		.info = {
+			.vendor_id = MTK_NL80211_VENDOR_ID,
+			.subcmd = MTK_NL80211_VENDOR_SUBCMD_ABI_CONNAC2,
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV,
+		.dumpit = mt76_vendor_abi_connac2_dump,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1,
+	},
 	{
 		.info = {
 			.vendor_id = MTK_NL80211_VENDOR_ID,
@@ -1586,7 +1451,7 @@ static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 			 WIPHY_VENDOR_CMD_NEED_RUNNING,
 		.doit = mt7915_vendor_amnt_ctrl,
 		.dumpit = mt7915_vendor_amnt_ctrl_dump,
-		.policy = amnt_ctrl_policy,
+		.policy = mt76_vendor_amnt_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_AMNT_CTRL_MAX,
 	},
 	{
@@ -1597,7 +1462,7 @@ static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
 			WIPHY_VENDOR_CMD_NEED_RUNNING,
 		.doit = mt7915_vendor_rfeature_ctrl,
-		.policy = rfeature_ctrl_policy,
+		.policy = mt76_vendor_rfeature_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_RFEATURE_CTRL_MAX,
 	},
 	{
@@ -1644,7 +1509,7 @@ static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 			 WIPHY_VENDOR_CMD_NEED_RUNNING,
 		.doit = mt7915_vendor_edcca_ctrl,
 		.dumpit = mt7915_vendor_edcca_ctrl_dump,
-		.policy = edcca_ctrl_policy,
+		.policy = mt76_vendor_edcca_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_EDCCA_CTRL_MAX,
 	},
 	{
@@ -1655,7 +1520,7 @@ static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
 			 WIPHY_VENDOR_CMD_NEED_RUNNING,
 		.doit = mt7915_vendor_3wire_ctrl,
-		.policy = three_wire_ctrl_policy,
+		.policy = mt76_vendor_3wire_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_3WIRE_CTRL_MAX,
 	},
 	{
@@ -1665,9 +1530,9 @@ static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
 			 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = mt7915_vendor_ibf_ctrl,
-		.dumpit = mt7915_vendor_ibf_ctrl_dump,
-		.policy = ibf_ctrl_policy,
+		.doit = mt76_vendor_ibf_ctrl,
+		.dumpit = mt76_vendor_ibf_ctrl_dump,
+		.policy = mt76_vendor_ibf_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_IBF_CTRL_MAX,
 	},
 	{
@@ -1677,8 +1542,8 @@ static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
 			 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.dumpit = mt7915_vendor_bss_color_ctrl_dump,
-		.policy = bss_color_ctrl_policy,
+		.dumpit = mt76_vendor_bss_color_ctrl_dump,
+		.policy = mt76_vendor_bss_color_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_BSS_COLOR_CTRL_MAX,
 	},
 	{
@@ -1689,7 +1554,7 @@ static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
 			 WIPHY_VENDOR_CMD_NEED_RUNNING,
 		.doit = mt7915_vendor_txpower_ctrl,
-		.policy = txpower_ctrl_policy,
+		.policy = mt76_vendor_txpower_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_TXPOWER_CTRL_MAX,
 	},
 	{
@@ -1700,19 +1565,37 @@ static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
 			 WIPHY_VENDOR_CMD_NEED_RUNNING,
 		.doit = mt7915_vendor_beacon_ctrl,
-		.policy = beacon_ctrl_policy,
+		.policy = mt76_vendor_beacon_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_BEACON_CTRL_MAX,
 	},
 };
 
+static int mt7915_vendor_ibf_ctrl(struct mt76_dev *mdev, bool enabled)
+{
+	struct mt7915_dev *dev = container_of(mdev, struct mt7915_dev, mt76);
+
+	dev->ibf = enabled;
+
+	return mt7915_mcu_set_txbf(dev, MT_BF_TYPE_UPDATE);
+}
+
+static int mt7915_vendor_ibf_ctrl_dump(struct mt76_dev *mdev, bool *enabled)
+{
+	struct mt7915_dev *dev = container_of(mdev, struct mt7915_dev, mt76);
+
+	*enabled = dev->ibf;
+
+	return 0;
+}
+
+static const struct mt76_vendor_ops mt7915_vendor_ops = {
+	.commands = mt7915_vendor_commands,
+	.n_commands = ARRAY_SIZE(mt7915_vendor_commands),
+	.ibf_ctrl = mt7915_vendor_ibf_ctrl,
+	.ibf_ctrl_dump = mt7915_vendor_ibf_ctrl_dump,
+};
+
 void mt7915_vendor_register(struct mt7915_phy *phy)
 {
-	/* Temporarily disable vendor commands to avoid command
-	 * failures during Wi-Fi 6 and 7 codebase integration
-	 */
-	dev_warn(phy->mt76->dev->dev, "temporarily disable vendor commands\n");
-	return;
-
-	phy->mt76->hw->wiphy->vendor_commands = mt7915_vendor_commands;
-	phy->mt76->hw->wiphy->n_vendor_commands = ARRAY_SIZE(mt7915_vendor_commands);
+	mt76_vendor_register(phy->mt76->dev, &mt7915_vendor_ops);
 }

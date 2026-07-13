@@ -1,5 +1,9 @@
-#ifndef __MT7996_VENDOR_H
-#define __MT7996_VENDOR_H
+/* SPDX-License-Identifier: BSD-3-Clause-Clear */
+/*
+ * Copyright (C) 2026 MediaTek Inc.
+ */
+#ifndef __MT76_VENDOR_H
+#define __MT76_VENDOR_H
 
 #define MTK_NL80211_VENDOR_ID	0x0ce7
 
@@ -11,6 +15,7 @@ enum mtk_nl80211_vendor_subcmds {
 	MTK_NL80211_VENDOR_SUBCMD_RFEATURE_CTRL = 0xc3,
 	MTK_NL80211_VENDOR_SUBCMD_WIRELESS_CTRL = 0xc4,
 	MTK_NL80211_VENDOR_SUBCMD_MU_CTRL = 0xc5,
+	MTK_NL80211_VENDOR_SUBCMD_PHY_CAPA_CTRL = 0xc6,
 	MTK_NL80211_VENDOR_SUBCMD_EDCCA_CTRL = 0xc7,
 	MTK_NL80211_VENDOR_SUBCMD_3WIRE_CTRL = 0xc8,
 	MTK_NL80211_VENDOR_SUBCMD_IBF_CTRL = 0xc9,
@@ -22,10 +27,12 @@ enum mtk_nl80211_vendor_subcmds {
 	MTK_NL80211_VENDOR_SUBCMD_SCS_CTRL = 0xd0,
 	MTK_NL80211_VENDOR_SUBCMD_EPCS_CTRL = 0xd4,
 	MTK_NL80211_VENDOR_SUBCMD_DFS_TX_CTRL = 0xd5,
+	MTK_NL80211_VENDOR_SUBCMD_ABI_CONNAC2 = 0xd6,
 };
 
 enum mtk_nl80211_vendor_events {
 	MTK_NL80211_VENDOR_EVENT_PP_BMP_UPDATE = 0x5,
+	MT76_VENDOR_N_EVENTS
 };
 
 enum mtk_vendor_attr_edcca_ctrl {
@@ -87,6 +94,20 @@ enum mtk_vendor_attr_mu_ctrl {
 		NUM_MTK_VENDOR_ATTRS_MU_CTRL - 1
 };
 
+#define MTK_VENDOR_ATTR_MU_CTRL_OFDMA_MODE	MTK_VENDOR_ATTR_MU_CTRL_STRUCT
+#define MTK_VENDOR_ATTR_MU_CTRL_OFDMA_VAL	MTK_VENDOR_ATTR_MU_CTRL_RADIO_IDX
+
+/* MT7915-only CSI extensions; the command is currently kept disabled. */
+#define MTK_VENDOR_ATTR_CSI_CTRL_INTERVAL	MTK_VENDOR_ATTR_CSI_CTRL_DUMP_NUM
+#define MTK_VENDOR_ATTR_CSI_CTRL_STA_INTERVAL	MTK_VENDOR_ATTR_CSI_CTRL_DATA
+#define MTK_VENDOR_ATTR_CSI_CTRL_DUMP_MAC_FILTER	MTK_VENDOR_ATTR_CSI_CTRL_RADIO_IDX
+#define EDCCA_THRES_NUM	3
+
+enum capi_control_changed {
+	CAPI_RFEATURE_CHANGED = BIT(16),
+	CAPI_WIRELESS_CHANGED = BIT(17),
+};
+
 enum mtk_vendor_attr_rfeature_ctrl {
 	MTK_VENDOR_ATTR_RFEATURE_CTRL_UNSPEC,
 
@@ -118,7 +139,7 @@ enum mtk_vendor_attr_wireless_ctrl {
 	MTK_VENDOR_ATTR_WIRELESS_CTRL_MIMO,
 	MTK_VENDOR_ATTR_WIRELESS_CTRL_AMSDU,
 	MTK_VENDOR_ATTR_WIRELESS_CTRL_AMPDU,
-	MTK_VENDOR_ATTR_WIRELESS_CTRL_CERT = 9,
+	MTK_VENDOR_ATTR_WIRELESS_CTRL_CERT,
 	MTK_VENDOR_ATTR_WIRELESS_CTRL_RTS_SIGTA,
 	MTK_VENDOR_ATTR_WIRELESS_CTRL_MU_EDCA, /* reserve */
 	MTK_VENDOR_ATTR_WIRELESS_CTRL_LINK_ID,
@@ -353,6 +374,9 @@ enum mtk_vendor_attr_txpower_ctrl {
 		NUM_MTK_VENDOR_ATTRS_TXPOWER_CTRL - 1
 };
 
+#define MTK_VENDOR_ATTR_TXPOWER_CTRL_LPI_ENABLE	MTK_VENDOR_ATTR_TXPOWER_CTRL_LPI_PSD
+#define MTK_VENDOR_ATTR_TXPOWER_CTRL_BCN_DUP	MTK_VENDOR_ATTR_TXPOWER_CTRL_LPI_BCN_ENHANCE
+
 enum mtk_vendor_attr_dfs_tx_ctrl {
 	MTK_VENDOR_ATTR_DFS_TX_CTRL_UNSPEC,
 
@@ -365,6 +389,146 @@ enum mtk_vendor_attr_dfs_tx_ctrl {
 		NUM_MTK_VENDOR_ATTRS_DFS_TX_CTRL - 1
 };
 
-#endif
+enum mtk_vendor_attr_phy_capa_ctrl {
+	MTK_VENDOR_ATTR_PHY_CAPA_CTRL_UNSPEC,
+	MTK_VENDOR_ATTR_PHY_CAPA_CTRL_SET,
+	MTK_VENDOR_ATTR_PHY_CAPA_CTRL_DUMP,
+
+	NUM_MTK_VENDOR_ATTRS_PHY_CAPA_CTRL,
+	MTK_VENDOR_ATTR_PHY_CAPA_CTRL_MAX =
+		NUM_MTK_VENDOR_ATTRS_PHY_CAPA_CTRL - 1,
+};
+
+enum mtk_vendor_attr_phy_capa_dump {
+	MTK_VENDOR_ATTR_PHY_CAPA_DUMP_UNSPEC,
+	MTK_VENDOR_ATTR_PHY_CAPA_DUMP_MAX_SUPPORTED_BSS,
+	MTK_VENDOR_ATTR_PHY_CAPA_DUMP_MAX_SUPPORTED_STA,
+
+	NUM_MTK_VENDOR_ATTRS_PHY_CAPA_DUMP,
+	MTK_VENDOR_ATTR_PHY_CAPA_DUMP_MAX =
+		NUM_MTK_VENDOR_ATTRS_PHY_CAPA_DUMP - 1,
+};
+
+enum mtk_vendor_attr_csi_mac_filter {
+	MTK_VENDOR_ATTR_CSI_MAC_FILTER_UNSPEC,
+	MTK_VENDOR_ATTR_CSI_MAC_FILTER_MAC,
+	MTK_VENDOR_ATTR_CSI_MAC_FILTER_INTERVAL,
+
+	NUM_MTK_VENDOR_ATTRS_CSI_MAC_FILTER,
+	MTK_VENDOR_ATTR_CSI_MAC_FILTER_MAX =
+		NUM_MTK_VENDOR_ATTRS_CSI_MAC_FILTER - 1,
+};
 
 #endif
+
+struct mt76_dev;
+
+struct mt76_vendor_ops {
+	const struct wiphy_vendor_command *commands;
+	unsigned int n_commands;
+	const struct nl80211_vendor_cmd_info *events;
+	unsigned int n_events;
+	int (*ibf_ctrl)(struct mt76_dev *dev, bool enabled);
+	int (*ibf_ctrl_dump)(struct mt76_dev *dev, bool *enabled);
+	int (*mu_ctrl)(struct mt76_dev *dev, u8 radio_idx, u8 enabled);
+	int (*mu_ctrl_cfg)(struct mt76_dev *dev, const struct nlattr *attr);
+	int (*mu_ctrl_dump)(struct mt76_dev *dev, u8 radio_idx, u8 *enabled);
+	int (*edcca_ctrl)(struct mt76_dev *dev, u8 radio_idx, bool enabled);
+	int (*edcca_ctrl_threshold)(struct mt76_dev *dev, u8 radio_idx, u8 value[4]);
+	int (*edcca_ctrl_dump)(struct mt76_dev *dev, u8 radio_idx, u8 value[4]);
+	int (*background_radar_ctrl)(struct mt76_dev *dev, bool disable_timer);
+	int (*dfs_tx_mode_ctrl)(struct mt76_dev *dev, u8 radio_idx, u8 mode);
+	void (*set_beacon)(struct ieee80211_vif *vif, u8 mode);
+};
+
+void mt76_vendor_register(struct mt76_dev *dev,
+			  const struct mt76_vendor_ops *ops);
+
+#ifdef CONFIG_MTK_VENDOR
+#define MT76_VENDOR_EDCCA_BW_NUM	4
+#define MT76_VENDOR_EDCCA_SET_EN	0
+#define MT76_VENDOR_EDCCA_SET_THRES	1
+#define MT76_VENDOR_EDCCA_GET_THRES	3
+
+extern const struct nl80211_vendor_cmd_info
+mt76_vendor_events[MT76_VENDOR_N_EVENTS];
+extern const struct nla_policy
+mt76_vendor_bss_color_ctrl_policy[NUM_MTK_VENDOR_ATTRS_BSS_COLOR_CTRL];
+extern const struct nla_policy
+mt76_vendor_wireless_ctrl_policy[NUM_MTK_VENDOR_ATTRS_WIRELESS_CTRL];
+extern const struct nla_policy
+mt76_vendor_amnt_ctrl_policy[NUM_MTK_VENDOR_ATTRS_AMNT_CTRL];
+extern const struct nla_policy
+mt76_vendor_amnt_set_policy[NUM_MTK_VENDOR_ATTRS_AMNT_SET];
+extern const struct nla_policy
+mt76_vendor_amnt_dump_policy[NUM_MTK_VENDOR_ATTRS_AMNT_DUMP];
+extern const struct nla_policy
+mt76_vendor_pp_ctrl_policy[NUM_MTK_VENDOR_ATTRS_PP_CTRL];
+extern const struct nla_policy
+mt76_vendor_rfeature_ctrl_policy[NUM_MTK_VENDOR_ATTRS_RFEATURE_CTRL];
+extern const struct nla_policy
+mt76_vendor_epcs_ctrl_policy[NUM_MTK_VENDOR_ATTRS_EPCS_CTRL];
+extern const struct nla_policy
+mt76_vendor_scs_ctrl_policy[NUM_MTK_VENDOR_ATTRS_SCS_CTRL];
+extern const struct nla_policy
+mt76_vendor_csi_ctrl_policy[NUM_MTK_VENDOR_ATTRS_CSI_CTRL];
+extern const struct nla_policy
+mt76_vendor_txpower_ctrl_policy[NUM_MTK_VENDOR_ATTRS_TXPOWER_CTRL];
+extern const struct nla_policy
+mt76_vendor_ibf_ctrl_policy[NUM_MTK_VENDOR_ATTRS_IBF_CTRL];
+extern const struct nla_policy
+mt76_vendor_3wire_ctrl_policy[NUM_MTK_VENDOR_ATTRS_3WIRE_CTRL];
+extern const struct nla_policy
+mt76_vendor_mu_ctrl_policy[NUM_MTK_VENDOR_ATTRS_MU_CTRL];
+extern const struct nla_policy
+mt76_vendor_edcca_ctrl_policy[NUM_MTK_VENDOR_ATTRS_EDCCA_CTRL];
+extern const struct nla_policy
+mt76_vendor_background_radar_ctrl_policy[NUM_MTK_VENDOR_ATTRS_BACKGROUND_RADAR_CTRL];
+extern const struct nla_policy
+mt76_vendor_dfs_tx_ctrl_policy[NUM_MTK_VENDOR_ATTRS_DFS_TX_CTRL];
+extern const struct nla_policy
+mt76_vendor_beacon_ctrl_policy[NUM_MTK_VENDOR_ATTRS_BEACON_CTRL];
+int mt76_vendor_abi_connac2_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
+				 struct sk_buff *skb, const void *data,
+				 int data_len, unsigned long *storage);
+
+int mt76_vendor_bss_color_ctrl_dump(struct wiphy *wiphy,
+				    struct wireless_dev *wdev,
+				    struct sk_buff *skb,
+				    const void *data, int data_len,
+				    unsigned long *storage);
+int mt76_vendor_pp_bitmap_update(struct mt76_phy *phy, u16 bitmap);
+int mt76_vendor_ibf_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
+			 const void *data, int data_len);
+int mt76_vendor_ibf_ctrl_dump(struct wiphy *wiphy,
+			      struct wireless_dev *wdev,
+			      struct sk_buff *skb, const void *data,
+			      int data_len, unsigned long *storage);
+int mt76_vendor_3wire_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
+			   const void *data, int data_len);
+int mt76_vendor_wireless_ctrl_dump(struct wiphy *wiphy,
+				   struct wireless_dev *wdev,
+				   struct sk_buff *skb, const void *data,
+				   int data_len, unsigned long *storage);
+int mt76_vendor_mu_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
+			const void *data, int data_len);
+int mt76_vendor_mu_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
+			     struct sk_buff *skb, const void *data,
+			     int data_len, unsigned long *storage);
+
+int mt76_vendor_edcca_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
+			   const void *data, int data_len);
+int mt76_vendor_edcca_ctrl_dump(struct wiphy *wiphy,
+				struct wireless_dev *wdev,
+				struct sk_buff *skb, const void *data,
+				int data_len, unsigned long *storage);
+int mt76_vendor_background_radar_ctrl(struct wiphy *wiphy,
+				      struct wireless_dev *wdev,
+				      const void *data, int data_len);
+int mt76_vendor_dfs_tx_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
+			    const void *data, int data_len);
+int mt76_vendor_beacon_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
+			    const void *data, int data_len);
+#endif
+
+#endif /* __MT76_VENDOR_H */

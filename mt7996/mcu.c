@@ -9,6 +9,7 @@
 #include "mcu.h"
 #include "mac.h"
 #include "eeprom.h"
+#include "../vendor.h"
 #include "mt7996_trace.h"
 
 #define fw_name(_dev, name, ...)	({			\
@@ -1567,7 +1568,7 @@ mt7996_mcu_pp_event(struct mt7996_dev *dev, struct sk_buff *skb)
 
 		if (phy->pp_mode == PP_FW_MODE) {
 			phy->punct_bitmap = report_bitmap;
-			mt7996_vendor_pp_bitmap_update(phy, report_bitmap);
+			mt76_vendor_pp_bitmap_update(mphy, report_bitmap);
 		}
 		break;
 	case UNI_EVENT_PP_TAG_ALG_CTRL:

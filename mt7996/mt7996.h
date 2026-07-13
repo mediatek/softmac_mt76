@@ -1640,7 +1640,6 @@ int mt7996_mcu_set_muru_cfg(struct mt7996_dev *dev, void *data);
 void mt7996_set_beacon_vif(struct ieee80211_vif *vif, u8 val);
 int mt7996_mcu_set_csi(struct mt7996_phy *phy, u8 mode,
 		       u8 cfg, u8 v1, u32 v2, u8 *mac_addr);
-int mt7996_vendor_pp_bitmap_update(struct mt7996_phy *phy, u16 bitmap);
 int mt7996_mcu_set_lpi_psd(struct mt7996_phy *phy, u8 enable);
 int mt7996_vendor_tsf_offset_event(struct mt7996_phy *phy, s64 *tsf_offset, int tsf_len);
 #endif

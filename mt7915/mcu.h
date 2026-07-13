@@ -774,7 +774,7 @@ struct cert_cfg {
 struct three_wire_cfg {
 	__le16 tag;
 	__le16 length;
-	u8 three_wire_en;
+	u8 ext_sel;
 	u8 rsv[3];
 } __packed;
 

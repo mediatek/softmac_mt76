@@ -8,7 +8,7 @@
 #include "../dma.h"
 #include "mac.h"
 #include "mcu.h"
-#include "vendor.h"
+#include "../vendor.h"
 
 #define to_rssi(field, rcpi)	((FIELD_GET(field, rcpi) - 220) / 2)
 
