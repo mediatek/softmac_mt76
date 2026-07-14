@@ -93,7 +93,7 @@ int mt76_mcu_skb_send_and_get_msg(struct mt76_dev *dev, struct sk_buff *skb,
 
 	if (dev->mcu_ops->mcu_skb_prepare_msg) {
 		orig_skb = skb;
-		ret = dev->mcu_ops->mcu_skb_prepare_msg(dev, skb, cmd, &seq);
+		ret = dev->mcu_ops->mcu_skb_prepare_msg(dev, skb, cmd, wait_resp ? &seq : NULL);
 		if (ret < 0)
 			goto out;
 	}

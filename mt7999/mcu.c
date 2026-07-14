@@ -241,7 +241,7 @@ mt7999_mcu_set_timeout(struct mt76_dev *mdev, int cmd)
 }
 
 static int
-mt7999_mcu_send_message(struct mt76_dev *mdev, struct sk_buff *skb,
+mt7999_mcu_fill_message(struct mt76_dev *mdev, struct sk_buff *skb,
 			int cmd, int *wait_seq)
 {
 	struct mt7999_dev *dev = container_of(mdev, struct mt7999_dev, mt76);
@@ -258,11 +258,8 @@ mt7999_mcu_send_message(struct mt76_dev *mdev, struct sk_buff *skb,
 		dev_info(dev->mt76.dev,"\n%s L1 SER recovery overlap, drop message %08x.",
 			 wiphy_name(dev->mt76.hw->wiphy), cmd);
 
-		dev_kfree_skb(skb);
 		return -EPERM;
 	}
-
-	mt7999_mcu_set_timeout(mdev, cmd);
 
 	seq = ++dev->mt76.mcu.msg_seq & 0xf;
 	if (!seq)
@@ -294,8 +291,20 @@ mt7999_mcu_send_message(struct mt76_dev *mdev, struct sk_buff *skb,
 		*wait_seq = seq;
 	}
 
+	return 0;
+}
+
+static int
+mt7999_mcu_send_message(struct mt76_dev *mdev, struct sk_buff *skb,
+			int cmd, int *wait_seq)
+{
+	struct mt7999_dev *dev = container_of(mdev, struct mt7999_dev, mt76);
+	int mcu_cmd = FIELD_GET(__MCU_CMD_FIELD_ID, cmd);
+	struct mt76_connac2_mcu_uni_txd *uni_txd = (struct mt76_connac2_mcu_uni_txd *)skb->data;
+
+	mt7999_mcu_set_timeout(mdev, cmd);
 	mt7999_packet_log_to_host(dev, skb->data, skb->len, PKT_BIN_DEBUG_MCU, 0);
-	trace_mt7999_mcu_send_message(cmd, mcu_cmd, seq, uni_txd->option);
+	trace_mt7999_mcu_send_message(cmd, mcu_cmd, uni_txd->seq, uni_txd->option);
 
 	return mt76_tx_queue_skb_raw(dev, mdev->q_mcu[MT_MCUQ_WM], skb, 0);
 }
@@ -5723,6 +5732,7 @@ int mt7999_mcu_init(struct mt7999_dev *dev)
 	static const struct mt76_mcu_ops mt7999_mcu_ops = {
 		.max_retry = 3,
 		.headroom = sizeof(struct mt76_connac2_mcu_txd), /* reuse */
+		.mcu_skb_prepare_msg = mt7999_mcu_fill_message,
 		.mcu_skb_send_msg = mt7999_mcu_send_message,
 		.mcu_parse_response = mt7999_mcu_parse_response,
 	};
