@@ -9285,12 +9285,8 @@ int mt7999_mcu_set_nf_ctrl(struct mt7999_dev *dev, bool enable, u8 timeout)
 
 out:
 	dev->nf_state = NF_STATE_IDLE;
-	if (ret < 0) {
-		dev_err(dev->mt76.dev,
-			"Failed to update noise floor (%pe)\n",
-			ERR_PTR(ret));
+	if (ret < 0)
 		return ret;
-	}
 
 	return 0;
 };

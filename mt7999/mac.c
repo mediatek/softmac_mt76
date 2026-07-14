@@ -3371,10 +3371,10 @@ void mt7999_mac_work(struct work_struct *work)
 
 	mutex_lock(&mdev->mutex);
 
-	mt76_update_survey(mphy);
 	if (++mphy->mac_work_count % 5 == 0 && !phy->dev->testmode_enable) {
 		int i;
 
+		mt76_update_survey(mphy);
 		mt7999_mac_update_stats(phy);
 
 		/* Update DEV-wise information only in
@@ -3382,28 +3382,37 @@ void mt7999_mac_work(struct work_struct *work)
 		 */
 		for (i = MT_BAND0; i <= mphy->band_idx; ++i) {
 			if (i == mphy->band_idx) {
-				mt7999_mcu_get_all_sta_info(mdev, UNI_ALL_STA_TXRX_RATE);
-				mt7999_mcu_get_all_sta_info(mdev, UNI_ALL_STA_TXRX_AIR_TIME);
 				mt7999_mac_sta_poll(mdev);
-				mt7999_mcu_get_all_sta_info(mdev, UNI_ALL_STA_TXRX_ADM_STAT);
-				mt7999_mcu_get_all_sta_info(mdev, UNI_ALL_STA_TXRX_MSDU_COUNT);
-				mt7999_mcu_get_all_sta_info(mdev, UNI_ALL_STA_RX_MPDU_COUNT);
-				mt7999_mcu_get_all_sta_info(mdev, UNI_ALL_STA_TX_STAT);
-				mt7999_mcu_get_all_sta_info(mdev, UNI_ALL_STA_DATA_TX_RETRY_COUNT);
 
-				mt7999_mcu_get_bss_acq_pkt_cnt(phy->dev);
+#define GET_STAT(_type) mt7999_mcu_get_all_sta_info(mdev, UNI_ALL_STA_##_type)
+				switch (mphy->mac_work_count & 0x1) {
+				case 1:
+					GET_STAT(TXRX_RATE);
+					GET_STAT(TXRX_AIR_TIME);
+					mt7999_mcu_get_bss_acq_pkt_cnt(phy->dev);
+					mt7999_mac_dynamic_txop(phy->dev);
 
-				if (mphy->mac_work_count % 10 == 0 &&
-				    phy->dev->ultra_save &&
-				    !phy->dev->disable_dynamic_1rpd) {
-					bool enable_1rpd = true;
+					if (phy->dev->ultra_save &&
+					    !phy->dev->disable_dynamic_1rpd) {
+						bool enable_1rpd = true;
 
-					ieee80211_iterate_stations_atomic(
-						mdev->hw, mt7999_check_sta_rssi,
-						&enable_1rpd);
+						ieee80211_iterate_stations_atomic(
+							mdev->hw, mt7999_check_sta_rssi,
+							&enable_1rpd);
 
-					mt7999_mcu_enable_1rpd(phy->dev, enable_1rpd);
+						mt7999_mcu_enable_1rpd(phy->dev,
+								       enable_1rpd);
+					}
+					break;
+				default:
+					GET_STAT(TXRX_ADM_STAT);
+					GET_STAT(TXRX_MSDU_COUNT);
+					GET_STAT(RX_MPDU_COUNT);
+					GET_STAT(TX_STAT);
+					GET_STAT(DATA_TX_RETRY_COUNT);
+					break;
 				}
+#undef GET_STAT
 
 				if (mphy->mac_work_count % 100 == 0) {
 					if (phy->dev->idxlog_enable && mt7999_mcu_fw_time_sync(mdev))
@@ -3415,8 +3424,6 @@ void mt7999_mac_work(struct work_struct *work)
 					mt7999_flush_pending_token(phy->dev);
 				}
 
-				if (mphy->mac_work_count % 10 == 0)
-					mt7999_mac_dynamic_txop(phy->dev);
 			} else if (mt7999_band_valid(phy->dev, i) &&
 			           test_bit(MT76_STATE_RUNNING, &mdev->phys[i]->state))
 				break;
