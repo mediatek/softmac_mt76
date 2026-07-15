@@ -42,6 +42,12 @@ int mt7999_mcu_get_tx_power_info(struct mt7999_phy *phy, u8 category, void *even
 		size += sizeof(struct txpower_basic_info);
 		break;
 	}
+
+	if (skb->len < size) {
+		dev_kfree_skb(skb);
+		return -EINVAL;
+	}
+
 	memcpy(event, skb->data, size);
 
 	dev_kfree_skb(skb);
