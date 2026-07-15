@@ -1009,45 +1009,50 @@ mt7999_tm_rx_gain_cal(struct mt7999_phy *phy, enum mt76_testmode_state state)
 			.op.rf.param.cal_param.band_idx = mphy->band_idx,
 		},
 	};
-	u8 *eeprom = dev->mt76.eeprom.data;
-	u32 i, j, size, *cal;
+	u8 *cal, *eeprom = dev->mt76.eeprom.data;
+	u32 i, size, *data;
 	int ret = 0;
 
-	if (dev->eeprom_mode != EEPROM_MODE_FLASH && dev->eeprom_mode != EEPROM_MODE_BIN) {
-		dev_err(dev->mt76.dev, "%s: currently not in FLASH or BIN FILE mode, return\n",
+	if (dev->eeprom_mode != EEPROM_MODE_FLASH &&
+	    dev->eeprom_mode != EEPROM_MODE_BIN) {
+		dev_err(dev->mt76.dev,
+			"%s: currently not in FLASH or BIN FILE mode, return\n",
 			__func__);
 		return -EOPNOTSUPP;
 	}
 
-	dev->prek.cur_offs = 0;
 	size = MT_EE_CAL_RX_GAIN_SIZE;
+	cal = eeprom + MT_EE_RX_GAIN_CAL;
 
 	switch (state) {
 	case MT76_TM_STATE_RX_GAIN_CAL:
-		ret = mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(TESTMODE_CTRL), &req,
-					sizeof(req), false);
+		ret = mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(TESTMODE_CTRL),
+					&req, sizeof(req), false);
 		if (ret) {
 			dev_err(dev->mt76.dev, "%s: failed to send mcu msg (%pe)\n",
 				__func__, ERR_PTR(ret));
 			return ret;
 		}
-
-		wait_event_timeout(dev->mt76.mcu.wait, dev->prek.cur_offs == size, 30 * HZ);
 		break;
 	case MT76_TM_STATE_RX_GAIN_CAL_DUMP:
-		cal = (u32 *)eeprom;
-		mt76_tm_dbg(&dev->mt76, "RX Gain Cal:");
-		for (i = 0; i < (size / sizeof(u32)); i += 4) {
-			j = MT_EE_RX_GAIN_CAL / sizeof(u32) + i;
-			mt76_tm_dbg(&dev->mt76, "[0x%08lx] 0x%8x 0x%8x 0x%8x 0x%8x",
-				    j * sizeof(u32), cal[j], cal[j + 1],
-				    cal[j + 2], cal[j + 3]);
+		ret = mt7999_mcu_get_fw_buf(dev, MT_EE_RX_GAIN_CAL, cal, size);
+		if (ret) {
+			dev_err(dev->mt76.dev, "%s: failed to get fw buf (%pe)\n",
+				__func__, ERR_PTR(ret));
+			return ret;
 		}
+
+		data = (u32 *)cal;
+		mt76_tm_dbg(&dev->mt76, "RX Gain Cal:");
+		for (i = 0; i < (size / sizeof(u32)); i += 4)
+			mt76_tm_dbg(&dev->mt76, "[0x%08zx] 0x%8x 0x%8x 0x%8x 0x%8x",
+				    MT_EE_RX_GAIN_CAL + i * sizeof(u32),
+				    data[i], data[i + 1], data[i + 2], data[i + 3]);
 		break;
 	case MT76_TM_STATE_RX_GAIN_CAL_CLEAN:
-		memset(eeprom + MT_EE_RX_GAIN_CAL, 0, size);
-		eeprom[MT_EE_DO_RX_GAIN_CAL] &= ~u8_encode_bits(GENMASK(2, 0),
-								MT_EE_WIFI_CAL_RX_GAIN);
+		memset(cal, 0, size);
+		for (i = MT_BAND0; i < __MT_MAX_BAND; i++)
+			eeprom[MT_EE_DO_RX_GAIN_CAL(i)] = 0;
 		break;
 	default:
 		return -EINVAL;
@@ -1065,9 +1070,6 @@ mt7999_tm_re_cal_event(struct mt7999_dev *dev, struct mt7999_tm_rf_test_data *da
 	cal_type = le32_to_cpu(data->cal_type);
 
 	switch (cal_type) {
-	case RF_RX_GAIN_CAL:
-		cal = dev->mt76.eeprom.data + MT_EE_RX_GAIN_CAL;
-		break;
 	case RF_PRE_CAL:
 	case RF_DPD_FLAT_CAL:
 		cal = (u8 *)dev->prek.cur_hdr + dev->prek.cur_hdr->data_offset;

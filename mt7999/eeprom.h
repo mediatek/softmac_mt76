@@ -15,10 +15,10 @@ enum mt7999_eeprom_field {
 	MT_EE_MAC_LAN_ADDR =		0x00a,
 	MT_EE_WIFI_CONF_BASE =		0x170,
 	MT_EE_MAC_ADDR_BASE =		0x17a,
-	MT_EE_DO_RX_GAIN_CAL =		0x1a1,
 	MT_EE_TESTMODE_EN =		0x1af,
 	MT_EE_VERSION =			0x1300,
 	MT_EE_DO_PRE_CAL_BASE =		0x140b,
+	MT_EE_DO_RX_GAIN_CAL_BASE =	0x1411,
 	MT_EE_TX0_POWER_2G =		0x2000,
 	MT_EE_RATE_DELTA_2G =		0x2010,
 	MT_EE_TX0_POWER_5G_B0 =		0x2400,	/* for band 0 5g variant */
@@ -37,6 +37,7 @@ enum mt7999_eeprom_field {
 #define MT_EE_WIFI_CONF(_band)			(MT_EE_WIFI_CONF_BASE + (_band) * 0x10)
 #define MT_EE_MAC_ADDR(_band)			(MT_EE_MAC_ADDR_BASE + (_band) * 0x10)
 #define MT_EE_DO_PRE_CAL(_band)			(MT_EE_DO_PRE_CAL_BASE + (_band) * 0x400)
+#define MT_EE_DO_RX_GAIN_CAL(_band)		(MT_EE_DO_RX_GAIN_CAL_BASE + (_band) * 0x400)
 #define MT_EE_WIFI_CONF_BAND_SEL		GENMASK(2, 0)
 #define MT_EE_WIFI_CONF_PA_LNA			GENMASK(4, 3)
 #define MT_EE_WIFI_CONF_TX_PATH			GENMASK(2, 0)
@@ -57,8 +58,6 @@ enum mt7999_eeprom_band {
 #define MT_EE_RATE_DELTA_MASK			GENMASK(5, 0)
 #define MT_EE_RATE_DELTA_SIGN			BIT(6)
 #define MT_EE_RATE_DELTA_EN			BIT(7)
-
-#define MT_EE_WIFI_CAL_RX_GAIN			GENMASK(5, 3)
 
 #define MT_EE_CAL_UNIT				1024
 
@@ -96,7 +95,7 @@ static const u32 mt7999_prek_rev[] = {
 #define MT_EE_CAL_GROUP_SIZE(_radio)		(PREK(GROUP_STATE_SIZE_ ## _radio ## G) + \
 						 PREK(GROUP_DATA_SIZE_ ## _radio ## G))
 
-#define MT_EE_CAL_RX_GAIN_SIZE			748
+#define MT_EE_CAL_RX_GAIN_SIZE			0x440
 
 enum rf_cal_item {
 	RF_RX_GAIN_CAL = BIT(24),

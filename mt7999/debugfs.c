@@ -1306,6 +1306,43 @@ mt7999_precal_info_show(struct seq_file *file, void *data)
 }
 DEFINE_SHOW_ATTRIBUTE(mt7999_precal_info);
 
+static ssize_t
+mt7999_fw_buf_get(struct file *file, char __user *user_buf,
+		  size_t count, loff_t *ppos)
+{
+	struct mt7999_dev *dev = file->private_data;
+	int ret;
+
+	if (!dev->fw_buf.data) {
+		dev->fw_buf.size = MT7999_EEPROM_SIZE;
+		dev->fw_buf.data = devm_kzalloc(dev->mt76.dev,
+						dev->fw_buf.size,
+						GFP_KERNEL);
+		if (!dev->fw_buf.data)
+			return -ENOMEM;
+	}
+
+	/* always get the latest data in the fw buffer, as it might be updated by the driver */
+	ret = mt7999_mcu_get_fw_buf(dev, 0, dev->fw_buf.data, dev->fw_buf.size);
+	if (ret) {
+		dev_err(dev->mt76.dev, "Failed to get fw eeprom buffer (%pe)\n",
+			ERR_PTR(ret));
+		devm_kfree(dev->mt76.dev, dev->fw_buf.data);
+		dev->fw_buf.data = NULL;
+		dev->fw_buf.size = 0;
+		return ret;
+	}
+
+	return simple_read_from_buffer(user_buf, count, ppos,
+				      dev->fw_buf.data, dev->fw_buf.size);
+}
+
+static const struct file_operations mt7999_fw_buf_ops = {
+	.read = mt7999_fw_buf_get,
+	.open = simple_open,
+	.llseek = default_llseek,
+};
+
 static int
 mt7999_vow_info_read(struct seq_file *s, void *data)
 {
@@ -1616,6 +1653,7 @@ int mt7999_init_dev_debugfs(struct mt7999_phy *phy)
 	debugfs_create_devm_seqfile(dev->mt76.dev, "efuse_free_block", dir,
 				    mt7999_efuse_get_free_block);
 	debugfs_create_file("ext_eeprom", 0400, dir, dev, &mt7999_ext_eeprom_ops);
+	debugfs_create_file("fw_buf", 0400, dir, dev, &mt7999_fw_buf_ops);
 	debugfs_create_file("precal_info", 0400, dir, dev, &mt7999_precal_info_fops);
 	debugfs_create_devm_seqfile(dev->mt76.dev, "vow_info", dir,
 				    mt7999_vow_info_read);

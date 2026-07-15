@@ -233,6 +233,7 @@ union eeprom_data {
 		DECLARE_FLEX_ARRAY(u8, data);
 	} ext_eeprom;
 	DECLARE_FLEX_ARRAY(u8, efuse);
+	DECLARE_FLEX_ARRAY(u8, fw_buf);
 } __packed;
 
 struct mt7999_mcu_eeprom_info {
@@ -241,7 +242,10 @@ struct mt7999_mcu_eeprom_info {
 	__le16 tag;
 	__le16 len;
 	__le32 addr;
-	__le32 valid;
+	union {
+		__le32 valid;
+		__le32 read_len;
+	};
 } __packed;
 
 struct mt7999_mcu_eeprom_access {
@@ -1458,6 +1462,7 @@ enum {
 	UNI_EFUSE_FREE_BLOCK = 3,
 	UNI_EFUSE_BUFFER_RD,
 	UNI_EFUSE_BUFFER_MODE = 6,
+	UNI_EFUSE_GET_FW_BUF,
 };
 
 enum {

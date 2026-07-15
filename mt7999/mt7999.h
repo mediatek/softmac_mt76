@@ -1070,6 +1070,8 @@ struct mt7999_dev {
 	u8 rf_mode;
 #endif
 	int nf_state;
+
+	struct debugfs_blob_wrapper fw_buf;
 };
 
 enum {
@@ -1386,6 +1388,7 @@ int mt7999_mcu_sta_rate_update(struct mt7999_dev *dev, struct mt7999_sta *msta,
 int mt7999_mcu_set_eeprom(struct mt7999_dev *dev);
 int mt7999_mcu_get_eeprom(struct mt7999_dev *dev, u32 offset, u8 *buf, u32 buf_len,
 			  enum mt7999_eeprom_mode mode);
+int mt7999_mcu_get_fw_buf(struct mt7999_dev *dev, u32 offset, u8 *buf, u32 read_len);
 int mt7999_mcu_get_efuse_free_block(struct mt7999_dev *dev, void *info);
 int mt7999_mcu_write_ext_eeprom(struct mt7999_dev *dev, u32 offset,
 				u32 data_len, u8 *write_buf);
