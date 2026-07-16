@@ -2681,10 +2681,7 @@ mt7999_mcu_sta_amsdu_tlv(struct mt7999_dev *dev, struct sk_buff *skb,
 
 	switch (link_sta->agg.max_amsdu_len) {
 	case IEEE80211_MAX_MPDU_LEN_VHT_11454:
-		amsdu->max_mpdu_size =
-			(msta_link->wcid.phy_idx == MT_BAND0 && !link_sta->sta->mlo) ?
-			IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_7991:
-			IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_11454;
+		amsdu->max_mpdu_size = IEEE80211_VHT_CAP_MAX_MPDU_LENGTH_11454;
 		return;
 	case IEEE80211_MAX_MPDU_LEN_HT_7935:
 	case IEEE80211_MAX_MPDU_LEN_VHT_7991:
