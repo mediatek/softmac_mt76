@@ -189,6 +189,7 @@ static int
 mt7999_mcu_parse_response(struct mt76_dev *mdev, int cmd,
 			  struct sk_buff *skb, int seq)
 {
+#define WLAN_STATUS_NOT_ACCEPTED 0x10003
 	struct mt7999_mcu_rxd *rxd;
 	struct mt7999_mcu_uni_event *event;
 	int mcu_cmd = FIELD_GET(__MCU_CMD_FIELD_ID, cmd);
@@ -219,6 +220,10 @@ mt7999_mcu_parse_response(struct mt76_dev *mdev, int cmd,
 		if (mcu_cmd != le16_to_cpu(event->cid))
 			ret = -EAGAIN;
 	}
+
+	/* FW ignores this command, not an error */
+	if (ret == WLAN_STATUS_NOT_ACCEPTED)
+		ret = 0;
 
 	return ret;
 }
