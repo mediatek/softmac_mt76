@@ -439,9 +439,6 @@ mt7996_tm_set_tx_frames(struct mt7996_phy *phy, bool en)
 		      mt7996_tm_rate_mapping(td->tx_rate_mode, RATE_MODE_TO_PHY));
 	mt7996_tm_set(dev, SET_ID(TX_RATE), td->tx_rate_idx);
 
-	if (mt76_testmode_param_present(td, MT76_TM_ATTR_TX_POWER))
-		mt7996_tm_set(dev, SET_ID(POWER), td->tx_power[0]);
-
 	mt7996_tm_set_tx_length(phy);
 	mt7996_tm_set_antenna(phy, SET_ID(TX_PATH));
 	mt7996_tm_set(dev, SET_ID(STBC), td->tx_rate_stbc);

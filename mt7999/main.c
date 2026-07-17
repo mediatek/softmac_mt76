@@ -439,7 +439,7 @@ int mt7999_vif_link_add(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 		mt7999_mcu_add_sta(dev, link_conf, NULL, link, NULL,
 				   CONN_STATE_PORT_SECURE, true);
 
-		if (mt7999_vow_sta_init(link, msta_link))
+		if (!dev->testmode_enable && mt7999_vow_sta_init(link, msta_link))
 			mt76_bss_dbg(vif, "link_id=%u: failed to init VoW for AP BMC entry",
 				     link_conf->link_id);
 	}

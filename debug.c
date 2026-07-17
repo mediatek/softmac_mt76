@@ -6,7 +6,7 @@
 #include <linux/vmalloc.h>
 #include "mt76.h"
 
-unsigned int mt76_debug_mask = 0x3f;
+unsigned int mt76_debug_mask = 0x7f;
 module_param(mt76_debug_mask, uint, 0644);
 MODULE_PARM_DESC(mt76_debug_mask, "Debugging mask");
 
