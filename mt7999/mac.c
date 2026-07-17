@@ -3401,7 +3401,7 @@ void mt7999_mac_work(struct work_struct *work)
 							&enable_1rpd);
 
 						mt7999_mcu_enable_1rpd(phy->dev,
-								       enable_1rpd);
+								       enable_1rpd, false);
 					}
 					break;
 				default:

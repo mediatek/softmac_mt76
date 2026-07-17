@@ -940,7 +940,8 @@ static void mt7999_low_power_config(struct mt7999_dev *dev)
 	arg[0] = MT7999_ULTRA_SAVE_CONFIG_ALL;
 	arg[1] = dev->ultra_save;
 	mt7999_mcu_set_lp_option(dev, arg);
-	mt7999_mcu_enable_1rpd(dev, dev->ultra_save);
+	mt7999_mcu_enable_1rpd(dev, false, true);
+	dev->disable_dynamic_1rpd = true;
 
 	/* Power Saving Transceiver */
 	mt7999_mcu_set_pst(dev, 0xff, MURU_PST_CMD_ALGO_MODE,

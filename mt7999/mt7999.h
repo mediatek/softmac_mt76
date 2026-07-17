@@ -1653,7 +1653,7 @@ int mt7999_mcu_edcca_enable(struct mt7999_phy *phy, bool enable);
 int mt7999_mcu_edcca_threshold_ctrl(struct mt7999_phy *phy, u8 *value, bool set);
 int mt7999_mcu_set_tpo(struct mt7999_dev *dev, u8 type, u8 val);
 int mt7999_mcu_set_lp_option(struct mt7999_dev *dev, u8 *arg);
-void mt7999_mcu_enable_1rpd(struct mt7999_dev *dev, bool enable);
+void mt7999_mcu_enable_1rpd(struct mt7999_dev *dev, bool enable, bool init);
 int mt7999_mcu_set_pst(struct mt7999_dev *dev, u32 band, u32 cmd, u32 val);
 int mt7999_mcu_flush_ple(struct mt7999_dev *dev, u16 threshold,
 			 u8 *sta_bitmap, u16 sta_cnt);

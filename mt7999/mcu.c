@@ -9156,12 +9156,13 @@ int mt7999_mcu_set_lp_option(struct mt7999_dev *dev, u8 *arg)
 				 sizeof(req), false);
 }
 
-void mt7999_mcu_enable_1rpd(struct mt7999_dev *dev, bool enable)
+void mt7999_mcu_enable_1rpd(struct mt7999_dev *dev, bool enable, bool init)
 {
 #define MT7999_ULTRA_SAVE_CONFIG_FEATURES      1
 #define MT7999_ULTRA_SAVE_1RPD                 4
 	u8 arg[4], i;
-	if (enable == dev->enable_1rpd)
+
+	if (!init && enable == dev->enable_1rpd)
 		return;
 
 	dev->enable_1rpd = enable;
