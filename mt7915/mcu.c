@@ -506,13 +506,24 @@ mt7915_mcu_rx_sr_swsd(struct mt7915_dev *dev, struct sk_buff *skb)
 	static const char * const rules[] = {"NO CONNECTED", "NO CONGESTION",
 					     "NO INTERFERENCE", "MESH ILLEGAL APCLI",
 					     "SR ON"};
-	u8 idx;
+	u8 idx, rule;
 
 	event = (struct mt7915_mcu_sr_swsd_event *)skb->data;
 	idx = event->basic.band_idx;
 
-	dev_info(dev->mt76.dev, "Band index = %u\n", event->basic.band_idx);
-	dev_info(dev->mt76.dev, "Hit Rule = %s\n", rules[event->rule[idx]]);
+	if (idx >= ARRAY_SIZE(event->rule)) {
+		dev_info(dev->mt76.dev, "Invalid band idx %u\n", idx);
+		return;
+	}
+
+	rule = event->rule[idx];
+	if (rule >= ARRAY_SIZE(rules)) {
+		dev_info(dev->mt76.dev, "Invalid SR rule %u\n", rule);
+		return;
+	}
+
+	dev_info(dev->mt76.dev, "Band index = %u\n", idx);
+	dev_info(dev->mt76.dev, "Hit Rule = %s\n", rules[rule]);
 	dev_info(dev->mt76.dev, "Timer Period = %d(us)\n"
 		 "Congestion Ratio  = %d.%1d%%\n",
 		 SR_SCENE_DETECTION_TIMER_PERIOD_MS * 1000,
