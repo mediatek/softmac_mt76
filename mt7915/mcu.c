@@ -561,8 +561,10 @@ mt7915_mcu_rx_sr_event(struct mt7915_dev *dev, struct sk_buff *skb)
 
 	event = (struct mt7915_mcu_sr_basic_event *)skb->data;
 
-	if (event->band_idx > MT_BAND1)
+	if (event->band_idx > MT_BAND1) {
 		dev_info(dev->mt76.dev, "Invalid band idx %d\n", event->band_idx);
+		return;
+	}
 
 	switch (event->sub_event_id) {
 	case SPR_EVENT_CFG_SR_ENABLE:
