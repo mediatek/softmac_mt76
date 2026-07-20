@@ -171,13 +171,24 @@ mt7996_mcu_rx_sr_swsd(struct mt7996_dev *dev, struct sk_buff *skb)
 	struct mt7996_mcu_sr_swsd_event *event;
 	static const char * const rules[] = {"1 - NO CONNECTED", "2 - NO CONGESTION",
 					     "3 - NO INTERFERENCE", "4 - SR ON"};
-	u8 idx;
+	u8 idx, rule;
 
 	event = (struct mt7996_mcu_sr_swsd_event *)skb->data;
 	idx = event->basic.band_idx;
 
-	dev_info(dev->mt76.dev, "Band index = %u\n", le16_to_cpu(event->basic.band_idx));
-	dev_info(dev->mt76.dev, "Hit Rule = %s\n", rules[event->tlv[idx].rule]);
+	if (idx >= ARRAY_SIZE(event->tlv)) {
+		dev_info(dev->mt76.dev, "Invalid band idx %u\n", idx);
+		return;
+	}
+
+	rule = event->tlv[idx].rule;
+	if (rule >= ARRAY_SIZE(rules)) {
+		dev_info(dev->mt76.dev, "Invalid SR rule %u\n", rule);
+		return;
+	}
+
+	dev_info(dev->mt76.dev, "Band index = %u\n", idx);
+	dev_info(dev->mt76.dev, "Hit Rule = %s\n", rules[rule]);
 	dev_info(dev->mt76.dev, "Timer Period = %d(us)\n"
 		 "Congestion Ratio  = %d.%1d%%\n",
 		 SR_SCENE_DETECTION_TIMER_PERIOD_MS * 1000,
@@ -225,6 +236,12 @@ void mt7996_mcu_rx_sr_event(struct mt7996_dev *dev, struct sk_buff *skb)
 	struct mt7996_mcu_sr_common_event *event;
 
 	event = (struct mt7996_mcu_sr_common_event *)skb->data;
+	if (event->basic.band_idx >= ARRAY_SIZE(dev->mt76.phys)) {
+		dev_info(dev->mt76.dev, "Invalid band idx %u\n",
+			 event->basic.band_idx);
+		return;
+	}
+
 	mphy = dev->mt76.phys[event->basic.band_idx];
 	if (!mphy)
 		return;
