@@ -493,7 +493,9 @@ static void mt7996_vif_link_destroy(struct mt7996_phy *phy,
 	};
 	struct mt7996_dev *dev = phy->dev;
 	int idx = msta_link->wcid.idx;
-	bool offchannel = mlink->wcid->offchannel;
+
+	if (!mlink->wcid)
+		return;
 
 	cancel_delayed_work(&link->sta_chsw_work);
 
@@ -543,10 +545,12 @@ cleanup:
 
 	mt76_wcid_cleanup(&dev->mt76, &msta_link->wcid);
 
-	mlink->wcid = NULL;
-	if (mlink != (struct mt76_vif_link *)vif->drv_priv && !offchannel) {
+	if (mlink != (struct mt76_vif_link *)vif->drv_priv &&
+	    !mlink->wcid->offchannel) {
 		rcu_assign_pointer(mlink->mvif->link[msta_link->wcid.link_id], NULL);
 		kfree_rcu(mlink, rcu_head);
+	} else {
+		mlink->wcid = NULL;
 	}
 }
 
@@ -559,6 +563,9 @@ void mt7996_vif_link_remove(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 	struct mt7996_sta_link *msta_link = &link->msta_link;
 	unsigned int link_id = msta_link->wcid.link_id;
 	struct mt7996_phy *phy = mphy->priv;
+
+	if (!mlink->wcid)
+		return;
 
 	/* Hw requires to destroy active links tearing down the interface, so
 	 * postpone it removing the interface.
