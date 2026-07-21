@@ -472,6 +472,9 @@ void mt7996_vif_link_remove(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 	};
 	int idx = msta_link->wcid.idx;
 
+	if (!mlink->wcid)
+		return;
+
 	cancel_delayed_work(&link->sta_chsw_work);
 
 	if (dev->recovery.hw_full_reset)
