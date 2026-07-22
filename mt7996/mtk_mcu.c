@@ -1192,6 +1192,9 @@ int mt7996_set_muru_cfg(struct mt7996_dev *dev, u8 action, u8 val)
 	int ret = 0;
 
 	muru = kzalloc(sizeof(struct mt7996_muru), GFP_KERNEL);
+	if (!muru)
+		return -ENOMEM;
+
 	dl = &muru->dl;
 	ul = &muru->ul;
 	comm = &muru->comm;
