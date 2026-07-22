@@ -3631,6 +3631,7 @@ int mt7996_mcu_set_fixed_field(struct mt7996_dev *dev, struct mt7996_sta *msta,
 			break;
 		default:
 			err = -EINVAL;
+			dev_kfree_skb(skb);
 			goto error_unlock;
 		}
 		ra->op_vht_rx_nss = link_sta->rx_nss ? link_sta->rx_nss - 1 : 0;

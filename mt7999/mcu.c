@@ -3314,6 +3314,7 @@ int mt7999_mcu_sta_rate_update(struct mt7999_dev *dev, struct mt7999_sta *msta,
 			break;
 		default:
 			err = -EINVAL;
+			dev_kfree_skb(skb);
 			goto error_unlock;
 		}
 		ra->op_vht_rx_nss = link_sta->rx_nss ? link_sta->rx_nss - 1 : 0;
