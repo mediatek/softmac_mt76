@@ -20,42 +20,45 @@
 #define DEV_PR_ARG	__entry->wiphy_name
 
 DECLARE_EVENT_CLASS(mt7999_mcu_debug,
-	TP_PROTO(int cmd, u8 id, u8 seq, u8 option),
-	TP_ARGS(cmd, id, seq, option),
+	TP_PROTO(struct mt7999_dev *dev, int cmd, u8 id, u8 seq, u8 option),
+	TP_ARGS(dev, cmd, id, seq, option),
 	TP_STRUCT__entry(
 		__field(int, cmd)
 		__field(u8, id)
 		__field(u8, seq)
 		__field(u8, option)
+		__field(u32, ts)
 	),
 	TP_fast_assign(
 		__entry->cmd = cmd;
 		__entry->id = id;
 		__entry->seq = seq;
 		__entry->option = option;
+		__entry->ts = mt76_rr(dev, MT_LPON_FRCR(0));
 	),
 	TP_printk(
-		"cmd: 0x%x, id: 0x%x, seq: %u, option: 0x%x",
+		"cmd: 0x%x, id: 0x%x, seq: %u, option: 0x%x, ts: %u",
 		__entry->cmd,
 		__entry->id,
 		__entry->seq,
-		__entry->option
+		__entry->option,
+		__entry->ts
 	)
 );
 
 DEFINE_EVENT(mt7999_mcu_debug, mt7999_mcu_send_message,
-	TP_PROTO(int cmd, u8 id, u8 seq, u8 option),
-	TP_ARGS(cmd, id, seq, option)
+	TP_PROTO(struct mt7999_dev *dev, int cmd, u8 id, u8 seq, u8 option),
+	TP_ARGS(dev, cmd, id, seq, option)
 );
 
 DEFINE_EVENT(mt7999_mcu_debug, mt7999_mcu_rx_event,
-	TP_PROTO(int cmd, u8 id, u8 seq, u8 option),
-	TP_ARGS(cmd, id, seq, option)
+	TP_PROTO(struct mt7999_dev *dev, int cmd, u8 id, u8 seq, u8 option),
+	TP_ARGS(dev, cmd, id, seq, option)
 );
 
 DEFINE_EVENT(mt7999_mcu_debug, mt7999_mcu_timeout,
-	TP_PROTO(int cmd, u8 id, u8 seq, u8 option),
-	TP_ARGS(cmd, id, seq, option)
+	TP_PROTO(struct mt7999_dev *dev, int cmd, u8 id, u8 seq, u8 option),
+	TP_ARGS(dev, cmd, id, seq, option)
 );
 
 TRACE_EVENT(mt7999_tx_prepare,

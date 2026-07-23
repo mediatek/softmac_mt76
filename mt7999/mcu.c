@@ -196,9 +196,12 @@ mt7999_mcu_parse_response(struct mt76_dev *mdev, int cmd,
 	int ret = 0;
 
 	if (!skb) {
+		struct mt7999_dev *dev =
+			container_of(mdev, struct mt7999_dev, mt76);
+
 		dev_err(mdev->dev, "Message %08x (seq %d) timeout\n",
 			cmd, seq);
-		trace_mt7999_mcu_timeout(cmd, mcu_cmd, seq, 0);
+		trace_mt7999_mcu_timeout(dev, cmd, mcu_cmd, seq, 0);
 #ifdef CONFIG_MULDF_HELPER
 		mt76_muldf_drv_notify(mdev, CONSYS_MONITOR_CMD_TIMEOUT, true);
 #endif
@@ -309,7 +312,7 @@ mt7999_mcu_send_message(struct mt76_dev *mdev, struct sk_buff *skb,
 
 	mt7999_mcu_set_timeout(mdev, cmd);
 	mt7999_packet_log_to_host(dev, skb->data, skb->len, PKT_BIN_DEBUG_MCU, 0);
-	trace_mt7999_mcu_send_message(cmd, mcu_cmd, uni_txd->seq, uni_txd->option);
+	trace_mt7999_mcu_send_message(dev, cmd, mcu_cmd, uni_txd->seq, uni_txd->option);
 
 	return mt76_tx_queue_skb_raw(dev, mdev->q_mcu[MT_MCUQ_WM], skb, 0);
 }
@@ -1756,7 +1759,7 @@ void mt7999_mcu_rx_event(struct mt7999_dev *dev, struct sk_buff *skb)
 {
 	struct mt7999_mcu_rxd *rxd = (struct mt7999_mcu_rxd *)skb->data;
 
-	trace_mt7999_mcu_rx_event(0, rxd->eid, rxd->seq, rxd->option);
+	trace_mt7999_mcu_rx_event(dev, 0, rxd->eid, rxd->seq, rxd->option);
 	if (rxd->option & MCU_UNI_CMD_UNSOLICITED_EVENT) {
 		mt7999_mcu_uni_rx_unsolicited_event(dev, skb);
 		return;
