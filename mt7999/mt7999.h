@@ -129,7 +129,9 @@ enum mt7999_throttle_temp_idx {
 #define MT7999_HW_DROP_REASON	0x20
 
 #define WMM_PBC_QUEUE_NUM	5
-#define WMM_PBC_BOUND_MGMT	32
+#define WMM_PBC_PKT_THRESHOLD	200
+#define WMM_PBC_PG_THRESHOLD	64
+
 struct mt7999_vif;
 struct mt7999_sta;
 struct mt76_vendor_edcca_info;
@@ -810,6 +812,9 @@ struct mt7999_phy {
 	u32 rx_bytes[MT7999_MAX_WMM_SETS];
 	u32 rx_packets[MT7999_MAX_WMM_SETS];
 	u16 txop[MT7999_MAX_WMM_SETS];
+
+	bool wmm_pbc_enable;
+	struct work_struct wmm_pbc_work;
 };
 
 enum {
@@ -1015,8 +1020,8 @@ struct mt7999_dev {
 	struct mt7999_vow_ctrl vow;
 	bool radio_ultra_save;
 
-	bool wmm_pbc_enable;
-	struct work_struct wmm_pbc_work;
+	u64 pbc_pkt_cnt[IEEE80211_NUM_ACS];
+	u64 pbc_pg_cnt[IEEE80211_NUM_ACS];
 	u16 pbc_lower_bound[WMM_PBC_QUEUE_NUM];
 	u16 pbc_upper_bound[WMM_PBC_QUEUE_NUM];
 	bool disable_dynamic_txop;

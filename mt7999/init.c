@@ -912,6 +912,8 @@ mt7999_unregister_phy(struct mt7999_phy *phy)
 	if (!phy)
 		return;
 
+	cancel_work_sync(&phy->wmm_pbc_work);
+
 #ifdef CONFIG_MTK_VENDOR
 	mt7999_unregister_csi(phy);
 #endif
@@ -1944,6 +1946,39 @@ void mt7999_set_stream_caps(struct mt7999_phy *phy)
 					 NL80211_BAND_6GHZ);
 }
 
+static void mt7999_init_pbc(struct mt7999_dev *dev)
+{
+#define WMM_PBC_LOW_BOUND_VO	300
+#define WMM_PBC_LOW_BOUND_VI	350
+#define WMM_PBC_LOW_BOUND_BE	250
+#define WMM_PBC_LOW_BOUND_BK	100
+#define WMM_PBC_LOW_BOUND_MGMT	32
+#define WMM_PBC_UP_BOUND_VO	11500
+#define WMM_PBC_UP_BOUND_VI	11500
+#define WMM_PBC_UP_BOUND_BE	9500
+#define WMM_PBC_UP_BOUND_BK	4000
+#define WMM_PBC_UP_BOUND_MGMT	32
+	struct mt7999_phy *phy;
+
+#define pbc_acq_bound_config(_type, _ac, _val)					\
+	dev->pbc_ ## _type ## _bound[mt76_connac_lmac_mapping(_ac)] = (_val)
+
+	pbc_acq_bound_config(lower, IEEE80211_AC_VO, WMM_PBC_LOW_BOUND_VO);
+	pbc_acq_bound_config(lower, IEEE80211_AC_VI, WMM_PBC_LOW_BOUND_VI);
+	pbc_acq_bound_config(lower, IEEE80211_AC_BE, WMM_PBC_LOW_BOUND_BE);
+	pbc_acq_bound_config(lower, IEEE80211_AC_BK, WMM_PBC_LOW_BOUND_BK);
+	pbc_acq_bound_config(upper, IEEE80211_AC_VO, WMM_PBC_UP_BOUND_VO);
+	pbc_acq_bound_config(upper, IEEE80211_AC_VI, WMM_PBC_UP_BOUND_VI);
+	pbc_acq_bound_config(upper, IEEE80211_AC_BE, WMM_PBC_UP_BOUND_BE);
+	pbc_acq_bound_config(upper, IEEE80211_AC_BK, WMM_PBC_UP_BOUND_BK);
+	dev->pbc_lower_bound[4] = WMM_PBC_LOW_BOUND_MGMT;
+	dev->pbc_upper_bound[4] = WMM_PBC_UP_BOUND_MGMT;
+#undef pbc_acq_bound_config
+
+	mt7999_for_each_phy(dev, phy)
+		INIT_WORK(&phy->wmm_pbc_work, mt7999_mcu_wmm_pbc_work);
+}
+
 int mt7999_register_device(struct mt7999_dev *dev)
 {
 	struct ieee80211_hw *hw = mt76_hw(dev);
@@ -1972,25 +2007,6 @@ int mt7999_register_device(struct mt7999_dev *dev)
 				       sizeof(*dev->wcid_remap), GFP_KERNEL);
 	if (!dev->wcid_remap)
 		return -ENOMEM;
-
-#define pbc_acq_lower_bound_config(_ac, _bound)			\
-	dev->pbc_lower_bound[mt76_connac_lmac_mapping(_ac)] = (_bound)
-#define pbc_acq_upper_bound_config(_ac, _bound)			\
-	dev->pbc_upper_bound[mt76_connac_lmac_mapping(_ac)] = (_bound)
-	pbc_acq_lower_bound_config(IEEE80211_AC_VO, 300);
-	pbc_acq_lower_bound_config(IEEE80211_AC_VI, 350);
-	pbc_acq_lower_bound_config(IEEE80211_AC_BE, 250);
-	pbc_acq_lower_bound_config(IEEE80211_AC_BK, 100);
-	dev->pbc_lower_bound[4] = WMM_PBC_BOUND_MGMT;
-
-	pbc_acq_upper_bound_config(IEEE80211_AC_VO, 11500);
-	pbc_acq_upper_bound_config(IEEE80211_AC_VI, 11500);
-	pbc_acq_upper_bound_config(IEEE80211_AC_BE, 9500);
-	pbc_acq_upper_bound_config(IEEE80211_AC_BK, 4000);
-	dev->pbc_upper_bound[4] = WMM_PBC_BOUND_MGMT;
-#undef pbc_acq_lower_bound_config
-#undef pbc_acq_upper_bound_config
-	INIT_WORK(&dev->wmm_pbc_work, mt7999_mcu_wmm_pbc_work);
 
 	ret = mt7999_init_hardware(dev);
 	if (ret)
@@ -2039,6 +2055,8 @@ int mt7999_register_device(struct mt7999_dev *dev)
 			goto error;
 	}
 
+	mt7999_init_pbc(dev);
+
 	mt7999_for_each_phy(dev, phy) {
 		mt7999_thermal_init(phy);
 		ret = mt7999_init_band_debugfs(phy);
@@ -2082,15 +2100,16 @@ error:
 
 void mt7999_unregister_device(struct mt7999_dev *dev)
 {
+	struct mt7999_phy *phy;
+
 	cancel_work_sync(&dev->dump_work);
 	cancel_work_sync(&dev->wed_rro.work);
 	cancel_work_sync(&dev->reset_work);
 	cancel_work_sync(&dev->rc_work);
 	cancel_work_sync(&dev->twt.event_work);
+	mt7999_for_each_phy(dev, phy)
+		mt7999_unregister_phy(phy);
 	mt7999_twt_event_list_free(dev);
-	mt7999_unregister_phy(mt7999_phy3(dev));
-	mt7999_unregister_phy(mt7999_phy2(dev));
-	mt7999_unregister_thermal(&dev->phy);
 	mt7999_coredump_unregister(dev);
 	mt76_unregister_device(&dev->mt76);
 	mt7999_wed_rro_free(dev);

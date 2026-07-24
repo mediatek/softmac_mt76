@@ -1238,11 +1238,11 @@ mt7999_mcu_rx_thermal_info_query(struct mt7999_dev *dev, struct sk_buff *skb)
 
 void mt7999_mcu_wmm_pbc_work(struct work_struct *work)
 {
-#define WMM_PBC_QUEUE_NUM	5
 #define WMM_PBC_BSS_ALL		0xff
 #define WMM_PBC_WLAN_IDX_ALL	0xffff
 #define WMM_PBC_BOUND_DEFAULT	0xffff
-	struct mt7999_dev *dev = container_of(work, struct mt7999_dev, wmm_pbc_work);
+	struct mt7999_phy *phy = container_of(work, struct mt7999_phy, wmm_pbc_work);
+	struct mt7999_dev *dev = phy->dev;
 
 	struct {
 		u8 _rsv[4];
@@ -1265,14 +1265,14 @@ void mt7999_mcu_wmm_pbc_work(struct work_struct *work)
 		.bss_idx = WMM_PBC_BSS_ALL,
 		.queue_num = WMM_PBC_QUEUE_NUM,
 		.wlan_idx = cpu_to_le16(WMM_PBC_WLAN_IDX_ALL),
-		.band_idx = dev->mphy.band_idx,
+		.band_idx = phy->mt76->band_idx,
 	};
 	int i, ret;
 
 	for (i = 0; i < WMM_PBC_QUEUE_NUM; ++i) {
-		req.bound[i].low = cpu_to_le16(dev->wmm_pbc_enable ?
+		req.bound[i].low = cpu_to_le16(phy->wmm_pbc_enable ?
 					       dev->pbc_lower_bound[i] : 0);
-		req.bound[i].up = cpu_to_le16(dev->wmm_pbc_enable ?
+		req.bound[i].up = cpu_to_le16(phy->wmm_pbc_enable ?
 					      dev->pbc_upper_bound[i] :
 					      WMM_PBC_BOUND_DEFAULT);
 	}
@@ -1505,32 +1505,83 @@ mt7999_mcu_mld_event(struct mt7999_dev *dev, struct sk_buff *skb)
 	}
 }
 
+static void mt7999_queue_phy_pbc_work(struct mt7999_phy *phy, bool multi_ac)
+{
+	if (multi_ac && !phy->wmm_pbc_enable) {
+		phy->wmm_pbc_enable = true;
+		queue_work(phy->dev->mt76.wq, &phy->wmm_pbc_work);
+	} else if (!multi_ac && phy->wmm_pbc_enable) {
+		phy->wmm_pbc_enable = false;
+		queue_work(phy->dev->mt76.wq, &phy->wmm_pbc_work);
+	}
+}
+
 static void
 mt7999_mcu_uni_bss_acq_pkt_cnt(struct mt7999_dev *dev, struct tlv *tlv)
 {
 	struct mt7999_mld_sdo_bss_acq_pkt_cnt *data =
 		(struct mt7999_mld_sdo_bss_acq_pkt_cnt *)tlv->data;
-	u64 sum[IEEE80211_NUM_ACS] = {0};
+	struct mt7999_phy *phy;
 	u8 ac_cnt = 0;
 	int i, j;
 
-	for (i = 0; i < SDO_CFG_BSS_NUM; i++) {
-		for (j = IEEE80211_AC_VO; j < IEEE80211_NUM_ACS; j++)
-			sum[j] += le32_to_cpu(data->pkt_cnt[i][mt76_connac_lmac_mapping(j)]);
+	/* The size of this fw event is always allocated based on the larger
+	 * per-bss struct, even if the content is per-band.
+	 */
+	if (le16_to_cpu(tlv->len) - 4 != sizeof(*data)) {
+		dev_err(dev->mt76.dev, "%s: invalid TLV length: %u\n",
+			__func__, le16_to_cpu(tlv->len));
+		return;
 	}
 
+	/* Update TX packet or PLE page counters */
+	if (le32_to_cpu(data->bitmap[0]) == 0) {
+		memset(dev->pbc_pg_cnt, 0, sizeof(dev->pbc_pg_cnt));
+
+		mt7999_for_each_phy(dev, phy) {
+			u8 band = phy->mt76->band_idx;
+
+			for (i = IEEE80211_AC_VO; i < IEEE80211_NUM_ACS; i++) {
+				/* PBC only tracks how many ACs have active
+				 * traffic, so specific AC index is irrelevant.
+				 * Hence, omit unnecessary LMAC AC index mapping
+				 * here for simplicity.
+				 */
+				dev->pbc_pg_cnt[i] += le32_to_cpu(data->band[band].pg_cnt[i]);
+			}
+		}
+	} else {
+		memset(dev->pbc_pkt_cnt, 0, sizeof(dev->pbc_pkt_cnt));
+
+		for (i = 0; i < SDO_CFG_BSS_NUM; i++) {
+			u32 bitmap = le32_to_cpu(data->bitmap[i / 32]);
+
+			if (!(bitmap & BIT(i % 32)))
+				continue;
+
+			for (j = IEEE80211_AC_VO; j < IEEE80211_NUM_ACS; j++) {
+				/* PBC only tracks how many ACs have active
+				 * traffic, so specific AC index is irrelevant.
+				 * Hence, omit unnecessary LMAC AC index mapping
+				 * here for simplicity.
+				 */
+				dev->pbc_pkt_cnt[j] += le32_to_cpu(data->bss[i].cnt[j]);
+			}
+		}
+	}
+
+	/* Check TX packet and PLE page counters to detect multi-AC traffic */
 	for (i = IEEE80211_AC_VO; i < IEEE80211_NUM_ACS; i++) {
-		if (sum[i] > WMM_PKT_THRESHOLD)
+		if (dev->pbc_pg_cnt[i] > WMM_PBC_PG_THRESHOLD ||
+		    dev->pbc_pkt_cnt[i] > WMM_PBC_PKT_THRESHOLD)
 			ac_cnt++;
 	}
 
-	if (ac_cnt > 1 && !dev->wmm_pbc_enable) {
-		dev->wmm_pbc_enable = true;
-		queue_work(dev->mt76.wq, &dev->wmm_pbc_work);
-	} else if (ac_cnt <= 1 && dev->wmm_pbc_enable) {
-		dev->wmm_pbc_enable = false;
-		queue_work(dev->mt76.wq, &dev->wmm_pbc_work);
-	}
+	/* For MT7999, PBC is per-PHY configured, and it should
+	 * be enabled/disabled simultaneously on all PHYs.
+	 */
+	mt7999_for_each_phy(dev, phy)
+		mt7999_queue_phy_pbc_work(phy, ac_cnt > 1);
 }
 
 static void

@@ -1655,11 +1655,18 @@ struct mt7999_mcu_sdo_event {
 
 #define SDO_CFG_BSS_NUM			96
 #define SDO_CFG_BSS_MAP_WORDLEN		((SDO_CFG_BSS_NUM + 31) / 32)
-#define WMM_PKT_THRESHOLD		100
 
 struct mt7999_mld_sdo_bss_acq_pkt_cnt {
 	__le32 bitmap[SDO_CFG_BSS_MAP_WORDLEN];
-	__le32 pkt_cnt[SDO_CFG_BSS_NUM][IEEE80211_NUM_ACS];
+	union {
+		struct {
+			__le32 cnt[IEEE80211_NUM_ACS];
+		} __packed bss[SDO_CFG_BSS_NUM];
+
+		struct {
+			__le32 pg_cnt[IEEE80211_NUM_ACS];
+		} __packed band[__MT_MAX_BAND];
+	};
 };
 
 enum {
