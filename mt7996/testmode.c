@@ -1360,9 +1360,6 @@ mt7996_tm_txbf_init(struct mt7996_phy *phy, u16 *val)
 
 			td->tx_antenna_mask = width == NL80211_CHAN_WIDTH_160 ? 5 : 1;
 		}
-
-		if (td->tx_rate_mode == MT76_TM_TX_MODE_EHT_MU)
-			td->tx_rate_mode = MT76_TM_TX_MODE_EHT_SU;
 	}
 	mt76_testmode_param_set(td, MT76_TM_ATTR_TX_ANTENNA);
 
