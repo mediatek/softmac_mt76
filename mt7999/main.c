@@ -72,6 +72,9 @@ int mt7999_run(struct mt7999_phy *phy)
 #endif
 	ret = mt7999_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_SKU_POWER_LIMIT_CTRL,
 					   phy->sku_limit_en);
+	if (ret)
+		return ret;
+
 	ret = mt7999_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_BACKOFF_POWER_LIMIT_CTRL,
 					   phy->sku_path_en);
 	if (ret)

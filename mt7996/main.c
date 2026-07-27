@@ -56,12 +56,17 @@ int mt7996_run(struct mt7996_phy *phy)
 	phy->thermal_protection_enable = true;
 	ret = mt7996_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_SKU_POWER_LIMIT_CTRL,
 					   dev->dbg.sku_disable ? 0 : phy->sku_limit_en);
+	if (ret)
+		return ret;
 
 	ret = mt7996_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_BACKOFF_POWER_LIMIT_CTRL,
 					   dev->dbg.sku_disable ? 0 : phy->sku_path_en);
 #else
 	ret = mt7996_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_SKU_POWER_LIMIT_CTRL,
 					   phy->sku_limit_en);
+	if (ret)
+		return ret;
+
 	ret = mt7996_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_BACKOFF_POWER_LIMIT_CTRL,
 					   phy->sku_path_en);
 #endif
