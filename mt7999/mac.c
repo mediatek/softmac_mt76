@@ -2852,7 +2852,7 @@ mt7999_mac_fw_coredump(struct mt7999_dev *dev, u8 type)
 		 wiphy_name(dev->mt76.hw->wiphy), "WM");
 	memset(buf, 0, buf_len);
 	for (i = 0; i < num; i++) {
-		if (mem_region->len > buf_len) {
+		if (mem_region->len + sizeof(*hdr) > buf_len) {
 			dev_warn(dev->mt76.dev, "%s len %zu is too large\n",
 				 mem_region->name, mem_region->len);
 			break;

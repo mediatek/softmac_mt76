@@ -1665,7 +1665,7 @@ static void mt7915_mac_fw_coredump(struct mt7915_dev *dev, u8 type)
 		 ((type == MT7915_RAM_TYPE_WA) ? "WA" : "WM"));
 	memset(buf, 0, buf_len);
 	for (i = 0; i < num; i++) {
-		if (mem_region->len > buf_len) {
+		if (mem_region->len + sizeof(*hdr) > buf_len) {
 			dev_warn(dev->mt76.dev, "%s len %lu is too large\n",
 				 mem_region->name,
 				 (unsigned long)mem_region->len);

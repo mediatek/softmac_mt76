@@ -1601,7 +1601,8 @@ int mt7996_mcu_sta_get_wtbl(struct mt7996_dev *dev, u16 idx,
 	skb_pull(rskb, 4);
 	resp = (struct mt7996_mcu_sta_rec_get_wtbl_event *)rskb->data;
 	buf_len = le16_to_cpu(resp->len) - sizeof(*resp);
-	if (resp->tag != cmd->tag ||
+	if (rskb->len < le16_to_cpu(resp->len) ||
+	    resp->tag != cmd->tag ||
 	    resp->idx != cmd->idx ||
 	    resp->start_dw != cmd->start_dw ||
 	    resp->len_in_dw != cmd->len_in_dw ||

@@ -1575,7 +1575,8 @@ int mt7999_mcu_sta_get_wtbl(struct mt7999_dev *dev, u16 idx,
 	skb_pull(rskb, 4);
 	resp = (struct mt7999_mcu_sta_rec_get_wtbl_event *)rskb->data;
 	buf_len = le16_to_cpu(resp->len) - sizeof(*resp);
-	if (resp->tag != cmd->tag ||
+	if (rskb->len < le16_to_cpu(resp->len) ||
+	    resp->tag != cmd->tag ||
 	    resp->idx != cmd->idx ||
 	    resp->start_dw != cmd->start_dw ||
 	    resp->len_in_dw != cmd->len_in_dw ||
@@ -1705,11 +1706,15 @@ int mt7999_mcu_regval(struct mt7999_dev *dev,
 
 	skb_pull(skb, sizeof(struct uni_header));
 	tlv = (void *)skb->data;
+	if (skb->len != num * sizeof(*tlv)) {
+		ret = -EINVAL;
+		goto out;
+	}
+
 	for (i = 0; i < num; i++, tlv++) {
 		if (le16_to_cpu(tlv->tag) != UNI_ACCESS_REG_BASIC ||
 		    le16_to_cpu(tlv->len) != sizeof(*tlv) ||
-		    le32_to_cpu(tlv->regidx) != regidx[i] ||
-		    ((void *)tlv - (void *)skb->data) > skb->len) {
+		    le32_to_cpu(tlv->regidx) != regidx[i]) {
 			ret = -EINVAL;
 			goto out;
 		}

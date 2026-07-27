@@ -1040,12 +1040,12 @@ parse_rate(struct seq_file *s, u8 rate_idx, u16 txrate)
 			mcs, hw_rate_str(txmode, mcs), nss, stbc);
 }
 
-					  "20/40/80/160/80+80/320MHz"};
 static void mt7999_parse_lwtbl(struct seq_file *s, void *data)
 {
 	static const char *fcap_name[] = {"20MHz", "20/40MHz", "20/40/80MHz",
 					  "20/40/80/160/80+80MHz",
-					  "20/40/80/160/80+80/320MHz"};
+					  "20/40/80/160/80+80/320MHz",
+					  "N/A", "N/A", "N/A"};
 	u8 *lwtbl = (u8 *)data;
 	u32 *lwtbl_dw = (u32 *)data;
 
@@ -3340,6 +3340,7 @@ mt7999_show_sta_acq_info(struct seq_file *s, unsigned long *ple_stat,
 static void mt7999_show_txcmd(struct seq_file *s, u32 fid)
 {
 #define MT_TXCMD_BYTE_CNTS		GENMASK(15, 0)
+#define MT_TXCMD_MAX_DW			240
 	struct mt7999_dev *dev = dev_get_drvdata(s->private);
 	u32 *regidx = NULL, *regval = NULL, val;
 	u32 addr = MT_FID_HEADER | u32_encode_bits(fid, MT_FID_MASK);
@@ -3361,6 +3362,8 @@ static void mt7999_show_txcmd(struct seq_file *s, u32 fid)
 
 	txcmd_bytes = u32_get_bits(val, MT_TXCMD_BYTE_CNTS);
 	num = (txcmd_bytes >> 2) + ((txcmd_bytes % 4) ? 1 : 0);
+	if (!num || num > MT_TXCMD_MAX_DW)
+		return;
 
 	regval = kzalloc(sizeof(u32) * num, GFP_KERNEL);
 	if (!regval)

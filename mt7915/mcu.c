@@ -5082,6 +5082,11 @@ mt7915_mcu_report_csi(struct mt7915_dev *dev, struct sk_buff *skb)
 		break;
 	}
 
+	if (current_csi->data_num > CSI_BW80_DATA_COUNT) {
+		kfree(current_csi);
+		return -EINVAL;
+	}
+
 	for (i = 0; i < current_csi->data_num; i++) {
 		current_csi->data_i[i] = le16_to_cpu(cr->data_i[i]);
 		current_csi->data_q[i] = le16_to_cpu(cr->data_q[i]);

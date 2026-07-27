@@ -519,7 +519,8 @@ mt7996_mcu_ie_countdown(struct mt7996_dev *dev, struct sk_buff *skb)
 
 	tail = skb->data + skb->len;
 	data += sizeof(*hdr);
-	while (data + sizeof(*tlv) < tail && le16_to_cpu(tlv->len)) {
+	while (data + sizeof(*tlv) < tail && le16_to_cpu(tlv->len) &&
+	       data + le16_to_cpu(tlv->len) <= tail) {
 		event = (struct mt7996_mcu_countdown_notify *)tlv->data;
 
 		cdata.omac_idx = event->omac_idx;

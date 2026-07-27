@@ -1498,7 +1498,8 @@ static const struct berse_wtbl_parse WTBL_LMAC_DW9_7992[] = {
 	{NULL,}
 };
 
-char *fcap_name[] = {"20MHz", "20/40MHz", "20/40/80MHz", "20/40/80/160/80+80MHz", "20/40/80/160/80+80/320MHz"};
+char *fcap_name[] = {"20MHz", "20/40MHz", "20/40/80MHz", "20/40/80/160/80+80MHz",
+		     "20/40/80/160/80+80/320MHz", "N/A", "N/A", "N/A"};
 
 static void parse_fmac_lwtbl_dw9(struct seq_file *s, u8 *lwtbl)
 {
