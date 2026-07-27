@@ -90,7 +90,10 @@ mt7999_mcu_get_sta_nss(u16 mcs_map)
 			break;
 	}
 
-	return nss - 1;
+	if (!nss)
+		pr_err_ratelimited("Invalid mcs_map = 0x%x\n", mcs_map);
+
+	return nss ? nss - 1 : nss;
 }
 
 static void

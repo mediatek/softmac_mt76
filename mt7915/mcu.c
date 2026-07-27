@@ -55,6 +55,9 @@ mt7915_mcu_get_sta_nss(u16 mcs_map)
 			break;
 	}
 
+	if (!nss)
+		pr_err_ratelimited("Invalid mcs_map = 0x%x\n", mcs_map);
+
 	return nss ? nss - 1 : 0;
 }
 
