@@ -3499,10 +3499,10 @@ static ssize_t mt7996_amsdu_algo_write(struct file *file,
 	struct {
 		u8 _rsv[4];
 
-		u16 tag;
-		u16 len;
+		__le16 tag;
+		__le16 len;
 
-		u16 wlan_idx;
+		__le16 wlan_idx;
 		u8 algo_en;
 		u8 rsv[1];
 	} __packed data = {
@@ -3526,6 +3526,8 @@ static ssize_t mt7996_amsdu_algo_write(struct file *file,
 
 	if (data.wlan_idx >= mt7996_wtbl_size(dev))
 		return -EINVAL;
+
+	data.wlan_idx = cpu_to_le16(data.wlan_idx);
 
 	ret = mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(MEC), &data,
 				sizeof(data), true);
@@ -3552,13 +3554,13 @@ static ssize_t mt7996_amsdu_para_write(struct file *file,
 	struct {
 		u8 _rsv[4];
 
-		u16 tag;
-		u16 len;
+		__le16 tag;
+		__le16 len;
 
-		u16 wlan_idx;
+		__le16 wlan_idx;
 		u8  amsdu_en;
 		u8  num;
-		u16 lenth;
+		__le16 length;
 		u8  rsv[2];
 	} __packed data = {
 		.tag = cpu_to_le16(UNI_MEC_AMSDU_PARA_STA),
@@ -3576,11 +3578,14 @@ static ssize_t mt7996_amsdu_para_write(struct file *file,
 	else
 		buf[count] = '\0';
 
-	if (sscanf(buf, "%hu %hhu %hhu %hu", &data.wlan_idx, &data.amsdu_en, &data.num, &data.lenth) != 4)
+	if (sscanf(buf, "%hu %hhu %hhu %hu", &data.wlan_idx, &data.amsdu_en, &data.num, &data.length) != 4)
 		return -EINVAL;
 
 	if (data.wlan_idx >= mt7996_wtbl_size(dev))
 		return -EINVAL;
+
+	data.wlan_idx = cpu_to_le16(data.wlan_idx);
+	data.length = cpu_to_le16(data.length);
 
 	ret = mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(MEC), &data,
 			  sizeof(data), true);

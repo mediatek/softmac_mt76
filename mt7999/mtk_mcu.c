@@ -634,41 +634,43 @@ mt7999_mcu_rx_bf_event(struct mt7999_dev *dev, struct sk_buff *skb)
 	}
 	case UNI_EVENT_BF_FBK_INFO: {
 		struct mt7999_mcu_txbf_fbk_info *info;
-		__le32 total, i;
+		u32 total, i;
 
 		info = (struct mt7999_mcu_txbf_fbk_info *)skb->data;
 
-		total = info->u4PFMUWRDoneCnt + info->u4PFMUWRFailCnt;
-		total += info->u4PFMUWRTimeoutFreeCnt + info->u4FbRptPktDropCnt;
+		total = __le32_to_cpu(info->u4PFMUWRDoneCnt) +
+			__le32_to_cpu(info->u4PFMUWRFailCnt) +
+			__le32_to_cpu(info->u4PFMUWRTimeoutFreeCnt) +
+			__le32_to_cpu(info->u4FbRptPktDropCnt);
 
 		dev_info(dev->mt76.dev, "\n");
 		dev_info(dev->mt76.dev, "\x1b[32m =================================\x1b[m\n");
 		dev_info(dev->mt76.dev, "\x1b[32m PFMUWRDoneCnt              = %u\x1b[m\n",
-			info->u4PFMUWRDoneCnt);
+			__le32_to_cpu(info->u4PFMUWRDoneCnt));
 		dev_info(dev->mt76.dev, "\x1b[32m PFMUWRFailCnt              = %u\x1b[m\n",
-			info->u4PFMUWRFailCnt);
+			__le32_to_cpu(info->u4PFMUWRFailCnt));
 		dev_info(dev->mt76.dev, "\x1b[32m PFMUWRTimeOutCnt           = %u\x1b[m\n",
-			info->u4PFMUWRTimeOutCnt);
+			__le32_to_cpu(info->u4PFMUWRTimeOutCnt));
 		dev_info(dev->mt76.dev, "\x1b[32m PFMUWRTimeoutFreeCnt       = %u\x1b[m\n",
-			info->u4PFMUWRTimeoutFreeCnt);
+			__le32_to_cpu(info->u4PFMUWRTimeoutFreeCnt));
 		dev_info(dev->mt76.dev, "\x1b[32m FbRptPktDropCnt            = %u\x1b[m\n",
-			info->u4FbRptPktDropCnt);
+			__le32_to_cpu(info->u4FbRptPktDropCnt));
 		dev_info(dev->mt76.dev, "\x1b[32m TotalFbRptPkt              = %u\x1b[m\n", total);
 		dev_info(dev->mt76.dev, "\x1b[32m PollPFMUIntrStatTimeOut    = %u(micro-sec)\x1b[m\n",
-			info->u4PollPFMUIntrStatTimeOut);
+			__le32_to_cpu(info->u4PollPFMUIntrStatTimeOut));
 		dev_info(dev->mt76.dev, "\x1b[32m FbRptDeQInterval           = %u(milli-sec)\x1b[m\n",
-			info->u4DeQInterval);
+			__le32_to_cpu(info->u4DeQInterval));
 		dev_info(dev->mt76.dev, "\x1b[32m PktCntInFbRptTimeOutQ      = %u\x1b[m\n",
-			info->u4RptPktTimeOutListNum);
+			__le32_to_cpu(info->u4RptPktTimeOutListNum));
 		dev_info(dev->mt76.dev, "\x1b[32m PktCntInFbRptQ             = %u\x1b[m\n",
-			info->u4RptPktListNum);
+			__le32_to_cpu(info->u4RptPktListNum));
 
 		// [ToDo] Check if it is valid entry
 		for (i = 0; ((i < 5) && (i < CFG_BF_STA_REC_NUM)); i++) {
 
 			// [ToDo] AID needs to be refined
 			dev_info(dev->mt76.dev,"\x1b[32m AID%u  RxFbRptCnt           = %u\x1b[m\n"
-				, i, info->au4RxPerStaFbRptCnt[i]);
+				, i, __le32_to_cpu(info->au4RxPerStaFbRptCnt[i]));
 		}
 
 		break;
@@ -1054,8 +1056,8 @@ int mt7999_mcu_set_bypass_smthint(struct mt7999_dev *dev, u8 band_idx, u8 val)
 	struct {
 		u8 _rsv[4];
 
-		u16 tag;
-		u16 len;
+		__le16 tag;
+		__le16 len;
 
 		u8 action;
 		u8 band_idx;
@@ -1473,10 +1475,10 @@ int mt7999_mcu_set_amsdu_algo(struct mt7999_dev *dev, u16 wlan_idx, u8 algo_en)
 	struct {
 		u8 _rsv[4];
 
-		u16 tag;
-		u16 len;
+		__le16 tag;
+		__le16 len;
 
-		u16 wlan_idx;
+		__le16 wlan_idx;
 		u8 algo_en;
 		u8 rsv[1];
 	} __packed req = {
@@ -1496,13 +1498,13 @@ int mt7999_mcu_set_amsdu_para(struct mt7999_dev *dev, u16 wlan_idx,
 	struct {
 		u8 _rsv[4];
 
-		u16 tag;
-		u16 len;
+		__le16 tag;
+		__le16 len;
 
-		u16 wlan_idx;
+		__le16 wlan_idx;
 		u8  amsdu_en;
 		u8  num;
-		u16 length;
+		__le16 length;
 		u8  rsv[2];
 	} __packed req = {
 		.tag = cpu_to_le16(UNI_MEC_AMSDU_PARA_STA),

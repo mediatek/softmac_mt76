@@ -5683,9 +5683,9 @@ int mt7915_mcu_rf_regval(struct mt7915_dev *dev, u32 regidx, u32 *val, bool set)
 int mt7915_mcu_set_amsdu_algo(struct mt7915_dev *dev, u16 wcid, u8 enable)
 {
 	struct {
-		u16 action;
+		__le16 action;
 		u8 _rsv1[2];
-		u16 wcid;
+		__le16 wcid;
 		u8 enable;
 		u8 _rsv2[5];
 	} __packed req = {
