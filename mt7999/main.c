@@ -809,6 +809,11 @@ int mt7999_set_channel(struct mt76_phy *mphy)
 			goto out;
 	}
 
+	if (mphy->offchannel) {
+		mt7999_mac_update_beacons(phy);
+		mphy->offchan_bcn_stopped = true;
+	}
+
 	ret = mt7999_set_chan_info(phy, false);
 	if (ret)
 		goto out;
@@ -837,6 +842,10 @@ int mt7999_set_channel(struct mt76_phy *mphy)
 
 	mt7999_mac_reset_counters(phy);
 	phy->noise = 0;
+	if (!mphy->offchannel && mphy->offchan_bcn_stopped) {
+		mt7999_mac_update_beacons(phy);
+		mphy->offchan_bcn_stopped = false;
+	}
 
 out:
 	ieee80211_queue_delayed_work(mphy->hw, &mphy->mac_work,
