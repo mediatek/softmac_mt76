@@ -364,6 +364,11 @@ int mt7915_set_channel(struct mt76_phy *mphy)
 			goto out;
 	}
 
+	if (mphy->offchannel) {
+		mt7915_mac_update_beacons(phy);
+		mphy->offchan_bcn_stopped = true;
+	}
+
 	ret = mt7915_mcu_set_chan_info(phy, MCU_EXT_CMD(CHANNEL_SWITCH));
 	if (ret)
 		goto out;
@@ -379,6 +384,10 @@ int mt7915_set_channel(struct mt76_phy *mphy)
 
 	mt7915_mac_reset_counters(phy);
 	phy->noise = 0;
+	if (!mphy->offchannel && mphy->offchan_bcn_stopped) {
+		mt7915_mac_update_beacons(phy);
+		mphy->offchan_bcn_stopped = false;
+	}
 
 out:
 	if (!mt76_testmode_enabled(phy->mt76))

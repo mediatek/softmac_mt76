@@ -2294,6 +2294,9 @@ int mt7915_mcu_add_beacon(struct ieee80211_hw *hw, struct ieee80211_vif *vif, in
 	if (vif->bss_conf.nontransmitted)
 		return 0;
 
+	if (phy->mt76->offchannel)
+		en = false;
+
 	rskb = __mt76_connac_mcu_alloc_sta_req(&dev->mt76, &mvif->mt76,
 					       NULL, len);
 	if (IS_ERR(rskb))

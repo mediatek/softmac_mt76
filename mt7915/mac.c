@@ -1288,21 +1288,25 @@ mt7915_update_vif_beacon(void *priv, u8 *mac, struct ieee80211_vif *vif)
 	}
 }
 
+void mt7915_mac_update_beacons(struct mt7915_phy *phy)
+{
+	struct ieee80211_hw *hw = phy->mt76->hw;
+
+	ieee80211_iterate_active_interfaces(hw, IEEE80211_IFACE_ITER_RESUME_ALL,
+					    mt7915_update_vif_beacon, hw);
+}
+
 static void
 mt7915_update_beacons(struct mt7915_dev *dev)
 {
 	struct mt76_phy *mphy_ext = dev->mt76.phys[MT_BAND1];
 
-	ieee80211_iterate_active_interfaces(dev->mt76.hw,
-		IEEE80211_IFACE_ITER_RESUME_ALL,
-		mt7915_update_vif_beacon, dev->mt76.hw);
+	mt7915_mac_update_beacons(&dev->phy);
 
 	if (!mphy_ext)
 		return;
 
-	ieee80211_iterate_active_interfaces(mphy_ext->hw,
-		IEEE80211_IFACE_ITER_RESUME_ALL,
-		mt7915_update_vif_beacon, mphy_ext->hw);
+	mt7915_mac_update_beacons(mphy_ext->priv);
 }
 
 static int
