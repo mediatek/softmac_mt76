@@ -1088,6 +1088,7 @@ struct mt76_phy {
 	struct cfg80211_chan_def chandef;
 	struct cfg80211_chan_def main_chandef;
 	bool offchannel;
+	bool offchan_bcn_stopped;
 	bool radar_enabled;
 
 	struct delayed_work roc_work;

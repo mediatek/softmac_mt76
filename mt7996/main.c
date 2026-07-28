@@ -681,6 +681,11 @@ int mt7996_set_channel(struct mt76_phy *mphy)
 		goto out;
 	}
 
+	if (mphy->offchannel) {
+		mt7996_mac_update_beacons(phy);
+		mphy->offchan_bcn_stopped = true;
+	}
+
 	ret = mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_SWITCH, false);
 	if (ret)
 		goto out;
@@ -701,6 +706,10 @@ int mt7996_set_channel(struct mt76_phy *mphy)
 		mt7996_mcu_edcca_threshold_ctrl(phy, phy->user_edcca_threshold, true);
 #endif
 	phy->noise = 0;
+	if (!mphy->offchannel && mphy->offchan_bcn_stopped) {
+		mt7996_mac_update_beacons(phy);
+		mphy->offchan_bcn_stopped = false;
+	}
 
 out:
 	ieee80211_queue_delayed_work(mphy->hw, &mphy->mac_work,
