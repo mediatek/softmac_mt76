@@ -1210,7 +1210,9 @@ static int mt7996_vendor_beacon_ctrl(struct wiphy *wiphy,
 				     int data_len)
 {
 	struct ieee80211_vif *vif = wdev_to_ieee80211_vif(wdev);
+	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
 	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_BEACON_CTRL];
+	struct mt7996_dev *dev = mt7996_hw_dev(hw);
 	int err;
 	u8 val8;
 
@@ -1219,10 +1221,12 @@ static int mt7996_vendor_beacon_ctrl(struct wiphy *wiphy,
 	if (err)
 		return err;
 
+	mutex_lock(&dev->mt76.mutex);
 	if (tb[MTK_VENDOR_ATTR_BEACON_CTRL_MODE]) {
 		val8 = nla_get_u8(tb[MTK_VENDOR_ATTR_BEACON_CTRL_MODE]);
 		mt7996_set_beacon_vif(vif, val8);
 	}
+	mutex_unlock(&dev->mt76.mutex);
 
 	return 0;
 }

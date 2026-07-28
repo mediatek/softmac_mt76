@@ -510,6 +510,8 @@ struct mt7996_vif {
 
 	/* QoS map support */
 	u8 qos_map[IP_DSCP_NUM];
+
+	bool force_disable_beacon;
 };
 
 /* crash-dump */
