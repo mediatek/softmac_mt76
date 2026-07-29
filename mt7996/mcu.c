@@ -5082,7 +5082,6 @@ int mt7996_mcu_add_beacon(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 			  struct ieee80211_bss_conf *link_conf, bool enabled)
 {
 	struct mt7996_dev *dev = mt7996_hw_dev(hw);
-	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
 	struct mt7996_vif_link *link = mt7996_vif_conf_link(dev, vif, link_conf);
 	struct mt76_vif_link *mlink = link ? &link->mt76 : NULL;
 	struct ieee80211_mutable_offsets offs;
@@ -5103,9 +5102,6 @@ int mt7996_mcu_add_beacon(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 					  MT7996_MAX_BSS_OFFLOAD_SIZE);
 	if (IS_ERR(rskb))
 		return PTR_ERR(rskb);
-
-	if (mvif->force_disable_beacon)
-		enabled = false;
 
 	skb = ieee80211_beacon_get_template(hw, vif, &offs, link_conf->link_id);
 	if (enabled && !skb) {
@@ -9344,7 +9340,7 @@ void mt7996_set_beacon_vif(struct ieee80211_vif *vif, u8 val)
 	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
 	struct ieee80211_hw *hw = mvif->deflink.phy->mt76->hw;
 
-	mvif->force_disable_beacon = !val;
+	vif->bss_conf.enable_beacon = val;
 
 	mt7996_mcu_add_beacon(hw, vif, &vif->bss_conf, val);
 }

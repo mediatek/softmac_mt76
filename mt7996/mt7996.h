@@ -543,8 +543,6 @@ struct mt7996_vif {
 
 	/* sta channel switch */
 	u16 tx_paused_links;
-
-	bool force_disable_beacon;
 };
 
 /* crash-dump */
