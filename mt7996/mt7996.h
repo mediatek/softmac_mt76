@@ -797,8 +797,6 @@ struct mt7996_phy {
 
 	bool wmm_pbc_enable;
 	struct work_struct wmm_pbc_work;
-	u64 pbc_pkt_cnt[IEEE80211_NUM_ACS];
-	u64 pbc_pg_cnt[IEEE80211_NUM_ACS];
 };
 
 struct mt7996_dev {
@@ -947,6 +945,8 @@ struct mt7996_dev {
 
 	bool vow_atf_en;
 
+	u64 pbc_pkt_cnt[IEEE80211_NUM_ACS];
+	u64 pbc_pg_cnt[IEEE80211_NUM_ACS];
 	u16 pbc_low_bound[WMM_PBC_QUEUE_NUM];
 	u16 pbc_up_bound[WMM_PBC_QUEUE_NUM];
 
