@@ -1229,40 +1229,6 @@ mt7996_mcu_rx_thermal_info_query(struct mt7996_dev *dev, struct sk_buff *skb)
 	phy->throttle_state = phy->throttle_level[n->state];
 }
 
-static void
-mt7996_mcu_update_pbc_pkt_cnt(void *priv, u8 *mac, struct ieee80211_vif *vif)
-{
-	unsigned long link_id, valid_links = vif->valid_links ?: BIT(0);
-	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
-	struct mt7996_mcu_bss_acq_pkt_cnt_event *event = priv;
-	u32 bitmap = le32_to_cpu(event->bss_bitmap);
-
-	rcu_read_lock();
-	for_each_set_bit(link_id, &valid_links, IEEE80211_MLD_MAX_NUM_LINKS) {
-		struct mt7996_vif_link *link;
-		struct mt7996_phy *phy;
-		u8 bss_idx, ac;
-
-		link = (struct mt7996_vif_link *)rcu_dereference(mvif->mt76.link[link_id]);
-		if (!link)
-			continue;
-
-		bss_idx = link->mt76.idx;
-		if (bss_idx >= BSS_ACQ_PKT_CNT_BSS_NUM || !(bitmap & (1 << bss_idx)))
-			continue;
-
-		phy = link->phy;
-		if (!phy)
-			continue;
-
-		for (ac = IEEE80211_AC_VO; ac < IEEE80211_NUM_ACS; ++ac) {
-			u8 lmac_ac = mt76_connac_lmac_mapping(ac);
-			phy->pbc_pkt_cnt[ac] += le32_to_cpu(event->bss[bss_idx].cnt[lmac_ac]);
-		}
-	}
-	rcu_read_unlock();
-}
-
 void mt7996_mcu_wmm_pbc_work(struct work_struct *work)
 {
 #define WMM_PBC_BSS_ALL		0xff
@@ -1331,54 +1297,65 @@ static void mt7996_queue_phy_pbc_work(struct mt7996_phy *phy, bool multi_ac)
 static void
 mt7996_mcu_rx_bss_acq_pkt_cnt(struct mt7996_dev *dev, struct sk_buff *skb)
 {
-	struct mt7996_mcu_bss_acq_pkt_cnt_event *event = (struct mt7996_mcu_bss_acq_pkt_cnt_event *)skb->data;
+	struct mt7996_mcu_bss_acq_pkt_cnt_event *event;
 	struct mt7996_phy *phy;
-	bool multi_ac = false;
-	u8 ac;
+	int i, j, ac_cnt = 0;
+	u32 bitmap;
 
+	event = (struct mt7996_mcu_bss_acq_pkt_cnt_event *)skb->data;
+	bitmap = le32_to_cpu(event->bss_bitmap);
 	/* Update TX packet or PLE page counters */
-	if (event->bss_bitmap == 0) {
+	if (bitmap == 0) {
+		memset(dev->pbc_pg_cnt, 0, sizeof(dev->pbc_pg_cnt));
+
 		mt7996_for_each_phy(dev, phy) {
 			u8 band = phy->mt76->band_idx;
-
-			memset(phy->pbc_pg_cnt, 0, sizeof(phy->pbc_pg_cnt));
-
-			for (ac = IEEE80211_AC_VO; ac < IEEE80211_NUM_ACS; ++ac) {
-				u8 lmac_ac = mt76_connac_lmac_mapping(ac);
-				phy->pbc_pg_cnt[ac] += le32_to_cpu(event->band[band].pg_cnt[lmac_ac]);
+			for (i = IEEE80211_AC_VO; i < IEEE80211_NUM_ACS; i++) {
+				/* PBC only tracks how many ACs have active
+				 * traffic, so specific AC index is irrelevant.
+				 * Hence, omit unnecessary LMAC AC index mapping
+				 * here for simplicity.
+				 */
+				dev->pbc_pg_cnt[i] += le32_to_cpu(event->band[band].pg_cnt[i]);
 			}
 		}
 	} else {
-		mt7996_for_each_phy(dev, phy)
-			memset(phy->pbc_pkt_cnt, 0, sizeof(phy->pbc_pkt_cnt));
+		memset(dev->pbc_pkt_cnt, 0, sizeof(dev->pbc_pkt_cnt));
 
-		ieee80211_iterate_active_interfaces_atomic(dev->mt76.hw,
-				IEEE80211_IFACE_SKIP_SDATA_NOT_IN_DRIVER,
-				mt7996_mcu_update_pbc_pkt_cnt, event);
+		for (i = 0; i < BSS_ACQ_PKT_CNT_BSS_NUM; i++) {
+			if (!(bitmap & BIT(i)))
+				continue;
+
+			for (j = IEEE80211_AC_VO; j < IEEE80211_NUM_ACS; j++) {
+				/* PBC only tracks how many ACs have active
+				 * traffic, so specific AC index is irrelevant.
+				 * Hence, omit unnecessary LMAC AC index mapping
+				 * here for simplicity.
+				 */
+				dev->pbc_pkt_cnt[j] += le32_to_cpu(event->bss[i].cnt[j]);
+			}
+		}
 	}
 
 	/* Check TX packet and PLE page counters to detect multi-AC traffic */
-	mt7996_for_each_phy(dev, phy) {
-		u8 ac_cnt = 0;
-
-		for (ac = IEEE80211_AC_VO; ac < IEEE80211_NUM_ACS; ++ac)
-			if (phy->pbc_pg_cnt[ac] > WMM_PBC_PG_THRESHOLD ||
-			    phy->pbc_pkt_cnt[ac] > WMM_PBC_PKT_THRESHOLD)
-				++ac_cnt;
-
-		if (ac_cnt > 1)
-			multi_ac = true;
-
-		/* For MT7992, PBC is per-PHY configured */
-		if (is_mt7992(&dev->mt76))
-			mt7996_queue_phy_pbc_work(phy, ac_cnt > 1);
+	for (i = IEEE80211_AC_VO; i < IEEE80211_NUM_ACS; i++) {
+		if (dev->pbc_pg_cnt[i] > WMM_PBC_PG_THRESHOLD ||
+		    dev->pbc_pkt_cnt[i] > WMM_PBC_PKT_THRESHOLD)
+			ac_cnt++;
 	}
 
-	/* For other chips, PBC is per-DEV configured,
-	 * and its state is maintained in first PHY.
-	 */
-	if (!is_mt7992(&dev->mt76))
-		mt7996_queue_phy_pbc_work(&dev->phy, multi_ac);
+	if (is_mt7992(&dev->mt76)) {
+		/* For MT7992, PBC is per-PHY configured, and it should
+		 * be enabled/disabled simultaneously on all PHYs.
+		 */
+		mt7996_for_each_phy(dev, phy)
+			mt7996_queue_phy_pbc_work(phy, ac_cnt > 1);
+	} else {
+		/* For other chips, PBC is per-DEV configured,
+		 * and its state is maintained in first PHY.
+		 */
+		mt7996_queue_phy_pbc_work(&dev->phy, ac_cnt > 1);
+	}
 }
 
 int mt7996_mcu_ba_trigger_enable(struct mt7996_dev *dev, u8 enable)
@@ -1658,81 +1635,47 @@ mt7996_mcu_mld_event(struct mt7996_dev *dev, struct sk_buff *skb)
 }
 
 static void
-mt7996_mcu_uni_update_pbc_pkt_cnt(void *priv, u8 *mac, struct ieee80211_vif *vif)
-{
-	unsigned long link_id, valid_links = vif->valid_links ?: BIT(0);
-	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
-	struct mt7996_mld_sdo_bss_acq_pkt_cnt *event = priv;
-
-	rcu_read_lock();
-	for_each_set_bit(link_id, &valid_links, IEEE80211_MLD_MAX_NUM_LINKS) {
-		struct mt7996_vif_link *link;
-		struct mt7996_phy *phy;
-		u8 bss_idx, ac;
-		u32 bitmap;
-
-		link = (struct mt7996_vif_link *)rcu_dereference(mvif->mt76.link[link_id]);
-		if (!link)
-			continue;
-
-		bss_idx = link->mt76.idx;
-		if (bss_idx >= UNI_CMD_SDO_CFG_BSS_NUM)
-			continue;
-
-		bitmap = le32_to_cpu(event->bitmap[bss_idx / 32]);
-		if (!(bitmap & (1 << (bss_idx % 32))))
-			continue;
-
-		phy = link->phy;
-		if (!phy)
-			continue;
-
-		for (ac = IEEE80211_AC_VO; ac < IEEE80211_NUM_ACS; ++ac) {
-			u8 lmac_ac = mt76_connac_lmac_mapping(ac);
-			phy->pbc_pkt_cnt[ac] += le32_to_cpu(event->pkt_cnt[bss_idx][lmac_ac]);
-		}
-	}
-	rcu_read_unlock();
-}
-
-static void
 mt7996_mcu_uni_bss_acq_pkt_cnt(struct mt7996_dev *dev, struct tlv *tlv)
 {
-	struct mt7996_phy *phy;
-	bool multi_ac = false;
+	struct mt7996_mld_sdo_bss_acq_pkt_cnt *event;
+	int i, j, ac_cnt = 0;
 
-	if (le16_to_cpu(tlv->len) - 4 != sizeof(struct mt7996_mld_sdo_bss_acq_pkt_cnt)) {
+	event = (struct mt7996_mld_sdo_bss_acq_pkt_cnt *)tlv->data;
+	if (le16_to_cpu(tlv->len) - 4 != sizeof(*event)) {
 		dev_err(dev->mt76.dev, "%s: invalid TLV length: %u\n",
 			__func__, le16_to_cpu(tlv->len));
 		return;
 	}
 
 	/* Update TX packet counters */
-	mt7996_for_each_phy(dev, phy)
-		memset(phy->pbc_pkt_cnt, 0, sizeof(phy->pbc_pkt_cnt));
+	memset(dev->pbc_pkt_cnt, 0, sizeof(dev->pbc_pkt_cnt));
 
-	ieee80211_iterate_active_interfaces_atomic(dev->mt76.hw,
-			IEEE80211_IFACE_SKIP_SDATA_NOT_IN_DRIVER,
-			mt7996_mcu_uni_update_pbc_pkt_cnt, tlv->data);
+	for (i = 0; i < UNI_CMD_SDO_CFG_BSS_NUM; i++) {
+		u32 bitmap = le32_to_cpu(event->bitmap[i / 32]);
+
+		if (!(bitmap & BIT(i % 32)))
+			continue;
+
+		for (j = IEEE80211_AC_VO; j < IEEE80211_NUM_ACS; j++) {
+			/* PBC only tracks how many ACs have active
+			 * traffic, so specific AC index is irrelevant.
+			 * Hence, omit unnecessary LMAC AC index mapping
+			 * here for simplicity.
+			 */
+			dev->pbc_pkt_cnt[j] += le32_to_cpu(event->pkt_cnt[i][j]);
+		}
+	}
 
 	/* Check TX packet counters to detect multi-AC traffic */
-	mt7996_for_each_phy(dev, phy) {
-		u8 ac, ac_cnt = 0;
-
-		for (ac = IEEE80211_AC_VO; ac < IEEE80211_NUM_ACS; ++ac)
-			if (phy->pbc_pkt_cnt[ac] > WMM_PBC_PKT_THRESHOLD)
-				++ac_cnt;
-
-		if (ac_cnt > 1) {
-			multi_ac = true;
-			break;
-		}
+	for (i = IEEE80211_AC_VO; i < IEEE80211_NUM_ACS; i++) {
+		if (dev->pbc_pkt_cnt[i] > WMM_PBC_PKT_THRESHOLD)
+			ac_cnt++;
 	}
 
 	/* Via unified FW command, PBC is per-DEV configured,
 	 * and its state is maintained in first PHY.
 	 */
-	mt7996_queue_phy_pbc_work(&dev->phy, multi_ac);
+	mt7996_queue_phy_pbc_work(&dev->phy, ac_cnt > 1);
 }
 
 static void
