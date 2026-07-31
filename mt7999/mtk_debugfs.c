@@ -395,7 +395,7 @@ mt7999_show_lp_history(struct seq_file *s, u32 type)
 	}
 
 	seq_printf(s, "\x1b[32m%s log output\x1b[0m\n", dump->fw_type);
-	seq_printf(s, "\x1b[32mfw status: %s\n", dump->fw_state);
+	seq_printf(s, "\x1b[32mfw status: %s\x1b[0m\n", dump->fw_state);
 	/* PC log */
 	now = jiffies;
 	for (i = 0; i < 10; i++)
