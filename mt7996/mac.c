@@ -4468,7 +4468,6 @@ void mt7996_sta_chsw_state_reset(struct mt7996_vif_link *mconf)
 	lockdep_assert_held(&dev->mt76.mutex);
 
 	mvif->tx_paused_links &= ~BIT(link_id);
-	mvif->cs_links[0] = IEEE80211_LINK_UNSPECIFIED;
 	mconf->state = MT7996_STA_CHSW_IDLE;
 	mconf->next_state = MT7996_STA_CHSW_IDLE;
 	mconf->pause_timeout = 0;
@@ -4537,6 +4536,8 @@ fail:
 	mt76_bss_dbg(vif, "link %d: fail to %s tx (%d)", link_id,
 		     mconf->state == MT7996_STA_CHSW_PAUSE_TX ? "pause" : "resume", ret);
 	mt7996_sta_chsw_state_reset(mconf);
+	memset(mvif->cs_links, IEEE80211_LINK_UNSPECIFIED,
+	       sizeof(mvif->cs_links));
 	mutex_unlock(&dev->mt76.mutex);
 
 	/* trigger connection drop */

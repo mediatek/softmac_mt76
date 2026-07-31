@@ -1244,6 +1244,8 @@ mt7999_post_channel_switch(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	if (mvif->cs_links[0] != link_conf->link_id)
 		return 0;
 
+	mt76_bss_dbg(vif, "handling link %d post channel switch\n", link_conf->link_id);
+
 	mutex_lock(&dev->mt76.mutex);
 
 	link = mt7999_vif_conf_link(dev, vif, link_conf);
@@ -3288,9 +3290,10 @@ mt7999_sta_channel_switch(struct ieee80211_hw *hw,
 #define TX_PAUSED_GRACE_PERIOD		2000
 	struct mt7999_dev *dev = mt7999_hw_dev(hw);
 	struct mt7999_vif *mvif = (struct mt7999_vif *)vif->drv_priv;
+	struct cfg80211_chan_def *chandef;
 	struct ieee80211_bss_conf *conf;
 	struct mt7999_vif_link *mconf;
-	unsigned int link_id = ch_switch->link_id;
+	unsigned int link_id;
 	int csa_time;
 
 	if (vif->type != NL80211_IFTYPE_STATION)
@@ -3298,12 +3301,17 @@ mt7999_sta_channel_switch(struct ieee80211_hw *hw,
 
 	mutex_lock(&dev->mt76.mutex);
 
+	link_id = ch_switch->link_id;
+	chandef = &ch_switch->chandef;
 	conf = link_conf_dereference_protected(vif, link_id);
 	mconf = mt7999_vif_link(dev, vif, link_id);
 	if (!conf || !mconf) {
 		mutex_unlock(&dev->mt76.mutex);
 		return;
 	}
+
+	mt76_sta_dbg(vif, "receive link %u CSA, channel %u width %d csa count %d\n",
+		     link_id, chandef->chan->center_freq, chandef->width, ch_switch->count);
 
 	/* a new csa occurred while the original one was still in progress */
 	if (mconf->state != MT7999_STA_CHSW_IDLE)
@@ -3312,8 +3320,7 @@ mt7999_sta_channel_switch(struct ieee80211_hw *hw,
 	csa_time = (max_t(u8, ch_switch->count, 1) - 1) * conf->beacon_int;
 	mconf->pause_timeout = TX_PAUSED_GRACE_PERIOD +
 			       MT7999_MAX_BEACON_LOSS * conf->beacon_int +
-			       cfg80211_chandef_dfs_cac_time(hw->wiphy,
-							     &ch_switch->chandef);
+			       cfg80211_chandef_dfs_cac_time(hw->wiphy, chandef);
 	mconf->next_state = MT7999_STA_CHSW_PAUSE_TX;
 	mvif->cs_links[0] = link_id;
 	mutex_unlock(&dev->mt76.mutex);
