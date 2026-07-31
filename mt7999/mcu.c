@@ -2158,6 +2158,9 @@ int mt7999_mcu_set_protection(struct mt7999_phy *phy, struct mt7999_vif_link *li
 		PROT_NONGF_STA	 = BIT(7),
 	};
 
+	/* FIXME: traffic hangs if ERP_PROTECTION bit of PCR0 is set, need to check FW */
+	return 0;
+
 	skb = __mt7999_mcu_alloc_bss_req(&dev->mt76, &link->mt76,
 					 MT7999_BSS_UPDATE_MAX_SIZE);
 	if (IS_ERR(skb))
