@@ -774,6 +774,8 @@ struct mt7996_phy {
 		u32 active_bitmap;
 		u32 interval;
 		u32 last_record;
+		u32 report_cnt;
+		u32 dump_cnt;
 	} csi;
 
 	u8 dfs_tx_mode;

@@ -1491,20 +1491,29 @@ mt7996_vendor_csi_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
 		*storage |= RESERVED_SET;
 	}
 
-	(*storage)--;
-
 	spin_lock_bh(&phy->csi.lock);
 
 	if (!list_empty(&phy->csi.list)) {
 		struct csi_data *csi;
-		void *a, *b;
-		int i;
+		void *a;
+		u32 csi_data_len;
 
 		csi = list_first_entry(&phy->csi.list, struct csi_data, node);
+		if (csi->data_num > CSI_BW320_DATA_COUNT) {
+			dev_err(dev->mt76.dev, "invalid csi data num = %d\n",
+				csi->data_num);
+			list_del(&csi->node);
+			phy->csi.count--;
+			kfree(csi);
+			err = -EINVAL;
+			goto out;
+		}
+
+		csi_data_len = csi->data_num * sizeof(s16);
 
 		a = nla_nest_start(skb, MTK_VENDOR_ATTR_CSI_CTRL_DATA);
 		if (!a)
-			goto out;
+			goto nla_put_failure;
 
 		if (nla_put_u8(skb, MTK_VENDOR_ATTR_CSI_DATA_VER, 1) ||
 		    nla_put_u8(skb, MTK_VENDOR_ATTR_CSI_DATA_RSSI, csi->rssi) ||
@@ -1512,42 +1521,32 @@ mt7996_vendor_csi_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
 		    nla_put_u8(skb, MTK_VENDOR_ATTR_CSI_DATA_BW, csi->data_bw) ||
 		    nla_put_u8(skb, MTK_VENDOR_ATTR_CSI_DATA_CH_IDX, csi->pri_ch_idx) ||
 		    nla_put_u8(skb, MTK_VENDOR_ATTR_CSI_DATA_MODE, csi->rx_mode))
-			goto out;
+			goto nla_put_cancel;
 
 		if (nla_put_u16(skb, MTK_VENDOR_ATTR_CSI_DATA_TX_ANT, csi->tx_idx) ||
 		    nla_put_u16(skb, MTK_VENDOR_ATTR_CSI_DATA_RX_ANT, csi->rx_idx))
-			goto out;
+			goto nla_put_cancel;
 
 		if (nla_put_u32(skb, MTK_VENDOR_ATTR_CSI_DATA_INFO, csi->ext_info) ||
 		    nla_put_u32(skb, MTK_VENDOR_ATTR_CSI_DATA_CHAIN_INFO, csi->chain_info) ||
 		    nla_put_u32(skb, MTK_VENDOR_ATTR_CSI_DATA_TS, csi->ts))
-			goto out;
+			goto nla_put_cancel;
 
 		if (nla_put(skb, MTK_VENDOR_ATTR_CSI_DATA_TA, ETH_ALEN, csi->ta))
-			goto out;
+			goto nla_put_cancel;
 
 		if (nla_put_u32(skb, MTK_VENDOR_ATTR_CSI_DATA_NUM, csi->data_num))
-			goto out;
+			goto nla_put_cancel;
 
-		b = nla_nest_start(skb, MTK_VENDOR_ATTR_CSI_DATA_I);
-		if (!b)
-			goto out;
+		if (nla_put(skb, MTK_VENDOR_ATTR_CSI_DATA_I, csi_data_len, csi->data_i))
+			goto nla_put_cancel;
 
-		for (i = 0; i < csi->data_num; i++)
-			if (nla_put_u16(skb, i, csi->data_i[i]))
-				goto out;
-		nla_nest_end(skb, b);
-
-		b = nla_nest_start(skb, MTK_VENDOR_ATTR_CSI_DATA_Q);
-		if (!b)
-			goto out;
-
-		for (i = 0; i < csi->data_num; i++)
-			if (nla_put_u16(skb, i, csi->data_q[i]))
-				goto out;
-		nla_nest_end(skb, b);
+		if (nla_put(skb, MTK_VENDOR_ATTR_CSI_DATA_Q, csi_data_len, csi->data_q))
+			goto nla_put_cancel;
 
 		nla_nest_end(skb, a);
+		phy->csi.dump_cnt++;
+		(*storage)--;
 
 		list_del(&csi->node);
 		kfree(csi);
@@ -1555,8 +1554,13 @@ mt7996_vendor_csi_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
 
 		spin_unlock_bh(&phy->csi.lock);
 		return skb->len;
-	} else
+nla_put_cancel:
+		nla_nest_cancel(skb, a);
+nla_put_failure:
+		err = -ENOBUFS;
+	} else {
 		err = -ENOENT;
+	}
 
 out:
 	spin_unlock_bh(&phy->csi.lock);

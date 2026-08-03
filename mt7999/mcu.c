@@ -1164,6 +1164,7 @@ mt7999_mcu_csi_report_data(struct mt7999_phy *phy, u8 *tlv_buf, u32 len)
 
 	list_add_tail(&target_csi->node, &phy->csi.list);
 	phy->csi.count++;
+	phy->csi.report_cnt++;
 
 	if (phy->csi.count > CSI_MAX_BUF_NUM) {
 		struct csi_data *old;

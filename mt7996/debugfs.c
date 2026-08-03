@@ -1463,6 +1463,61 @@ static int mt7996_rdd_fcc5_lpn_set(void *data, u64 val)
 DEFINE_DEBUGFS_ATTRIBUTE(fops_rdd_fcc5_lpn, NULL,
 			 mt7996_rdd_fcc5_lpn_set, "%lld\n");
 
+#ifdef CONFIG_MTK_VENDOR
+static ssize_t
+mt7996_get_csi_stats(struct file *file, char __user *user_buf,
+		     size_t count, loff_t *ppos)
+{
+	struct mt7996_phy *phy = file->private_data;
+	bool enable;
+	u32 csi_count, active_bitmap, interval, last_record;
+	u32 report_cnt, dump_cnt;
+	char *buf;
+	size_t len = 0;
+	ssize_t ret;
+
+	buf = kzalloc(PAGE_SIZE, GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
+
+	spin_lock_bh(&phy->csi.lock);
+	enable = phy->csi.enable;
+	csi_count = phy->csi.count;
+	active_bitmap = phy->csi.active_bitmap;
+	interval = phy->csi.interval;
+	last_record = phy->csi.last_record;
+	report_cnt = phy->csi.report_cnt;
+	dump_cnt = phy->csi.dump_cnt;
+	spin_unlock_bh(&phy->csi.lock);
+
+	len += scnprintf(buf + len, PAGE_SIZE - len, "CSI enable: %d\n",
+			 enable);
+	len += scnprintf(buf + len, PAGE_SIZE - len, "CSI data_cnt: %u\n",
+			 csi_count);
+	len += scnprintf(buf + len, PAGE_SIZE - len,
+			 "CSI active_bitmap: 0x%08x\n", active_bitmap);
+	len += scnprintf(buf + len, PAGE_SIZE - len, "CSI interval: %u\n",
+			 interval);
+	len += scnprintf(buf + len, PAGE_SIZE - len, "CSI last_record: %u\n",
+			 last_record);
+	len += scnprintf(buf + len, PAGE_SIZE - len, "CSI fw_report_cnt: %u\n",
+			 report_cnt);
+	len += scnprintf(buf + len, PAGE_SIZE - len, "CSI dump_cnt: %u\n",
+			 dump_cnt);
+
+	ret = simple_read_from_buffer(user_buf, count, ppos, buf, len);
+	kfree(buf);
+
+	return ret;
+}
+
+static const struct file_operations mt7996_csi_ops = {
+	.read = mt7996_get_csi_stats,
+	.open = simple_open,
+	.llseek = default_llseek,
+};
+#endif
+
 int mt7996_init_band_debugfs(struct mt7996_phy *phy)
 {
 	struct mt7996_dev *dev = phy->dev;
@@ -1498,6 +1553,9 @@ int mt7996_init_band_debugfs(struct mt7996_phy *phy)
 	}
 	debugfs_create_file("power_table_filename", 0600, dir, phy,
 			    &fops_mt7996_sku_filename);
+#ifdef CONFIG_MTK_VENDOR
+	debugfs_create_file("csi_stats", 0400, dir, phy, &mt7996_csi_ops);
+#endif
 #ifdef CONFIG_MTK_DEBUG
 	mt7996_mtk_init_band_debugfs(phy, dir);
 #endif
