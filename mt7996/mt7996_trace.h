@@ -20,42 +20,45 @@
 #define DEV_PR_ARG	__entry->wiphy_name
 
 DECLARE_EVENT_CLASS(mt7996_mcu_debug,
-	TP_PROTO(struct mt7996_dev *dev, bool uni, u8 id, u8 ext_id,
-		 const void *data, size_t len),
-	TP_ARGS(dev, uni, id, ext_id, data, len),
+	TP_PROTO(struct mt7996_dev *dev, int cmd, u8 id, u8 seq, u8 option),
+	TP_ARGS(dev, cmd, id, seq, option),
 	TP_STRUCT__entry(
-		__field(bool, uni)
+		__field(int, cmd)
 		__field(u8, id)
-		__field(u8, ext_id)
-		__field(size_t, len)
-		__dynamic_array(u8, data, len)
+		__field(u8, seq)
+		__field(u8, option)
+		__field(u32, ts)
 	),
 	TP_fast_assign(
-		__entry->uni = uni;
+		__entry->cmd = cmd;
 		__entry->id = id;
-		__entry->ext_id = ext_id;
-		__entry->len = len;
-		memcpy(__get_dynamic_array(data), data, len);
+		__entry->seq = seq;
+		__entry->option = option;
+		__entry->ts = mt76_rr(dev, MT_LPON_FRCR(0));
 	),
 	TP_printk(
-		"uni: %d, id: %u, ext_id: %u, len: %zu",
-		__entry->uni,
+		"cmd: 0x%x, id: 0x%x, seq: %u, option: 0x%x, ts: %u",
+		__entry->cmd,
 		__entry->id,
-		__entry->ext_id,
-		__entry->len
+		__entry->seq,
+		__entry->option,
+		__entry->ts
 	)
 );
 
-DEFINE_EVENT(mt7996_mcu_debug, mt7996_mcu_cmd,
-	TP_PROTO(struct mt7996_dev *dev, bool uni, u8 id, u8 ext_id,
-		 const void *data, size_t len),
-	TP_ARGS(dev, uni, id, ext_id, data, len)
+DEFINE_EVENT(mt7996_mcu_debug, mt7996_mcu_send_message,
+	TP_PROTO(struct mt7996_dev *dev, int cmd, u8 id, u8 seq, u8 option),
+	TP_ARGS(dev, cmd, id, seq, option)
 );
 
-DEFINE_EVENT(mt7996_mcu_debug, mt7996_mcu_event,
-	TP_PROTO(struct mt7996_dev *dev, bool uni, u8 id, u8 ext_id,
-		 const void *data, size_t len),
-	TP_ARGS(dev, uni, id, ext_id, data, len)
+DEFINE_EVENT(mt7996_mcu_debug, mt7996_mcu_rx_event,
+	TP_PROTO(struct mt7996_dev *dev, int cmd, u8 id, u8 seq, u8 option),
+	TP_ARGS(dev, cmd, id, seq, option)
+);
+
+DEFINE_EVENT(mt7996_mcu_debug, mt7996_mcu_timeout,
+	TP_PROTO(struct mt7996_dev *dev, int cmd, u8 id, u8 seq, u8 option),
+	TP_ARGS(dev, cmd, id, seq, option)
 );
 
 TRACE_EVENT(mt7996_tx_prepare,
