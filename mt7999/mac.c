@@ -18,6 +18,36 @@
 static int mt7999_mac_btwt_add_member(struct mt7999_twt_flow *flow, u16 idx);
 static int mt7999_mac_btwt_del_member(struct mt7999_twt_flow *flow, u16 idx);
 
+/* Combine gain per 0.5 dB of chain difference (value unit: 0.25 dB) */
+static const int signal_diff[] = {
+	12, 11, 10, 9, 8, 8, 7, 6, 6, 5, 5, 4, 4, 4, 3, 3,
+	 3,  2,  2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+};
+
+/* chain_signal: RSSI in 0.5 dB steps; return: RSSI in dBm */
+int mt7999_rx_signal(u8 chain_mask, s16 *chain_signal)
+{
+	int signal = -128 << 2;
+	u8 chains = chain_mask & GENMASK(IEEE80211_MAX_CHAINS - 1, 0);
+
+	for (; chains; chains >>= 1, chain_signal++) {
+		int cur, diff;
+
+		cur = *chain_signal << 1;
+		if (!(chains & BIT(0)) || cur > 0)
+			continue;
+
+		if (cur > signal)
+			swap(cur, signal);
+
+		diff = (signal - cur) >> 1;
+		if (diff < ARRAY_SIZE(signal_diff))
+			signal += signal_diff[diff];
+	}
+
+	return DIV_ROUND_CLOSEST(signal, 4);
+}
+
 static struct mt76_wcid *mt7999_rx_get_wcid(struct mt7999_dev *dev,
 					    u16 idx, u8 band_idx)
 {
@@ -501,7 +531,8 @@ mt7999_mac_fill_rx(struct mt7999_dev *dev, enum mt76_rxq_id q,
 	/* RXD Group 3 - P-RXV */
 	if (rxd1 & MT_RXD1_NORMAL_GROUP_3) {
 		u32 v4, v5;
-		int ret;
+		int ret, i;
+		s16 chain_signal[IEEE80211_MAX_CHAINS];
 
 		rxv = rxd;
 		rxd += MT_RXD_GROUP3_SIZE;
@@ -512,20 +543,22 @@ mt7999_mac_fill_rx(struct mt7999_dev *dev, enum mt76_rxq_id q,
 		v5 = le32_to_cpu(rxv[5]);
 
 		status->chains = mt7999_rx_chainmask(phy);
-		status->chain_signal[0] = to_rssi(MT_PRXV4_RCPI0, v4);
-		status->chain_signal[1] = to_rssi(MT_PRXV4_RCPI1, v4);
-		status->chain_signal[2] = to_rssi(MT_PRXV4_RCPI2, v4);
-		status->chain_signal[3] = to_rssi(MT_PRXV4_RCPI3, v4);
-		status->chain_signal[4] = to_rssi(MT_PRXV5_RCPI4, v5);
+		chain_signal[0] = to_rssi_double(MT_PRXV4_RCPI0, v4);
+		chain_signal[1] = to_rssi_double(MT_PRXV4_RCPI1, v4);
+		chain_signal[2] = to_rssi_double(MT_PRXV4_RCPI2, v4);
+		chain_signal[3] = to_rssi_double(MT_PRXV4_RCPI3, v4);
+		chain_signal[4] = to_rssi_double(MT_PRXV5_RCPI4, v5);
+
+		for (i = 0; i < IEEE80211_MAX_CHAINS; i++)
+			status->chain_signal[i] = chain_signal[i] / 2;
 
 		if (msta_link) {
 			u16 rx_mask = status->chains;
-			int i;
 
 			memcpy(msta_link->chain_signal, status->chain_signal,
-			       IEEE80211_MAX_CHAINS);
-			msta_link->signal = mt76_rx_signal(rx_mask,
-							   msta_link->chain_signal);
+			       sizeof(msta_link->chain_signal));
+			msta_link->signal = mt7999_rx_signal(status->chains,
+							     chain_signal);
 
 			for (i = 0; i < hweight16(rx_mask); ++i)
 				ewma_avg_signal_add(msta_link->chain_signal_avg + i,

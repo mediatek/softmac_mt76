@@ -7899,6 +7899,7 @@ int mt7999_mcu_get_per_sta_info(struct mt76_dev *dev, u16 tag,
 			struct mt7999_phy *phy;
 			u8 *rcpi = rssi->rcpi;
 			u16 rx_mask;
+			s16 chain_ack_signal[IEEE80211_MAX_CHAINS];
 
 			wlan_idx = le16_to_cpu(rssi->wlan_idx);
 			wcid = __mt76_wcid_ptr(dev, wlan_idx);
@@ -7911,12 +7912,15 @@ int mt7999_mcu_get_per_sta_info(struct mt76_dev *dev, u16 tag,
 			rx_mask = mt7999_rx_chainmask(phy);
 
 			for (j = 0; j < ARRAY_SIZE(rssi->rcpi); ++j)
-				msta_link->chain_ack_signal[j] = to_rssi(MT_PRXV4_RCPI0, rcpi[j]);
-			msta_link->chain_ack_signal[4] = to_rssi(MT_PRXV4_RCPI0, rssi->rcpi_wf4);
+				chain_ack_signal[j] = to_rssi_double(MT_PRXV4_RCPI0, rcpi[j]);
+			chain_ack_signal[4] = to_rssi_double(MT_PRXV4_RCPI0, rssi->rcpi_wf4);
 
-			msta_link->ack_signal = mt76_rx_signal(rx_mask,
-							       msta_link->chain_ack_signal);
-			ewma_avg_signal_add(&msta_link->avg_ack_signal, -msta_link->ack_signal);
+			for (j = 0; j < IEEE80211_MAX_CHAINS; ++j)
+				msta_link->chain_ack_signal[j] = chain_ack_signal[j] / 2;
+
+			msta_link->ack_signal = mt7999_rx_signal(rx_mask, chain_ack_signal);
+			ewma_avg_signal_add(&msta_link->avg_ack_signal,
+					    -msta_link->ack_signal);
 		}
 		break;
 	case UNI_PER_STA_SNR:

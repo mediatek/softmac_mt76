@@ -114,7 +114,8 @@ enum mt7999_throttle_temp_idx {
 
 #define MT7999_BUILD_TIME_LEN		20
 
-#define to_rssi(field, rcpi)	((FIELD_GET(field, rcpi) - 220) / 2)
+#define to_rssi(field, rcpi)		((FIELD_GET(field, rcpi) - 220) / 2)
+#define to_rssi_double(field, rcpi)	((FIELD_GET(field, rcpi) - 220))
 
 #define MT7999_MAX_BEACON_LOSS		20
 #define MT7999_MAX_PROBE_TIMEOUT	500
@@ -1542,6 +1543,7 @@ mt7999_vow_should_enable(struct mt7999_dev *dev)
 		test_bit(MT76_STATE_MCU_RUNNING, &dev->mphy.state);
 }
 
+int mt7999_rx_signal(u8 chain_mask, s16 *chain_signal);
 void mt7999_set_pcie_l1ss(struct mt7999_dev *dev, bool en);
 void mt7999_mac_init(struct mt7999_dev *dev);
 void mt7999_mac_reset_counters(struct mt7999_phy *phy);
