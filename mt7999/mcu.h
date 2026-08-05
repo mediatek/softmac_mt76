@@ -2166,6 +2166,19 @@ struct mt7999_mcu_twt_sync_event {
 	u8 __rsv2[3];
 } __packed;
 
+#define MT_NF_MAX_ANT_NUM	4
+
+struct mt7999_mcu_nf_event {
+	u8 _rsv1[4];
+
+	__le16 tag;
+	__le16 len;
+	u8 mode;
+	u8 _rsv2[3];
+	__le32 avg_power[MT_NF_MAX_ANT_NUM];
+	__le32 avg_ipi[__MT_MAX_BAND][MT_NF_MAX_ANT_NUM][11];
+} __packed;
+
 #ifdef CONFIG_MTK_VENDOR
 struct mt7999_mcu_csi_event {
 	struct mt7999_mcu_rxd rxd;

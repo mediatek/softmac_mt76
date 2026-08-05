@@ -779,7 +779,6 @@ enum offs_rev {
 #define MT_WF_PHYRX_CSD(_band, _wf, ofs)	(MT_WF_PHYRX_CSD_BASE + \
 						 ((_band) << 20) + \
 						 ((_wf) << 16) + (ofs))
-#define MT_WF_PHYRX_CSD_IRPI(_band, _wf)	MT_WF_PHYRX_CSD(_band, _wf, 0x1000)
 
 /* PHYDFE CTRL */
 #define MT_WF_PHYDFE_TSSI_TXCTRL01(_band)	MT_WF_PHYRX_CSD(_band, 0, 0xc718)
@@ -789,16 +788,6 @@ enum offs_rev {
 #define MT_WF_PHY_BAND_BASE			0x83080000
 #define MT_WF_PHY_BAND(_band, ofs)		(MT_WF_PHY_BAND_BASE + \
 						 ((_band) << 20) + (ofs))
-
-/* PHYRX CTRL */
-#define MT_WF_PHYRX_BAND_RX_CTRL1(_band)	MT_WF_PHY_BAND(_band, 0x2004)
-#define MT_WF_PHYRX_BAND_RX_CTRL1_IPI_EN	GENMASK(2, 0)
-#define MT_WF_PHYRX_BAND_RX_CTRL1_STSCNT_EN	GENMASK(11, 9)
-
-/* PHYRX CSD BAND */
-#define MT_WF_PHYRX_CSD_BAND_RXTD12(_band)		MT_WF_PHY_BAND(_band, 0x8230)
-#define MT_WF_PHYRX_CSD_BAND_RXTD12_IRPI_SW_CLR_ONLY	BIT(18)
-#define MT_WF_PHYRX_CSD_BAND_RXTD12_IRPI_SW_CLR		BIT(29)
 
 /* CONN MCU EXCP CON */
 #define MT_MCU_WA_EXCP_BASE			0x890d0000

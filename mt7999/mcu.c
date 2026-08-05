@@ -1591,6 +1591,58 @@ unlock:
 }
 
 static void
+mt7999_mcu_rx_nf_event(struct mt7999_dev *dev, struct sk_buff *skb)
+{
+#define UNI_EVENT_NOISE_FLOOR_CTRL	0
+#define NF_MODE_IDLE_POWER		0
+#define NF_MODE_IPI_HIST		1
+	static const u8 nf_power[] = { 92, 89, 86, 83, 80, 75, 70, 65, 60, 55, 52 };
+	struct mt7999_mcu_nf_event *event;
+	int band;
+
+	skb_pull(skb, sizeof(struct mt7999_mcu_rxd));
+	event = (struct mt7999_mcu_nf_event *)skb->data;
+
+	/* idle power is not supported */
+	if (le16_to_cpu(event->tag) != UNI_EVENT_NOISE_FLOOR_CTRL ||
+	    event->mode != NF_MODE_IPI_HIST || dev->nf_state != NF_STATE_WAIT)
+		return;
+
+	dev->nf_state = NF_STATE_RECEIVED;
+	for (band = MT_BAND0; band < __MT_MAX_BAND; band++) {
+		struct mt7999_phy *phy = __mt7999_phy(dev, band);
+		struct mt76_channel_state *state;
+		u32 val, sum = 0, n = 0;
+		int i, ant, ant_num;
+		u16 nf;
+
+		if (!phy)
+			continue;
+
+		ant_num = min(hweight8(phy->mt76->chainmask),
+			      dev->enable_1rpd ? 1 : MT_NF_MAX_ANT_NUM);
+		for (ant = 0; ant < ant_num; ant++) {
+			for (i = 0; i < ARRAY_SIZE(nf_power); i++) {
+				val = le32_to_cpu(event->avg_ipi[band][ant][i]);
+				sum += val * nf_power[i];
+				n += val;
+			}
+		}
+
+		nf = n ? sum / n : 0;
+		if (!phy->noise)
+			phy->noise = nf << 4;
+		else if (nf)
+			phy->noise += nf - (phy->noise >> 4);
+
+		state = phy->mt76->chan_state;
+		state->noise = -(phy->noise >> 4);
+	}
+
+	wake_up(&dev->mt76.mcu.wait);
+}
+
+static void
 mt7999_mcu_uni_rx_unsolicited_event(struct mt7999_dev *dev, struct sk_buff *skb)
 {
 	struct mt7999_mcu_rxd *rxd = (struct mt7999_mcu_rxd *)skb->data;
@@ -1635,6 +1687,9 @@ mt7999_mcu_uni_rx_unsolicited_event(struct mt7999_dev *dev, struct sk_buff *skb)
 #endif
 	case MCU_UNI_EVENT_THERMAL:
 		mt7999_mcu_rx_thermal_info_query(dev, skb);
+		break;
+	case MCU_UNI_EVENT_NOISE_FLOOR:
+		mt7999_mcu_rx_nf_event(dev, skb);
 		break;
 #ifdef CONFIG_NL80211_TESTMODE
 	case MCU_UNI_EVENT_TESTMODE_CTRL:
@@ -9011,6 +9066,57 @@ int mt7999_mcu_flush_ple(struct mt7999_dev *dev, u16 threshold,
 	*/
 	return 0;
 }
+
+int mt7999_mcu_set_nf_ctrl(struct mt7999_dev *dev, bool enable, u8 timeout)
+{
+#define UNI_NOISE_FLOOR_CTRL	0
+#define NF_EVENT_TIMEOUT	(5 * HZ)
+	struct {
+		u8 _rsv[4];
+
+		__le16 tag;
+		__le16 len;
+
+		u8 enable;
+		u8 timeout;
+		u8 count;
+		u8 event_num;
+	} __packed req = {
+		.tag = cpu_to_le16(UNI_NOISE_FLOOR_CTRL),
+		.len = cpu_to_le16(sizeof(req) - 4),
+		.enable = enable,
+		.timeout = timeout,
+		.count = 1,
+		.event_num = 1,
+	};
+	int ret;
+
+	dev->nf_state = NF_STATE_WAIT;
+	ret = mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(NOISE_FLOOR),
+				&req, sizeof(req), false);
+	if (ret)
+		goto out;
+
+	ret = wait_event_timeout(dev->mt76.mcu.wait,
+				 (dev->nf_state == NF_STATE_RECEIVED ||
+				  test_bit(MT76_MCU_RESET, &dev->mphy.state)),
+				 msecs_to_jiffies(timeout) + NF_EVENT_TIMEOUT);
+	if (!ret) {
+		ret = -ETIMEDOUT;
+		goto out;
+	}
+
+out:
+	dev->nf_state = NF_STATE_IDLE;
+	if (ret < 0) {
+		dev_err(dev->mt76.dev,
+			"Failed to update noise floor (%pe)\n",
+			ERR_PTR(ret));
+		return ret;
+	}
+
+	return 0;
+};
 
 #ifdef CONFIG_MTK_VENDOR
 void mt7999_set_wireless_vif(void *data, u8 *mac, struct ieee80211_vif *vif)

@@ -1009,6 +1009,13 @@ struct mt7999_dev {
 	} test;
 	u8 rf_mode;
 #endif
+	int nf_state;
+};
+
+enum {
+	NF_STATE_IDLE,
+	NF_STATE_WAIT,
+	NF_STATE_RECEIVED,
 };
 
 enum rdd_idx {
@@ -1470,7 +1477,6 @@ mt7999_vow_should_enable(struct mt7999_dev *dev)
 void mt7999_set_pcie_l1ss(struct mt7999_dev *dev, bool en);
 void mt7999_mac_init(struct mt7999_dev *dev);
 void mt7999_mac_reset_counters(struct mt7999_phy *phy);
-void mt7999_mac_enable_nf(struct mt7999_dev *dev, u8 band);
 void mt7999_mac_write_txwi(struct mt7999_dev *dev, __le32 *txwi,
 			   struct sk_buff *skb, struct mt76_wcid *wcid,
 			   struct ieee80211_key_conf *key, int pid,
@@ -1644,6 +1650,7 @@ void mt7999_mcu_enable_1rpd(struct mt7999_dev *dev, bool enable);
 int mt7999_mcu_set_pst(struct mt7999_dev *dev, u32 band, u32 cmd, u32 val);
 int mt7999_mcu_flush_ple(struct mt7999_dev *dev, u16 threshold,
 			 u8 *sta_bitmap, u16 sta_cnt);
+int mt7999_mcu_set_nf_ctrl(struct mt7999_dev *dev, bool enable, u8 timeout);
 void mt7999_irq_fwdl_enable(struct mt7999_dev *dev, u32 mask);
 void mt7999_irq_fwdl_disable(struct mt7999_dev *dev, u32 mask);
 

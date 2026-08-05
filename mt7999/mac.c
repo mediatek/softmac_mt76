@@ -2240,52 +2240,12 @@ int mt7999_mac_set_coverage_class(struct mt7999_phy *phy)
 	return 0;
 }
 
-void mt7999_mac_enable_nf(struct mt7999_dev *dev, u8 band)
-{
-	mt76_set(dev, MT_WF_PHYRX_CSD_BAND_RXTD12(band),
-		 MT_WF_PHYRX_CSD_BAND_RXTD12_IRPI_SW_CLR_ONLY |
-		 MT_WF_PHYRX_CSD_BAND_RXTD12_IRPI_SW_CLR);
-
-	mt76_set(dev, MT_WF_PHYRX_BAND_RX_CTRL1(band),
-		 FIELD_PREP(MT_WF_PHYRX_BAND_RX_CTRL1_IPI_EN, 0x5));
-}
-
-static u8
-mt7999_phy_get_nf(struct mt7999_phy *phy, u8 band_idx)
-{
-	static const u8 nf_power[] = { 92, 89, 86, 83, 80, 75, 70, 65, 60, 55, 52 };
-	struct mt7999_dev *dev = phy->dev;
-	u32 val, sum = 0, n = 0;
-	int ant, i;
-
-	for (ant = 0; ant < hweight8(phy->mt76->antenna_mask); ant++) {
-		u32 reg = MT_WF_PHYRX_CSD_IRPI(band_idx, ant);
-
-		for (i = 0; i < ARRAY_SIZE(nf_power); i++, reg += 4) {
-			val = mt76_rr(dev, reg);
-			sum += val * nf_power[i];
-			n += val;
-		}
-	}
-
-	return n ? sum / n : 0;
-}
-
 void mt7999_update_channel(struct mt76_phy *mphy)
 {
 	struct mt7999_phy *phy = mphy->priv;
-	struct mt76_channel_state *state = mphy->chan_state;
-	int nf;
 
 	mt7999_mcu_get_chan_mib_info(phy, false);
-
-	nf = mt7999_phy_get_nf(phy, mphy->band_idx);
-	if (!phy->noise)
-		phy->noise = nf << 4;
-	else if (nf)
-		phy->noise += nf - (phy->noise >> 4);
-
-	state->noise = -(phy->noise >> 4);
+	mt7999_mcu_set_nf_ctrl(phy->dev, true, 0);
 }
 
 static bool
