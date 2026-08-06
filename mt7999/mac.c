@@ -235,6 +235,10 @@ mt7999_mac_fill_rx_rate(struct mt7999_dev *dev,
 	dcm = FIELD_GET(MT_PRXV5_DCM, v5);
 	bw = FIELD_GET(MT_PRXV5_FRAME_MODE, v5);
 
+	/* the hardware reports NSTS; report the data NSS for STBC frames */
+	if (stbc && nss > 1)
+		nss >>= 1;
+
 	switch (*mode) {
 	case MT_PHY_TYPE_CCK:
 		cck = true;
