@@ -193,7 +193,7 @@ mt76_dma_queue_magic_cnt_init(struct mt76_dev *dev, struct mt76_queue *q)
 static int
 mt76_dma_read_dma_idx(struct mt76_queue *q, int fallback)
 {
-	u32 idx = Q_READ(q, dma_idx);
+	u32 idx = Q_READ(q, dma_idx, MT_QUEUE_DMA_IDX);
 
 	return idx < q->ndesc ? idx : fallback;
 }
@@ -203,16 +203,16 @@ mt76_dma_sync_idx(struct mt76_dev *dev, struct mt76_queue *q)
 {
 	if ((q->flags & MT_QFLAG_WED_RRO_EN) &&
 	    (!is_mt7992(dev) || !mt76_npu_device_active(dev)))
-		Q_WRITE(q, ring_size, MT_DMA_RRO_EN | q->ndesc);
+		Q_WRITE(q, ring_size, MT_DMA_RRO_EN | q->ndesc, MT_QUEUE_RING_SIZE);
 	else
-		Q_WRITE(q, ring_size, q->ndesc);
+		Q_WRITE(q, ring_size, q->ndesc, MT_QUEUE_RING_SIZE);
 
 	if (mt76_queue_is_npu_tx(q)) {
 		writel(q->ndesc, &q->regs->ring_size);
 		writel(q->desc_dma, &q->regs->desc_base);
 	}
 
-	Q_WRITE(q, desc_base, q->desc_dma);
+	Q_WRITE(q, desc_base, q->desc_dma, MT_QUEUE_DESC_BASE);
 
 	q->head = mt76_dma_read_dma_idx(q, 0);
 	q->tail = q->head;
@@ -238,8 +238,8 @@ void mt76_dma_queue_reset(struct mt76_dev *dev, struct mt76_queue *q,
 		if (mt76_queue_is_emi(q))
 			*q->emi_cpu_idx = 0;
 		else
-			Q_WRITE(q, cpu_idx, 0);
-		Q_WRITE(q, dma_idx, 0);
+			Q_WRITE(q, cpu_idx, 0, MT_QUEUE_CPU_IDX);
+		Q_WRITE(q, dma_idx, 0, GENMASK(31, 0));
 	}
 	mt76_dma_sync_idx(dev, q);
 }
@@ -416,7 +416,7 @@ mt76_dma_kick_queue(struct mt76_dev *dev, struct mt76_queue *q)
 	if (mt76_queue_is_emi(q))
 		*q->emi_cpu_idx = cpu_to_le16(q->head);
 	else
-		Q_WRITE(q, cpu_idx, q->head);
+		Q_WRITE(q, cpu_idx, q->head, MT_QUEUE_CPU_IDX);
 }
 
 static void

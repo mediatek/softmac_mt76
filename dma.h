@@ -103,16 +103,17 @@ mt76_dma_handle_write(struct mt76_queue *q, u32 offset, u32 val)
 	return false;
 }
 
-#define Q_READ(_q, _field) ({						\
+#define Q_READ(_q, _field, _mask) ({					\
 	u32 _offset = offsetof(struct mt76_queue_regs, _field);		\
 	u32 _val;							\
 	if (!mt76_dma_handle_read(_q, _offset, &_val))			\
 		_val = readl(&(_q)->regs->_field);			\
-	_val;								\
+	_mask ? FIELD_GET(_mask, _val) : _val;				\
 })
 
-#define Q_WRITE(_q, _field, _val)	do {				\
+#define Q_WRITE(_q, _field, _v, _mask)	do {				\
 	u32 _offset = offsetof(struct mt76_queue_regs, _field);		\
+	u32 _val = (Q_READ(_q, _field, 0) & ~_mask) | FIELD_PREP(_mask, _v);	\
 	if (!mt76_dma_handle_write(_q, _offset, _val))			\
 		writel(_val, &(_q)->regs->_field);			\
 } while (0)
