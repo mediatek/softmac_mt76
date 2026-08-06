@@ -111,6 +111,12 @@ mt7999_eeprom_check_or_use_default(struct mt7999_dev *dev)
 		goto out;
 	}
 
+	if (fw->size < MT7999_EEPROM_SIZE) {
+		dev_err(dev->mt76.dev, "Invalid default bin size\n");
+		ret = -EINVAL;
+		goto out;
+	}
+
 	if (dev->eeprom_mode == EEPROM_MODE_FLASH ||
 	    dev->eeprom_mode == EEPROM_MODE_BIN) {
 		u8 eep_ver, cur_eep_ver;
