@@ -824,7 +824,7 @@ mt7999_mac_write_txwi_80211(struct mt7999_dev *dev, __le32 *txwi,
 						  MT_TX_UNLIMIT_RETRY));
 	}
 
-	if (multicast && ieee80211_vif_is_mld(vif)) {
+	if (multicast && vif && ieee80211_vif_is_mld(vif)) {
 		val = MT_TXD3_SN_VALID |
 		      FIELD_PREP(MT_TXD3_SEQ, IEEE80211_SEQ_TO_SN(seqno));
 		txwi[3] |= cpu_to_le32(val);
@@ -844,13 +844,13 @@ mt7999_mac_write_txwi_80211(struct mt7999_dev *dev, __le32 *txwi,
 		txwi[6] &= ~cpu_to_le32(MT_TXD6_HW_AMSDU);
 	}
 
-	if (ieee80211_vif_is_mld(vif) &&
+	if (vif && ieee80211_vif_is_mld(vif) &&
 	    (multicast || unlikely(skb->protocol == cpu_to_be16(ETH_P_PAE)) ||
 	     info->flags & IEEE80211_TX_CTL_INJECTED))
 		txwi[3] |= cpu_to_le32(MT_TXD3_FL);
 
 	if (ieee80211_is_nullfunc(fc) && ieee80211_has_a4(fc) &&
-	    ieee80211_vif_is_mld(vif)) {
+	    vif && ieee80211_vif_is_mld(vif)) {
 		txwi[3] |= cpu_to_le32(MT_TXD3_FL);
 		txwi[6] |= cpu_to_le32(MT_TXD6_DIS_MAT);
 	}
