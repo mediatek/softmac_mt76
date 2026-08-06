@@ -1551,7 +1551,8 @@ void mt7999_mac_reset_counters(struct mt7999_phy *phy);
 void mt7999_mac_write_txwi(struct mt7999_dev *dev, __le32 *txwi,
 			   struct sk_buff *skb, struct mt76_wcid *wcid,
 			   struct ieee80211_key_conf *key, int pid,
-			   enum mt76_txq_id qid, u32 changed);
+			   enum mt76_txq_id qid, u32 changed,
+			   unsigned int link_id);
 void mt7999_mac_update_beacons(struct mt7999_phy *phy);
 int mt7999_mac_set_coverage_class(struct mt7999_phy *phy);
 void mt7999_mac_work(struct work_struct *work);

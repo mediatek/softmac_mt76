@@ -893,7 +893,8 @@ static struct mt76_wcid *mt7999_get_txd_wcid(struct mt76_wcid *wcid, u8 tid)
 void mt7999_mac_write_txwi(struct mt7999_dev *dev, __le32 *txwi,
 			   struct sk_buff *skb, struct mt76_wcid *wcid,
 			   struct ieee80211_key_conf *key, int pid,
-			   enum mt76_txq_id qid, u32 changed)
+			   enum mt76_txq_id qid, u32 changed,
+			   unsigned int link_id)
 {
 	struct ieee80211_hdr *hdr = (struct ieee80211_hdr *)skb->data;
 	struct ieee80211_tx_info *info = IEEE80211_SKB_CB(skb);
@@ -904,7 +905,6 @@ void mt7999_mac_write_txwi(struct mt7999_dev *dev, __le32 *txwi,
 	struct mt76_vif_link *mlink = NULL;
 	struct mt76_wcid *wcid_txd;
 	struct mt7999_vif *mvif;
-	unsigned int link_id;
 	u32 val;
 	bool inband_disc = !!(changed & (BSS_CHANGED_UNSOL_BCAST_PROBE_RESP |
 					 BSS_CHANGED_FILS_DISCOVERY));
@@ -912,17 +912,11 @@ void mt7999_mac_write_txwi(struct mt7999_dev *dev, __le32 *txwi,
 				    BSS_CHANGED_BEACON_ENABLED)) && (!inband_disc);
 	u8 tid = skb->priority & IEEE80211_QOS_CTL_TID_MASK;
 
-	if (wcid != &dev->mt76.global_wcid)
-		link_id = wcid->link_id;
-	else
-		link_id = u32_get_bits(info->control.flags,
-				       IEEE80211_TX_CTRL_MLO_LINK);
-
 	mvif = vif ? (struct mt7999_vif *)vif->drv_priv : NULL;
 	if (mvif) {
 		if (wcid->offchannel)
 			mlink = rcu_dereference(mvif->mt76.offchannel_link);
-		if (!mlink)
+		if (!mlink && link_id != IEEE80211_LINK_UNSPECIFIED)
 			mlink = rcu_dereference(mvif->mt76.link[link_id]);
 	}
 
@@ -1172,7 +1166,7 @@ int mt7999_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
 	/* Transmit non qos data by 802.11 header and need to fill txd by host*/
 	if (!is_8023 || pid >= MT_PACKET_ID_FIRST)
 		mt7999_mac_write_txwi(dev, txwi_ptr, tx_info->skb, wcid, key,
-				      pid, qid, 0);
+				      pid, qid, 0, link_id);
 
 	txp = (struct mt76_connac_txp_common *)(txwi + MT_TXD_SIZE);
 	for (i = 0; i < nbuf; i++) {
