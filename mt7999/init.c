@@ -2053,6 +2053,8 @@ void mt7999_unregister_device(struct mt7999_dev *dev)
 {
 	cancel_work_sync(&dev->dump_work);
 	cancel_work_sync(&dev->wed_rro.work);
+	cancel_work_sync(&dev->reset_work);
+	cancel_work_sync(&dev->rc_work);
 	cancel_work_sync(&dev->twt.event_work);
 	mt7999_twt_event_list_free(dev);
 	mt7999_unregister_phy(mt7999_phy3(dev));
