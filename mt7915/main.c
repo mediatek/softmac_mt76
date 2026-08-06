@@ -1530,6 +1530,7 @@ static void mt7915_sta_set_decap_offload(struct ieee80211_hw *hw,
 	mt76_connac_mcu_wtbl_update_hdr_trans(&dev->mt76, vif, sta);
 }
 
+#if 0
 static void mt7915_sta_set_airtime_weight(struct ieee80211_hw *hw,
 					  struct ieee80211_vif *vif,
 					  struct ieee80211_sta *sta, u16 weight)
@@ -1542,6 +1543,7 @@ static void mt7915_sta_set_airtime_weight(struct ieee80211_hw *hw,
 
 	mt7915_sta_vow_set_airtime_weight(dev, msta, weight);
 }
+#endif
 
 static int mt7915_sta_set_txpwr(struct ieee80211_hw *hw,
 				struct ieee80211_vif *vif,
@@ -2106,7 +2108,7 @@ const struct ieee80211_ops mt7915_ops = {
 	.sta_set_txpwr = mt7915_sta_set_txpwr,
 	.sta_set_4addr = mt7915_sta_set_4addr,
 	.sta_set_decap_offload = mt7915_sta_set_decap_offload,
-	.sta_set_airtime_weight = mt7915_sta_set_airtime_weight,
+	// .sta_set_airtime_weight = mt7915_sta_set_airtime_weight,
 	.add_twt_setup = mt7915_mac_add_twt_setup,
 	.twt_teardown_request = mt7915_twt_teardown_request,
 	.set_frag_threshold = mt7915_set_frag_threshold,

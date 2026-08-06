@@ -2514,6 +2514,7 @@ mt7996_set_bitrate_mask(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	return 0;
 }
 
+#if 0
 static void mt7996_sta_set_airtime_weight(struct ieee80211_hw *hw,
 					  struct ieee80211_vif *vif,
 					  struct ieee80211_sta *sta, u16 weight)
@@ -2544,6 +2545,7 @@ static void mt7996_sta_set_airtime_weight(struct ieee80211_hw *hw,
 
 	mutex_unlock(&dev->mt76.mutex);
 }
+#endif
 
 static void mt7996_sta_set_4addr(struct ieee80211_hw *hw,
 				 struct ieee80211_vif *vif,
@@ -3596,7 +3598,7 @@ const struct ieee80211_ops mt7996_ops = {
 	.link_sta_statistics = mt7996_link_sta_statistics,
 	.sta_set_4addr = mt7996_sta_set_4addr,
 	.sta_set_decap_offload = mt7996_sta_set_decap_offload,
-	.sta_set_airtime_weight = mt7996_sta_set_airtime_weight,
+	// .sta_set_airtime_weight = mt7996_sta_set_airtime_weight,
 	.add_twt_setup = mt7996_mac_add_twt_setup,
 	.twt_teardown_request = mt7996_twt_teardown_request,
 	.twt_information = mt7996_twt_information,
