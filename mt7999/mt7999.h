@@ -865,6 +865,7 @@ struct mt7999_dev {
 	struct mt7999_phy *radio_phy[MT7999_MAX_RADIOS];
 	struct wiphy_radio radios[MT7999_MAX_RADIOS];
 	struct wiphy_radio_freq_range radio_freqs[MT7999_MAX_RADIOS];
+	struct mac_address radio_addrs[MT7999_MAX_RADIOS];
 
 	int irq;
 	int wed_irq;

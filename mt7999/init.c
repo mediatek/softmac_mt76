@@ -511,6 +511,8 @@ mt7999_init_wiphy_band(struct ieee80211_hw *hw, struct mt7999_phy *phy)
 	radio->iface_combinations = &if_comb;
 	radio->n_iface_combinations = 1;
 	radio->antenna_mask = phy->mt76->chainmask << dev->mt76.chainshift[phy->mt76->band_idx];
+	memcpy(dev->radio_addrs[n_radios].addr, phy->mt76->macaddr, ETH_ALEN);
+	hw->wiphy->n_addresses++;
 	hw->wiphy->n_radio++;
 
 	wiphy->available_antennas_rx |= radio->antenna_mask;
@@ -549,6 +551,7 @@ mt7999_init_wiphy(struct ieee80211_hw *hw, struct mtk_wed_device *wed)
 	wiphy->iface_combinations = &if_comb_global;
 	wiphy->n_iface_combinations = 1;
 	wiphy->radio = dev->radios;
+	wiphy->addresses = dev->radio_addrs;
 
 	wiphy->reg_notifier = mt7999_regd_notifier;
 	wiphy->flags |= WIPHY_FLAG_HAS_CHANNEL_SWITCH |
