@@ -285,7 +285,15 @@ mt7999_mac_fill_rx_rate(struct mt7999_dev *dev,
 		if (gi <= NL80211_RATE_INFO_EHT_GI_3_2)
 			status->eht.gi = gi;
 		break;
-	/*TODO: add UHR */
+	case MT_PHY_TYPE_UHR_MU:
+	case MT_PHY_TYPE_UHR_TB:
+		status->nss = nss;
+		status->encoding = RX_ENC_UHR;
+		i &= PRXV_TX_RATE_UHR;
+
+		if (gi <= NL80211_RATE_INFO_EHT_GI_3_2)
+			status->uhr.gi = gi;
+		break;
 	default:
 		return -EINVAL;
 	}

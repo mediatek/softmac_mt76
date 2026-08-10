@@ -2155,6 +2155,13 @@ mt7999_parse_rate(struct rate_info *rate, char *buf, size_t size)
 			gi = GI_1_6;
 		else if (rate->eht_gi == NL80211_RATE_INFO_EHT_GI_3_2)
 			gi = GI_3_2;
+	} else if (rate->flags & RATE_INFO_FLAGS_UHR_MCS) {
+		pos += snprintf(pos, size - (pos - buf), " UHR");
+
+		if (rate->eht_gi == NL80211_RATE_INFO_EHT_GI_1_6)
+			gi = GI_1_6;
+		else if (rate->eht_gi == NL80211_RATE_INFO_EHT_GI_3_2)
+			gi = GI_3_2;
 	} else if (rate->legacy == 0) {
 		pos += snprintf(pos, size - (pos - buf), "Proprietary Long Range");
 	} else {

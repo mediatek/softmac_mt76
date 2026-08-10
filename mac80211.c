@@ -1268,6 +1268,11 @@ mt76_rx_convert(struct mt76_dev *dev, struct sk_buff *skb,
 	if (status->encoding == RX_ENC_EHT) {
 		status->eht.ru = mstat.eht.ru;
 		status->eht.gi = mstat.eht.gi;
+	} else if (status->encoding == RX_ENC_UHR) {
+		status->uhr.ru = mstat.uhr.ru;
+		status->uhr.gi = mstat.uhr.gi;
+		status->uhr.elr = mstat.uhr.elr;
+		status->uhr.im = mstat.uhr.im;
 	} else {
 		status->he_ru = mstat.he_ru;
 		status->he_gi = mstat.he_gi;

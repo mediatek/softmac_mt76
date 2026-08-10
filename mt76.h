@@ -380,6 +380,8 @@ enum mt76_phy_type {
 	MT_PHY_TYPE_EHT_SU = 13,
 	MT_PHY_TYPE_EHT_TRIG,
 	MT_PHY_TYPE_EHT_MU,
+	MT_PHY_TYPE_UHR_MU,
+	MT_PHY_TYPE_UHR_TB,
 	__MT_PHY_TYPE_MAX,
 	MT_PHY_TYPE_UNKNOWN = 0xff
 };
@@ -844,6 +846,12 @@ struct mt76_rx_status {
 			u8 ru:4;
 			u8 gi:2;
 		} eht;
+		struct {
+			u8 ru:4;
+			u8 gi:2;
+			u8 elr:1;
+			u8 im:1;
+		} uhr;
 	};
 
 	u16 amsdu:1, first_amsdu:1, last_amsdu:1;

@@ -636,6 +636,18 @@ mt7999_mcu_update_rate(struct rate_info *rate, struct ieee80211_supported_band *
 		tmp_rate.flags |= RATE_INFO_FLAGS_EHT_MCS;
 		tmp_rate.eht_gi = gi;
 		break;
+	case MT_PHY_TYPE_UHR_MU:
+	case MT_PHY_TYPE_UHR_TB:
+		tmp_rate.mcs = mcs & CMDRPT_TX_RATE_UHR;
+		if (tmp_rate.mcs > 23 || gi > NL80211_RATE_INFO_EHT_GI_3_2) {
+			ret = -EINVAL;
+			goto out;
+		}
+
+		tmp_rate.flags |= RATE_INFO_FLAGS_UHR_MCS;
+		/* Todo: Reuse eht_gi until mac80211 adds a dedicated UHR GI field. */
+		tmp_rate.eht_gi = gi;
+		break;
 	case MT_PHY_TYPE_UNKNOWN:
 		return 0;
 	default:
