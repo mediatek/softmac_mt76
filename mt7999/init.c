@@ -1973,6 +1973,11 @@ int mt7999_register_device(struct mt7999_dev *dev)
 	INIT_WORK(&dev->dump_work, mt7999_mac_dump_work);
 	mutex_init(&dev->dump_mutex);
 
+	dev->wcid_remap = devm_kcalloc(dev->mt76.dev, MT7999_WTBL_STA,
+				       sizeof(*dev->wcid_remap), GFP_KERNEL);
+	if (!dev->wcid_remap)
+		return -ENOMEM;
+
 #define pbc_acq_lower_bound_config(_ac, _bound)			\
 	dev->pbc_lower_bound[mt76_connac_lmac_mapping(_ac)] = (_bound)
 #define pbc_acq_upper_bound_config(_ac, _bound)			\

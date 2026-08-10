@@ -1305,14 +1305,22 @@ mt7999_mac_sta_init_link(struct mt7999_dev *dev,
 	if (!phy)
 		return -EINVAL;
 
-	idx = mt76_wcid_alloc(dev->mt76.wcid_mask, MT7999_WTBL_STA);
-	if (idx < 0)
-		return -ENOSPC;
+	if (msta->peer_wcid[phy->mt76->band_idx]) {
+		idx = msta->peer_wcid[phy->mt76->band_idx];
+	} else {
+		idx = mt76_wcid_alloc(dev->mt76.wcid_mask, MT7999_WTBL_STA);
+		if (idx < 0)
+			return -ENOSPC;
+
+		msta->peer_wcid[phy->mt76->band_idx] = idx;
+	}
 
 	if (msta->deflink_id == IEEE80211_LINK_UNSPECIFIED) {
 		msta_link = &msta->deflink;
 		msta->deflink_id = link_id;
 		msta->seclink_id = msta->deflink_id;
+		msta->pri_band = phy->mt76->band_idx;
+		msta->sec_band = msta->pri_band;
 		mt7999_sta_init_txq_wcid(sta, idx);
 	} else {
 		msta_link = kzalloc(sizeof(*msta_link), GFP_KERNEL);
@@ -1320,9 +1328,11 @@ mt7999_mac_sta_init_link(struct mt7999_dev *dev,
 			return -ENOMEM;
 
 		if (msta->seclink_id == msta->deflink_id &&
-		    (sta->valid_links & ~BIT(msta->deflink_id)))
+		    (sta->valid_links & ~BIT(msta->deflink_id))) {
 			msta->seclink_id = __ffs(sta->valid_links &
 						 ~BIT(msta->deflink_id));
+			msta->sec_band = phy->mt76->band_idx;
+		}
 	}
 
 	INIT_LIST_HEAD(&msta_link->rc_list);
@@ -1334,6 +1344,7 @@ mt7999_mac_sta_init_link(struct mt7999_dev *dev,
 	msta_link->wcid.link_valid = !!sta->valid_links;
 	msta_link->wcid.def_wcid = &msta->deflink.wcid;
 	msta->setup_links |= BIT(link_id);
+	dev->wcid_remap[idx] = msta->peer_wcid[msta->pri_band];
 
 	ewma_avg_signal_init(&msta_link->avg_ack_signal);
 	ewma_signal_init(&msta_link->wcid.rssi);
@@ -1406,8 +1417,13 @@ void mt7999_mac_sta_remove_link(struct mt7999_dev *dev,
 		struct mt7999_phy *phy =
 			__mt7999_phy(dev, msta_link->wcid.phy_idx);
 
-		if (phy)
+		if (phy) {
+			u8 band = phy->mt76->band_idx;
+
 			phy->mt76->num_sta--;
+			dev->wcid_remap[msta->peer_wcid[band]] = 0;
+			msta->peer_wcid[band] = 0;
+		}
 
 		rcu_assign_pointer(msta->link[link_id], NULL);
 		rcu_assign_pointer(dev->mt76.wcid[msta_link->wcid.idx], NULL);
@@ -1516,6 +1532,55 @@ mt7999_mac_sta_change_links(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 }
 
 static int
+mt7999_mac_reserve_wcid(struct mt7999_dev *dev, struct ieee80211_vif *vif,
+			struct ieee80211_sta *sta, unsigned long links)
+{
+	struct mt7999_sta *msta = (struct mt7999_sta *)sta->drv_priv;
+	struct mt7999_phy *phy;
+
+	if (vif->type != NL80211_IFTYPE_AP || !sta->mlo)
+		return 0;
+
+	mt7999_for_each_phy(dev, phy) {
+		u8 band = phy->mt76->band_idx;
+		int idx;
+
+		if (msta->peer_wcid[band])
+			continue;
+
+		idx = mt76_wcid_alloc(dev->mt76.wcid_mask, MT7999_WTBL_STA);
+		if (idx < 0)
+			return -ENOSPC;
+
+		msta->peer_wcid[band] = idx;
+		dev->wcid_remap[idx] = msta->peer_wcid[msta->pri_band];
+		if (msta->sec_band == msta->pri_band)
+			msta->sec_band = band;
+	}
+
+	return 0;
+}
+
+static void
+mt7999_mac_release_wcid(struct mt7999_dev *dev, struct ieee80211_sta *sta)
+{
+	struct mt7999_sta *msta = (struct mt7999_sta *)sta->drv_priv;
+	struct mt7999_phy *phy;
+
+	mt7999_for_each_phy(dev, phy) {
+		u8 band = phy->mt76->band_idx;
+		u16 peer_wcid = msta->peer_wcid[band];
+
+		if (!peer_wcid)
+			continue;
+
+		msta->peer_wcid[band] = 0;
+		dev->wcid_remap[peer_wcid] = 0;
+		mt76_wcid_mask_clear(dev->mt76.wcid_mask, peer_wcid);
+	}
+}
+
+static int
 mt7999_mac_sta_add(struct mt7999_dev *dev, struct ieee80211_vif *vif,
 		   struct ieee80211_sta *sta)
 {
@@ -1591,6 +1656,10 @@ mt7999_mac_sta_event(struct mt7999_dev *dev, struct ieee80211_vif *vif,
 		switch (ev) {
 		case MT76_STA_EVENT_ASSOC:
 			if (links == sta->valid_links && sta->mlo) {
+				err = mt7999_mac_reserve_wcid(dev, vif, sta, links);
+				if (err)
+					goto unlock;
+
 				err = mt7999_mcu_set_peer_mld(dev, vif, sta, NULL, true);
 				if (err)
 					goto unlock;
@@ -1680,6 +1749,7 @@ mt7999_mac_sta_remove(struct mt7999_dev *dev, struct ieee80211_vif *vif,
 #endif
 	for (i = 0; i < ARRAY_SIZE(msta->link); i++)
 		mt7999_mac_sta_remove_link(dev, sta, i, true);
+	mt7999_mac_release_wcid(dev, sta);
 	mutex_unlock(&dev->mt76.mutex);
 }
 

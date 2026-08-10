@@ -57,9 +57,20 @@ static struct mt76_wcid *mt7999_rx_get_wcid(struct mt7999_dev *dev,
 	struct mt76_wcid *wcid;
 	int i;
 
-	wcid = mt76_wcid_ptr(dev, idx);
-	if (!wcid || wcid == &dev->mt76.global_wcid)
+	/* global_wcid */
+	if (!idx)
 		return NULL;
+
+	wcid = mt76_wcid_ptr(dev, idx);
+	if (!wcid) {
+		/* try if primary wcid exists */
+		if (idx < MT7999_WTBL_STA && dev->wcid_remap[idx] &&
+		    idx != dev->wcid_remap[idx])
+			wcid = mt76_wcid_ptr(dev, dev->wcid_remap[idx]);
+
+		if (!wcid)
+			return NULL;
+	}
 
 	if (!mt7999_band_valid(dev, band_idx))
 		return NULL;

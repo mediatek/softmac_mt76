@@ -471,6 +471,10 @@ struct mt7999_sta {
 	u16 setup_links;
 
 	struct mt7999_vif *vif;
+
+	u16 peer_wcid[__MT_MAX_BAND];
+	u8 pri_band;
+	u8 sec_band;
 };
 
 struct mt7999_vif_link {
@@ -880,6 +884,7 @@ struct mt7999_dev {
 
 	u64 mld_idx_mask;
 	u64 mld_remap_idx_mask;
+	u16 *wcid_remap;
 
 	const struct mt76_bus_ops *bus_ops;
 	struct mt7999_phy phy;
