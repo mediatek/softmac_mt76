@@ -298,10 +298,8 @@ int mt7915_dma_start(struct mt7915_dev *dev, bool reset, bool wed_reset)
 	/* enable interrupts for TX/RX rings */
 	irq_mask = MT_INT_RX_DONE_MCU |
 		   MT_INT_TX_DONE_MCU |
-		   MT_INT_MCU_CMD;
-
-	if (!dev->phy.mt76->band_idx)
-		irq_mask |= MT_INT_BAND0_RX_DONE;
+		   MT_INT_MCU_CMD |
+		   MT_INT_BAND0_RX_DONE;
 
 	if (dev->dbdc_support || dev->phy.mt76->band_idx)
 		irq_mask |= MT_INT_BAND1_RX_DONE;
@@ -462,7 +460,7 @@ int mt7915_dma_init(struct mt7915_dev *dev, struct mt7915_phy *phy2)
 
 	/* init tx queue */
 	ret = mt7915_init_tx_queues(&dev->phy,
-				    MT_TXQ_ID(dev->phy.mt76->band_idx),
+				    MT_TXQ_ID(0),
 				    MT7915_TX_RING_SIZE,
 				    MT_TXQ_RING_BASE(0));
 	if (ret)
@@ -470,7 +468,7 @@ int mt7915_dma_init(struct mt7915_dev *dev, struct mt7915_phy *phy2)
 
 	if (phy2) {
 		ret = mt7915_init_tx_queues(phy2,
-					    MT_TXQ_ID(phy2->mt76->band_idx),
+					    MT_TXQ_ID(1),
 					    MT7915_TX_RING_SIZE,
 					    MT_TXQ_RING_BASE(1));
 		if (ret)
@@ -527,23 +525,21 @@ int mt7915_dma_init(struct mt7915_dev *dev, struct mt7915_phy *phy2)
 		return ret;
 
 	/* rx data queue for band0 */
-	if (!dev->phy.mt76->band_idx) {
-		if (mtk_wed_device_active(&mdev->mmio.wed) &&
-		    mtk_wed_get_rx_capa(&mdev->mmio.wed)) {
-			mdev->q_rx[MT_RXQ_MAIN].flags =
-				MT_WED_Q_RX(MT7915_RXQ_BAND0);
-			dev->mt76.rx_token_size += MT7915_RX_RING_SIZE;
-			mdev->q_rx[MT_RXQ_MAIN].wed = &mdev->mmio.wed;
-		}
-
-		ret = mt76_queue_alloc(dev, &dev->mt76.q_rx[MT_RXQ_MAIN],
-				       MT_RXQ_ID(MT_RXQ_MAIN),
-				       MT7915_RX_RING_SIZE,
-				       MT_RX_BUF_SIZE,
-				       MT_RXQ_RING_BASE(MT_RXQ_MAIN));
-		if (ret)
-			return ret;
+	if (mtk_wed_device_active(&mdev->mmio.wed) &&
+	    mtk_wed_get_rx_capa(&mdev->mmio.wed)) {
+		mdev->q_rx[MT_RXQ_MAIN].flags =
+			MT_WED_Q_RX(MT7915_RXQ_BAND0);
+		dev->mt76.rx_token_size += MT7915_RX_RING_SIZE;
+		mdev->q_rx[MT_RXQ_MAIN].wed = &mdev->mmio.wed;
 	}
+
+	ret = mt76_queue_alloc(dev, &dev->mt76.q_rx[MT_RXQ_MAIN],
+				MT_RXQ_ID(MT_RXQ_MAIN),
+				MT7915_RX_RING_SIZE,
+				MT_RX_BUF_SIZE,
+				MT_RXQ_RING_BASE(MT_RXQ_MAIN));
+	if (ret)
+		return ret;
 
 	/* tx free notify event from WA for band0 */
 	if (!is_mt7915(mdev)) {
