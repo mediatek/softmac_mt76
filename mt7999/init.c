@@ -661,10 +661,20 @@ void mt7999_mac_init(struct mt7999_dev *dev)
 		mt76_rmw_field(dev, i, MT_LED_GPIO_SEL_MASK, 4);
 	}
 
+	switch (dev->option_type) {
+	case 2:
+		/* 7988d */
+		rx_path_type = 12;
+		break;
+	default:
+		rx_path_type = 7;
+		break;
+	}
+
 	if (mt76_npu_device_active(&dev->mt76))
 		rx_path_type = dev->hif2 ? 11 : 10;
 	else
-		rx_path_type = dev->hif2 ? 7 : 0;
+		rx_path_type = dev->hif2 ? rx_path_type : 0;
 
 	rro_bypass = mt7999_has_hwrro(dev) ?
 		     MT7999_RRO_BMC_BYPASS_UC_BASED_ON_WTBL : MT7999_RRO_ALL_BYPASS;
@@ -780,14 +790,30 @@ static int mt7999_register_phy(struct mt7999_dev *dev, enum mt76_band_id band)
 	u32 mac_ofs, hif1_ofs = 0;
 	int ret;
 	struct mtk_wed_device *wed = &dev->mt76.mmio.wed;
+	bool hif2_chk = false;
 
 	if (!mt7999_band_valid(dev, band))
 		return 0;
 
-	if (dev->hif2 && band == MT_BAND2) {
+	if (dev->hif2) {
+		switch (dev->option_type) {
+		case 2:
+			/* 7988d */
+			if (band == MT_BAND1)
+				hif2_chk = true;
+			break;
+		default:
+			if (band == MT_BAND2 && !mt76_npu_device_active(&dev->mt76))
+				hif2_chk = true;
+			break;
+		}
+	}
+
+	if (hif2_chk) {
 		hif1_ofs = MT_WFDMA0_PCIE1(0) - MT_WFDMA0(0);
 		wed = &dev->mt76.mmio.wed_hif2;
 	}
+
 	mphy = mt76_alloc_radio_phy(&dev->mt76, sizeof(*phy), band);
 	if (!mphy)
 		return -ENOMEM;

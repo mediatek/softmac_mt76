@@ -72,8 +72,13 @@ static void mt7999_dma_config(struct mt7999_dev *dev)
 	/* data tx queue */
 	TXQ_CONFIG(0, MT_INT_TX_DONE_BAND0, MT7999_TXQ_BAND0);
 	if (dev->hif2) {
-		TXQ_CONFIG(1, MT_INT_TX_DONE_BAND1, MT7999_TXQ_BAND1);
-		TXQ_CONFIG(2, MT_INT_TX_DONE_BAND2, MT7999_TXQ_BAND2);
+		if (dev->option_type == 2) {
+			TXQ_CONFIG(1, MT_INT_TX_DONE_BAND2, MT7999_TXQ_BAND2);
+			TXQ_CONFIG(2, MT_INT_TX_DONE_BAND1, MT7999_TXQ_BAND1);
+		} else {
+			TXQ_CONFIG(1, MT_INT_TX_DONE_BAND1, MT7999_TXQ_BAND1);
+			TXQ_CONFIG(2, MT_INT_TX_DONE_BAND2, MT7999_TXQ_BAND2);
+		}
 	} else {
 		TXQ_CONFIG(2, MT_INT_TX_DONE_BAND1, MT7999_TXQ_BAND1);
 	}
@@ -248,11 +253,24 @@ static void mt7999_dma_enable(struct mt7999_dev *dev, bool reset)
 
 	if (dev->hif2) {
 		mt76_set(dev, MT_WFDMA_HOST_CONFIG,
-			 MT_WFDMA_HOST_CONFIG_PDMA_BAND |
-			 MT_WFDMA_HOST_CONFIG_BAND2_PCIE1);
+			 MT_WFDMA_HOST_CONFIG_PDMA_BAND);
+
 		mt76_clear(dev, MT_WFDMA_HOST_CONFIG,
 			   MT_WFDMA_HOST_CONFIG_BAND0_PCIE1 |
-			   MT_WFDMA_HOST_CONFIG_BAND1_PCIE1);
+			   MT_WFDMA_HOST_CONFIG_BAND1_PCIE1 |
+			   MT_WFDMA_HOST_CONFIG_BAND2_PCIE1);
+
+		switch (dev->option_type) {
+		case 2:
+			/* 7988d */
+			mt76_set(dev, MT_WFDMA_HOST_CONFIG,
+				 MT_WFDMA_HOST_CONFIG_BAND1_PCIE1);
+			break;
+		default:
+			mt76_set(dev, MT_WFDMA_HOST_CONFIG,
+				 MT_WFDMA_HOST_CONFIG_BAND2_PCIE1);
+			break;
+		}
 
 		mt76_clear(dev, MT_WFDMA_TRINFO_P1_DMY_CTRL,
 			   MT_WFDMA_TRINFO_DMY_AXI_SEL);
