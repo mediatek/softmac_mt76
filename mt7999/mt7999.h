@@ -757,6 +757,8 @@ struct mt7999_phy {
 	bool sku_limit_en;
 	bool sku_path_en;
 
+	bool use_ap_sniffer;
+
 	u8 pp_mode;
 	u16 punct_bitmap;
 
@@ -1449,6 +1451,7 @@ int mt7999_mcu_get_per_sta_info(struct mt76_dev *dev, u16 tag,
 int mt7999_mcu_get_all_sta_info(struct mt76_dev *dev, u16 tag);
 int mt7999_mcu_get_bss_acq_pkt_cnt(struct mt7999_dev *dev);
 int mt7999_mcu_set_sniffer_mode(struct mt7999_phy *phy, bool enabled);
+int mt7999_mcu_set_ap_sniffer_mode(struct mt7999_phy *phy, bool enable);
 int mt7999_mcu_mld_reconf_stop_link(struct mt7999_dev *dev,
 				    struct ieee80211_vif *vif,
 				    u16 removed_links);

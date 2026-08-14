@@ -1167,6 +1167,9 @@ int mt7999_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
 	wcid->used_token++;
 	spin_unlock_bh(&wcid->token_lock);
 
+	if (__mt7999_phy(dev, wcid->phy_idx)->use_ap_sniffer)
+		info->flags |= IEEE80211_TX_CTL_REQ_TX_STATUS;
+
 	pid = mt76_tx_status_skb_add(mdev, wcid, tx_info->skb);
 	memset(txwi_ptr, 0, MT_TXD_SIZE);
 	/* Transmit non qos data by 802.11 header and need to fill txd by host*/

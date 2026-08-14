@@ -616,16 +616,23 @@ void mt7999_vif_link_remove(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 	}
 }
 
-static void mt7999_set_monitor(struct mt7999_phy *phy, bool enabled)
+static void mt7999_set_monitor(struct mt7999_phy *phy, struct ieee80211_vif *vif,
+			       bool enabled, bool ap_sniffer)
 {
-	struct mt7999_dev *dev;
-
-	if (!phy)
+	if (vif->type != NL80211_IFTYPE_MONITOR || !phy ||
+	    phy->dev->testmode_enable)
 		return;
 
-	dev = phy->dev;
+	if (enabled)
+		phy->mt76->monitor_vif = vif;
 
-	mt7999_mcu_set_hdr_trans(dev, !enabled);
+	if (ap_sniffer || phy->use_ap_sniffer) {
+		phy->use_ap_sniffer = enabled;
+		mt7999_mcu_set_ap_sniffer_mode(phy, enabled);
+		return;
+	}
+
+	mt7999_mcu_set_hdr_trans(phy->dev, !enabled);
 	mt7999_mcu_set_sniffer_mode(phy, enabled);
 }
 
@@ -708,17 +715,23 @@ static int mt7999_add_interface(struct ieee80211_hw *hw,
 		if (!mvif->deflink.phy)
 			mvif->deflink.phy = phy;
 
-		if (test_bit(MT76_STATE_RUNNING, &phy->mt76->state))
+		if (test_bit(MT76_STATE_RUNNING, &phy->mt76->state)) {
+			if (phy->mt76->monitor_vif) {
+				mt76_bss_dbg(vif, "An interface is not allowed to "
+					     "be added after monitor interface");
+				err = -EINVAL;
+				goto out;
+			}
+
+			mt7999_set_monitor(phy, vif, true, true);
 			continue;
+		}
 
 		err = mt7999_run(phy);
 		if (err)
 			goto out;
 
-		if (vif->type == NL80211_IFTYPE_MONITOR) {
-			mt7999_set_monitor(phy, true);
-			phy->mt76->monitor_vif = vif;
-		}
+		mt7999_set_monitor(phy, vif, true, false);
 	}
 
 	mt76_vif_init(vif, &mvif->mt76);
@@ -773,9 +786,8 @@ static void mt7999_remove_interface(struct ieee80211_hw *hw,
 
 		if (!phy)
 			continue;
-		if (vif->type == NL80211_IFTYPE_MONITOR &&
-		    !(rdata.monitor_mask & BIT(i)))
-			mt7999_set_monitor(phy, false);
+		if (!(rdata.monitor_mask & BIT(i)))
+			mt7999_set_monitor(phy, vif, false, false);
 		if (!(rdata.active_mask & BIT(i)))
 			mt7999_stop_phy(phy);
 
@@ -3362,6 +3374,15 @@ mt7999_set_qos_map(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 }
 
 static void
+mt7999_update_vif_offload(struct ieee80211_hw *hw, struct ieee80211_vif *vif)
+{
+	if (vif->offload_flags & IEEE80211_OFFLOAD_ENCAP_ENABLED)
+		vif->offload_flags |= IEEE80211_OFFLOAD_ENCAP_4ADDR;
+	else
+		vif->offload_flags &= ~IEEE80211_OFFLOAD_ENCAP_4ADDR;
+}
+
+static void
 mt7999_sta_channel_switch(struct ieee80211_hw *hw,
 			  struct ieee80211_vif *vif,
 			  struct ieee80211_channel_switch *ch_switch)
@@ -3484,6 +3505,7 @@ const struct ieee80211_ops mt7999_ops = {
 	CFG80211_TESTMODE_CMD(mt76_testmode_cmd)
 	CFG80211_TESTMODE_DUMP(mt76_testmode_dump)
 	.set_qos_map = mt7999_set_qos_map,
+	.update_vif_offload = mt7999_update_vif_offload,
 	.set_attlm = mt7999_set_attlm,
 	.set_sta_ttlm = mt7999_set_sta_ttlm,
 	.can_neg_ttlm = mt7999_can_neg_ttlm,

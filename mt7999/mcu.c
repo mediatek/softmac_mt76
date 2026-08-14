@@ -8156,6 +8156,31 @@ int mt7999_mcu_set_sniffer_mode(struct mt7999_phy *phy, bool enabled)
 				 sizeof(req), true);
 }
 
+int mt7999_mcu_set_ap_sniffer_mode(struct mt7999_phy *phy, bool enable)
+{
+	struct {
+		u8 band_idx;
+		u8 _rsv[3];
+
+		__le16 tag;
+		__le16 len;
+		u8 no_rx_drop;	/* 1: receive all frames */
+		u8 rxv_enable;	/* 1: RXD Group 5 (RXV) */
+		u8 de_amsdu_en;	/* 0: disable de-AMSDU */
+		u8 _rsv2[5];
+	} __packed req = {
+		.band_idx = phy->mt76->band_idx,
+		.tag = cpu_to_le16(UNI_BAND_CONFIG_AP_SNIFFER_MODE),
+		.len = cpu_to_le16(sizeof(req) - 4),
+		.no_rx_drop = enable,
+		.rxv_enable = enable,
+		.de_amsdu_en = !enable,
+	};
+
+	return mt76_mcu_send_msg(&phy->dev->mt76, MCU_WM_UNI_CMD(BAND_CONFIG),
+				 &req, sizeof(req), true);
+}
+
 static void
 mt7999_update_max_txpower_cur(struct mt7999_phy *phy, int tx_power)
 {
