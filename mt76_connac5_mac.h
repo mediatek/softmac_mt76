@@ -111,6 +111,7 @@ enum {
 #define MT_PRXV0_TXBF			BIT(11)
 #define MT_PRXV0_HT_AD_CODE		BIT(12)
 #define MT_PRXV0_HE_RU_ALLOC		GENMASK(30, 22)
+#define MT_PRXV1_2X_LDPC		BIT(29)
 
 enum {
 	PRXV_TX_RATE_HE = GENMASK(3, 0),
@@ -166,6 +167,10 @@ enum {
 
 /* C-RXV 13 */
 #define MT_CRXV_RU3_H			GENMASK(3, 0)
+
+/* C-RXV 40 */
+#define MT_CRXV_UEQM_EN			BIT(15)
+#define MT_CRXV_UEQM_PAT		GENMASK(17, 16)
 
 /* BW defined in FW hal_cal_flow_rom_legacy.h */
 enum {
@@ -391,6 +396,9 @@ enum tx_fixed_bw {
 						 IEEE80211_RADIOTAP_HE_##f)
 #define EHT_PREP(f, m, v)	le32_encode_bits(le32_get_bits(v, MT_CRXV_##m),\
 						 IEEE80211_RADIOTAP_EHT_##f)
+#define UHR_BITS(f)		cpu_to_le32(IEEE80211_RADIOTAP_UHR_##f)
+#define UHR_PREP(f, m, v)	le32_encode_bits(le32_get_bits(v, m),\
+						 IEEE80211_RADIOTAP_UHR_##f)
 
 enum {
 	CMDRPT_TX_RATE_HE = GENMASK(3, 0),

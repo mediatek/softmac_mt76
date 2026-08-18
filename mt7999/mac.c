@@ -676,6 +676,9 @@ mt7999_mac_fill_rx(struct mt7999_dev *dev, enum mt76_rxq_id q,
 
 	if (rxv && !(status->flag & RX_FLAG_8023)) {
 		switch (status->encoding) {
+		case RX_ENC_UHR:
+			mt76_connac5_mac_decode_uhr_radiotap(skb, rxv, mode);
+			break;
 		case RX_ENC_EHT:
 			mt76_connac5_mac_decode_eht_radiotap(skb, rxv, mode);
 			break;

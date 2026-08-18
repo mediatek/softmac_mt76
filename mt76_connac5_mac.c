@@ -322,3 +322,49 @@ void mt76_connac5_mac_decode_eht_radiotap(struct sk_buff *skb, __le32 *rxv,
 		EHT_PREP(USIG_COMMON_TXOP, TXOP_DUR, crxv[8]);
 }
 EXPORT_SYMBOL_GPL(mt76_connac5_mac_decode_eht_radiotap);
+
+void mt76_connac5_mac_decode_uhr_radiotap(struct sk_buff *skb, __le32 *rxv,
+					  u8 mode)
+{
+	struct mt76_rx_status *status = (struct mt76_rx_status *)skb->cb;
+	struct ieee80211_radiotap_uhr *uhr;
+	__le32 *crxv = &rxv[MT_RXD_GROUP3_SIZE];
+	u16 aid = le32_get_bits(crxv[8], MT_CRXV_MU_AID);
+	u8 ueqm_en = le32_get_bits(crxv[40], MT_CRXV_UEQM_EN);
+	u8 ueqm_pattern = le32_get_bits(crxv[40], MT_CRXV_UEQM_PAT);
+
+	if (WARN_ONCE(skb_mac_header(skb) != skb->data,
+		      "Should push tlv at the top of mac hdr"))
+		return;
+
+	uhr = mt76_connac5_mac_radiotap_push_tlv(skb, IEEE80211_RADIOTAP_UHR,
+						 sizeof(*uhr) + sizeof(*uhr->user));
+
+	status->flag |= RX_FLAG_RADIOTAP_TLV_AT_END;
+
+	uhr->known |= UHR_BITS(KNOWN_SPATIAL_REUSE);
+	uhr->data[0] |= UHR_PREP(DATA0_SPATIAL_REUSE, MT_CRXV_SR_MASK, crxv[9]);
+
+	uhr->user[0].known |= UHR_BITS(USER_KNOWN_STA_ID) |
+			      UHR_BITS(USER_KNOWN_MCS) |
+			      UHR_BITS(USER_KNOWN_NSS) |
+			      UHR_BITS(USER_KNOWN_UEQM) |
+			      UHR_BITS(USER_KNOWN_BF) |
+			      UHR_BITS(USER_KNOWN_CODING) |
+			      UHR_BITS(USER_KNOWN_UEQM_PATTERN) |
+			      UHR_BITS(USER_KNOWN_2X_LDPC);
+
+	uhr->user[0].info |= le32_encode_bits(aid,
+					      IEEE80211_RADIOTAP_UHR_USER_INFO_STA_ID) |
+			     le32_encode_bits(status->nss - 1,
+					      IEEE80211_RADIOTAP_UHR_USER_INFO_NSS) |
+			     le32_encode_bits(ueqm_en,
+					      IEEE80211_RADIOTAP_UHR_USER_INFO_UEQM) |
+			     le32_encode_bits(ueqm_pattern,
+					      IEEE80211_RADIOTAP_UHR_USER_INFO_UEQM_PATTERN) |
+			     UHR_PREP(USER_INFO_MCS, PRXV_TX_RATE_UHR, rxv[0]) |
+			     UHR_PREP(USER_INFO_BF, MT_PRXV0_TXBF, rxv[0]) |
+			     UHR_PREP(USER_INFO_CODING, MT_PRXV0_HT_AD_CODE, rxv[0]) |
+			     UHR_PREP(USER_INFO_2X_LDPC, MT_PRXV1_2X_LDPC, rxv[1]);
+}
+EXPORT_SYMBOL_GPL(mt76_connac5_mac_decode_uhr_radiotap);

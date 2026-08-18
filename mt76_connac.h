@@ -589,4 +589,6 @@ void mt76_connac5_mac_decode_he_radiotap(struct sk_buff *skb, __le32 *rxv,
 					 u8 mode);
 void mt76_connac5_mac_decode_eht_radiotap(struct sk_buff *skb, __le32 *rxv,
 					  u8 mode);
+void mt76_connac5_mac_decode_uhr_radiotap(struct sk_buff *skb, __le32 *rxv,
+					  u8 mode);
 #endif /* __MT76_CONNAC_H */
