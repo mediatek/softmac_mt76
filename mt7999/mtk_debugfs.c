@@ -4686,6 +4686,48 @@ mt7999_sr_pp_disable_set(void *data, u64 val)
 DEFINE_DEBUGFS_ATTRIBUTE(fops_sr_pp_disable, mt7999_sr_pp_disable_get,
 			 mt7999_sr_pp_disable_set, "%lld\n");
 
+static ssize_t mt7999_ra_option_write(struct file *file,
+				      const char __user *user_buf,
+				      size_t count,
+				      loff_t *ppos)
+{
+	struct mt7999_dev *dev = file->private_data;
+	char buf[100];
+	u8 option, val;
+	int ret;
+
+	if (count >= sizeof(buf))
+		return -EINVAL;
+
+	if (copy_from_user(buf, user_buf, count))
+		return -EFAULT;
+
+	if (count && buf[count - 1] == '\n')
+		buf[count - 1] = '\0';
+	else
+		buf[count] = '\0';
+
+	if (sscanf(buf, "%hhu %hhu", &option, &val) != 2)
+		goto err;
+
+	ret = mt7999_mcu_set_ra_option_ctrl(dev, option, val);
+	if (ret)
+		return ret;
+
+	return count;
+err:
+	dev_warn(dev->mt76.dev, "format: option val\n");
+
+	return -EINVAL;
+}
+
+static const struct file_operations fops_ra_option = {
+	.write = mt7999_ra_option_write,
+	.open = simple_open,
+	.owner = THIS_MODULE,
+	.llseek = default_llseek,
+};
+
 static int
 mt7999_pcie_l1ss_enable_get(void *data, u64 *val)
 {
@@ -5165,6 +5207,7 @@ void mt7999_mtk_init_dev_debugfs(struct mt7999_dev *dev, struct dentry *dir)
 			     &fops_mt7999_pbc_upper_bound);
 
 	debugfs_create_file("sr_pp_disable", 0600, dir, dev, &fops_sr_pp_disable);
+	debugfs_create_file("ra_option", 0200, dir, dev, &fops_ra_option);
 
 	/* Low power related */
 	debugfs_create_file("pci_l1ss", 0600, dir, dev, &fops_pcie_l1ss_enable);
