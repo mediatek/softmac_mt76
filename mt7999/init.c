@@ -1887,14 +1887,16 @@ mt7999_init_uhr_caps(struct mt7999_phy *phy, enum nl80211_band band,
 		     enum nl80211_iftype iftype)
 {
 	struct ieee80211_sta_uhr_cap *uhr_cap = &data->uhr_cap;
+	int nss = hweight8(phy->mt76->antenna_mask);
 
 	if (!phy->dev->has_uhr)
 		return;
 
 	uhr_cap->has_uhr = true;
 	uhr_cap->phy.cap = IEEE80211_UHR_PHY_CAP_ELR_RX |
-			   IEEE80211_UHR_PHY_CAP_ELR_TX;
-
+			   IEEE80211_UHR_PHY_CAP_ELR_TX |
+			   FIELD_PREP(IEEE80211_UHR_PHY_CAP_UEQM_TX_MAX_NSS, nss - 1) |
+			   FIELD_PREP(IEEE80211_UHR_PHY_CAP_UEQM_RX_MAX_NSS, nss - 1);
 	/* TODO: add default uhr mac & phy cap */
 	/* Note that mac80211 currently supports D1.2, some data structure
 	 * may need to be extended to support D1.4
