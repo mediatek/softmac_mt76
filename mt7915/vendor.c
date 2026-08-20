@@ -1360,28 +1360,6 @@ static int mt7915_vendor_3wire_ctrl(struct wiphy *wiphy,
 	return mt7915_mcu_set_cfg(phy, CFGINFO_3WIRE_EN_CFG, ext_sel);
 }
 
-static int
-mt7915_vendor_bss_color_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
-			     struct sk_buff *skb, const void *data, int data_len,
-			     unsigned long *storage)
-{
-	struct ieee80211_vif *vif = wdev_to_ieee80211_vif(wdev);
-	struct ieee80211_bss_conf *bss_conf = &vif->bss_conf;
-	int len = 0;
-
-	if (*storage == 1)
-		return -ENOENT;
-	*storage = 1;
-
-	if (nla_put_u64_64bit(skb,
-	    MTK_VENDOR_ATTR_AVAL_BSS_COLOR_BMP,
-	    ~bss_conf->used_color_bitmap, NL80211_ATTR_PAD))
-		return -ENOMEM;
-	len += 1;
-
-	return len;
-}
-
 static int mt7915_vendor_txpower_ctrl(struct wiphy *wiphy,
 				  struct wireless_dev *wdev,
 				  const void *data,
@@ -1578,7 +1556,7 @@ static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
 			 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.dumpit = mt7915_vendor_bss_color_ctrl_dump,
+		.dumpit = mt76_vendor_bss_color_ctrl_dump,
 		.policy = mt76_vendor_bss_color_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_BSS_COLOR_CTRL_MAX,
 	},
