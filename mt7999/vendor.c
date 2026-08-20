@@ -12,20 +12,6 @@
 
 #ifdef CONFIG_MTK_VENDOR
 static const struct nla_policy
-rfeature_ctrl_policy[NUM_MTK_VENDOR_ATTRS_RFEATURE_CTRL] = {
-	[MTK_VENDOR_ATTR_RFEATURE_CTRL_HE_GI] = {.type = NLA_U8 },
-	[MTK_VENDOR_ATTR_RFEATURE_CTRL_HE_LTF] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_RFEATURE_CTRL_TRIG_TYPE_CFG] = { .type = NLA_NESTED },
-	[MTK_VENDOR_ATTR_RFEATURE_CTRL_TRIG_TYPE_EN] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_RFEATURE_CTRL_TRIG_TYPE] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_RFEATURE_CTRL_ACK_PLCY] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_RFEATURE_CTRL_TRIG_TXBF] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_RFEATURE_CTRL_TRIG_VARIANT_TYPE] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_RFEATURE_CTRL_CODING_TYPE] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_RFEATURE_CTRL_LINK_ID] = { .type = NLA_U8 },
-};
-
-static const struct nla_policy
 epcs_ctrl_policy[NUM_MTK_VENDOR_ATTRS_EPCS_CTRL] = {
 	[MTK_VENDOR_ATTR_EPCS_ADDR] = NLA_POLICY_ETH_ADDR,
 	[MTK_VENDOR_ATTR_EPCS_LINK_ID] = { .type = NLA_U8 },
@@ -553,7 +539,7 @@ static int mt7999_vendor_rfeature_ctrl(struct wiphy *wiphy,
 	u8 band_idx, link_id = 0;
 
 	err = nla_parse(tb, MTK_VENDOR_ATTR_RFEATURE_CTRL_MAX, data, data_len,
-			rfeature_ctrl_policy, NULL);
+			mt76_vendor_rfeature_ctrl_policy, NULL);
 	if (err)
 		return err;
 
@@ -1307,7 +1293,7 @@ static const struct wiphy_vendor_command mt7999_vendor_commands[] = {
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
 			WIPHY_VENDOR_CMD_NEED_RUNNING,
 		.doit = mt7999_vendor_rfeature_ctrl,
-		.policy = rfeature_ctrl_policy,
+		.policy = mt76_vendor_rfeature_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_RFEATURE_CTRL_MAX,
 	},
 	{

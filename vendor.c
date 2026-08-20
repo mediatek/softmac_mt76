@@ -60,6 +60,21 @@ mt76_vendor_pp_ctrl_policy[NUM_MTK_VENDOR_ATTRS_PP_CTRL] = {
 EXPORT_SYMBOL_GPL(mt76_vendor_pp_ctrl_policy);
 
 const struct nla_policy
+mt76_vendor_rfeature_ctrl_policy[NUM_MTK_VENDOR_ATTRS_RFEATURE_CTRL] = {
+	[MTK_VENDOR_ATTR_RFEATURE_CTRL_HE_GI] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_RFEATURE_CTRL_HE_LTF] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_RFEATURE_CTRL_TRIG_TYPE_CFG] = { .type = NLA_NESTED },
+	[MTK_VENDOR_ATTR_RFEATURE_CTRL_TRIG_TYPE_EN] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_RFEATURE_CTRL_TRIG_TYPE] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_RFEATURE_CTRL_ACK_PLCY] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_RFEATURE_CTRL_TRIG_TXBF] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_RFEATURE_CTRL_TRIG_VARIANT_TYPE] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_RFEATURE_CTRL_CODING_TYPE] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_RFEATURE_CTRL_LINK_ID] = { .type = NLA_U8 },
+};
+EXPORT_SYMBOL_GPL(mt76_vendor_rfeature_ctrl_policy);
+
+const struct nla_policy
 mt76_vendor_ibf_ctrl_policy[NUM_MTK_VENDOR_ATTRS_IBF_CTRL] = {
 	[MTK_VENDOR_ATTR_IBF_CTRL_ENABLE] = { .type = NLA_U8 },
 };

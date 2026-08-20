@@ -464,6 +464,8 @@ mt76_vendor_amnt_dump_policy[NUM_MTK_VENDOR_ATTRS_AMNT_DUMP];
 extern const struct nla_policy
 mt76_vendor_pp_ctrl_policy[NUM_MTK_VENDOR_ATTRS_PP_CTRL];
 extern const struct nla_policy
+mt76_vendor_rfeature_ctrl_policy[NUM_MTK_VENDOR_ATTRS_RFEATURE_CTRL];
+extern const struct nla_policy
 mt76_vendor_ibf_ctrl_policy[NUM_MTK_VENDOR_ATTRS_IBF_CTRL];
 extern const struct nla_policy
 mt76_vendor_3wire_ctrl_policy[NUM_MTK_VENDOR_ATTRS_3WIRE_CTRL];
