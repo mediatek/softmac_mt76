@@ -11,13 +11,6 @@
 #include "mtk_mcu.h"
 
 #ifdef CONFIG_MTK_VENDOR
-static struct nla_policy
-pp_ctrl_policy[NUM_MTK_VENDOR_ATTRS_PP_CTRL] = {
-	[MTK_VENDOR_ATTR_PP_MODE] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_PP_LINK_ID] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_PP_BITMAP] = { .type = NLA_U16 },
-};
-
 static const struct nla_policy
 rfeature_ctrl_policy[NUM_MTK_VENDOR_ATTRS_RFEATURE_CTRL] = {
 	[MTK_VENDOR_ATTR_RFEATURE_CTRL_HE_GI] = {.type = NLA_U8 },
@@ -487,7 +480,7 @@ static int mt7996_vendor_pp_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 	u16 punct_bitmap = 0;
 
 	err = nla_parse(tb, MTK_VENDOR_ATTR_PP_CTRL_MAX, data, data_len,
-			pp_ctrl_policy, NULL);
+			mt76_vendor_pp_ctrl_policy, NULL);
 
 	if (tb[MTK_VENDOR_ATTR_PP_MODE])
 		mode = nla_get_u8(tb[MTK_VENDOR_ATTR_PP_MODE]);
@@ -1305,7 +1298,7 @@ static const struct wiphy_vendor_command mt7996_vendor_commands[] = {
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
 			WIPHY_VENDOR_CMD_NEED_RUNNING,
 		.doit = mt7996_vendor_pp_ctrl,
-		.policy = pp_ctrl_policy,
+		.policy = mt76_vendor_pp_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_PP_CTRL_MAX,
 	},
 	{

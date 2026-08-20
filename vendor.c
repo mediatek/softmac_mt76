@@ -52,6 +52,14 @@ mt76_vendor_amnt_dump_policy[NUM_MTK_VENDOR_ATTRS_AMNT_DUMP] = {
 EXPORT_SYMBOL_GPL(mt76_vendor_amnt_dump_policy);
 
 const struct nla_policy
+mt76_vendor_pp_ctrl_policy[NUM_MTK_VENDOR_ATTRS_PP_CTRL] = {
+	[MTK_VENDOR_ATTR_PP_MODE] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_PP_LINK_ID] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_PP_BITMAP] = { .type = NLA_U16 },
+};
+EXPORT_SYMBOL_GPL(mt76_vendor_pp_ctrl_policy);
+
+const struct nla_policy
 mt76_vendor_ibf_ctrl_policy[NUM_MTK_VENDOR_ATTRS_IBF_CTRL] = {
 	[MTK_VENDOR_ATTR_IBF_CTRL_ENABLE] = { .type = NLA_U8 },
 };
