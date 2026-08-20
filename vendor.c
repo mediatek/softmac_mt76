@@ -96,6 +96,20 @@ mt76_vendor_scs_ctrl_policy[NUM_MTK_VENDOR_ATTRS_SCS_CTRL] = {
 EXPORT_SYMBOL_GPL(mt76_vendor_scs_ctrl_policy);
 
 const struct nla_policy
+mt76_vendor_csi_ctrl_policy[NUM_MTK_VENDOR_ATTRS_CSI_CTRL] = {
+	[MTK_VENDOR_ATTR_CSI_CTRL_RADIO_IDX] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_CSI_CTRL_CFG] = { .type = NLA_NESTED },
+	[MTK_VENDOR_ATTR_CSI_CTRL_CFG_MODE] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_CSI_CTRL_CFG_TYPE] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_CSI_CTRL_CFG_VAL1] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_CSI_CTRL_CFG_VAL2] = { .type = NLA_U32 },
+	[MTK_VENDOR_ATTR_CSI_CTRL_MAC_ADDR] = NLA_POLICY_ETH_ADDR,
+	[MTK_VENDOR_ATTR_CSI_CTRL_DUMP_NUM] = { .type = NLA_U16 },
+	[MTK_VENDOR_ATTR_CSI_CTRL_DATA] = { .type = NLA_NESTED },
+};
+EXPORT_SYMBOL_GPL(mt76_vendor_csi_ctrl_policy);
+
+const struct nla_policy
 mt76_vendor_ibf_ctrl_policy[NUM_MTK_VENDOR_ATTRS_IBF_CTRL] = {
 	[MTK_VENDOR_ATTR_IBF_CTRL_ENABLE] = { .type = NLA_U8 },
 };

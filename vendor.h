@@ -470,6 +470,8 @@ mt76_vendor_epcs_ctrl_policy[NUM_MTK_VENDOR_ATTRS_EPCS_CTRL];
 extern const struct nla_policy
 mt76_vendor_scs_ctrl_policy[NUM_MTK_VENDOR_ATTRS_SCS_CTRL];
 extern const struct nla_policy
+mt76_vendor_csi_ctrl_policy[NUM_MTK_VENDOR_ATTRS_CSI_CTRL];
+extern const struct nla_policy
 mt76_vendor_ibf_ctrl_policy[NUM_MTK_VENDOR_ATTRS_IBF_CTRL];
 extern const struct nla_policy
 mt76_vendor_3wire_ctrl_policy[NUM_MTK_VENDOR_ATTRS_3WIRE_CTRL];

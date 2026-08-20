@@ -12,19 +12,6 @@
 
 #ifdef CONFIG_MTK_VENDOR
 static const struct nla_policy
-csi_ctrl_policy[NUM_MTK_VENDOR_ATTRS_CSI_CTRL] = {
-	[MTK_VENDOR_ATTR_CSI_CTRL_RADIO_IDX] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_CSI_CTRL_CFG] = {.type = NLA_NESTED },
-	[MTK_VENDOR_ATTR_CSI_CTRL_CFG_MODE] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_CSI_CTRL_CFG_TYPE] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_CSI_CTRL_CFG_VAL1] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_CSI_CTRL_CFG_VAL2] = { .type = NLA_U32 },
-	[MTK_VENDOR_ATTR_CSI_CTRL_MAC_ADDR] = NLA_POLICY_ETH_ADDR,
-	[MTK_VENDOR_ATTR_CSI_CTRL_DUMP_NUM] = { .type = NLA_U16 },
-	[MTK_VENDOR_ATTR_CSI_CTRL_DATA] = { .type = NLA_NESTED },
-};
-
-static struct nla_policy
 txpower_ctrl_policy[NUM_MTK_VENDOR_ATTRS_TXPOWER_CTRL] = {
 	[MTK_VENDOR_ATTR_TXPOWER_CTRL_LPI_PSD] = { .type = NLA_U8 },
 	[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_IDX] = { .type = NLA_U8 },
@@ -814,7 +801,7 @@ static int mt7999_vendor_csi_ctrl(struct wiphy *wiphy,
 	int err;
 
 	err = nla_parse(tb, MTK_VENDOR_ATTR_CSI_CTRL_MAX, data, data_len,
-			csi_ctrl_policy, NULL);
+			mt76_vendor_csi_ctrl_policy, NULL);
 	if (err)
 		return err;
 
@@ -910,7 +897,7 @@ mt7999_vendor_csi_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
 
 	if (data) {
 		err = nla_parse(tb, MTK_VENDOR_ATTR_CSI_CTRL_MAX, data, data_len,
-				csi_ctrl_policy, NULL);
+				mt76_vendor_csi_ctrl_policy, NULL);
 		if (err)
 			return err;
 	}
@@ -1308,7 +1295,7 @@ static const struct wiphy_vendor_command mt7999_vendor_commands[] = {
 			 WIPHY_VENDOR_CMD_NEED_RUNNING,
 		.doit = mt7999_vendor_csi_ctrl,
 		.dumpit = mt7999_vendor_csi_ctrl_dump,
-		.policy = csi_ctrl_policy,
+		.policy = mt76_vendor_csi_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_CSI_CTRL_MAX,
 	},
 	{
