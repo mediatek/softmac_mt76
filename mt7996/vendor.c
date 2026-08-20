@@ -95,12 +95,6 @@ txpower_ctrl_policy[NUM_MTK_VENDOR_ATTRS_TXPOWER_CTRL] = {
 	[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_FILENAME] = { .type = NLA_STRING },
 };
 
-static const struct nla_policy
-dfs_tx_ctrl_policy[NUM_MTK_VENDOR_ATTRS_DFS_TX_CTRL] = {
-	[MTK_VENDOR_ATTR_DFS_TX_CTRL_MODE] = {.type = NLA_U8 },
-	[MTK_VENDOR_ATTR_DFS_TX_CTRL_RADIO_IDX] = {.type = NLA_U8 },
-};
-
 struct mt7996_amnt_data {
 	u8 idx;
 	u8 addr[ETH_ALEN];
@@ -1240,56 +1234,6 @@ static int mt7996_vendor_txpower_ctrl(struct wiphy *wiphy,
 	return err;
 }
 
-static int mt7996_vendor_dfs_tx_mode_ctrl(struct wiphy *wiphy,
-					  struct wireless_dev *wdev,
-					  const void *data,
-					  int data_len)
-{
-	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
-	struct mt7996_dev *dev = mt7996_hw_dev(hw);
-	struct mt7996_phy *phy;
-	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_DFS_TX_CTRL];
-	u8 radio_idx, dfs_tx_mode;
-	int err, rdd_idx;
-
-	err = nla_parse(tb, MTK_VENDOR_ATTR_DFS_TX_CTRL_MAX, data, data_len,
-			dfs_tx_ctrl_policy, NULL);
-	if (err)
-		goto out;
-
-	if (!tb[MTK_VENDOR_ATTR_DFS_TX_CTRL_MODE] ||
-	    !tb[MTK_VENDOR_ATTR_DFS_TX_CTRL_RADIO_IDX]) {
-		err = -EINVAL;
-		goto out;
-	}
-
-	radio_idx = nla_get_u8(tb[MTK_VENDOR_ATTR_DFS_TX_CTRL_RADIO_IDX]);
-	if (!mt7996_radio_valid(dev, radio_idx)) {
-		dev_err(dev->mt76.dev, "Invalid radio idx %d\n", radio_idx);
-		err = -EINVAL;
-		goto out;
-	}
-
-	phy = dev->radio_phy[radio_idx];
-	rdd_idx = mt7996_get_rdd_idx(phy, false);
-	if (rdd_idx < 0) {
-		dev_err(dev->mt76.dev, "Invalid rdd idx %d\n", rdd_idx);
-		err = -EINVAL;
-		goto out;
-	}
-
-	dfs_tx_mode = nla_get_u8(tb[MTK_VENDOR_ATTR_DFS_TX_CTRL_MODE]);
-
-	err = mt7996_mcu_rdd_cmd(dev, RDD_DET_MODE, rdd_idx, dfs_tx_mode);
-	if (err)
-		goto out;
-
-	phy->dfs_tx_mode = dfs_tx_mode;
-
-out:
-	return err;
-}
-
 static const struct wiphy_vendor_command mt7996_vendor_commands[] = {
 	{
 		.info = {
@@ -1469,8 +1413,8 @@ static const struct wiphy_vendor_command mt7996_vendor_commands[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
 			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = mt7996_vendor_dfs_tx_mode_ctrl,
-		.policy = dfs_tx_ctrl_policy,
+		.doit = mt76_vendor_dfs_tx_ctrl,
+		.policy = mt76_vendor_dfs_tx_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_DFS_TX_CTRL_MAX,
 	},
 };
@@ -1589,6 +1533,32 @@ static int mt7996_vendor_background_radar_ctrl(struct mt76_dev *mdev,
 	return mt7996_mcu_rdd_background_disable_timer(dev, disable_timer);
 }
 
+static int mt7996_vendor_dfs_tx_mode_ctrl(struct mt76_dev *mdev, u8 radio_idx,
+					  u8 mode)
+{
+	struct mt7996_dev *dev = container_of(mdev, struct mt7996_dev, mt76);
+	struct mt7996_phy *phy;
+	int rdd_idx, err;
+
+	if (!mt7996_radio_valid(dev, radio_idx)) {
+		dev_err(dev->mt76.dev, "Invalid radio idx %d\n", radio_idx);
+		return -EINVAL;
+	}
+
+	phy = dev->radio_phy[radio_idx];
+	rdd_idx = mt7996_get_rdd_idx(phy, false);
+	if (rdd_idx < 0) {
+		dev_err(dev->mt76.dev, "Invalid rdd idx %d\n", rdd_idx);
+		return -EINVAL;
+	}
+
+	err = mt7996_mcu_rdd_cmd(dev, RDD_DET_MODE, rdd_idx, mode);
+	if (!err)
+		phy->dfs_tx_mode = mode;
+
+	return err;
+}
+
 static const struct mt76_vendor_ops mt7996_vendor_ops = {
 	.commands = mt7996_vendor_commands,
 	.n_commands = ARRAY_SIZE(mt7996_vendor_commands),
@@ -1603,6 +1573,7 @@ static const struct mt76_vendor_ops mt7996_vendor_ops = {
 	.edcca_ctrl_threshold = mt7996_vendor_edcca_ctrl_threshold,
 	.edcca_ctrl_dump = mt7996_vendor_edcca_ctrl_dump,
 	.background_radar_ctrl = mt7996_vendor_background_radar_ctrl,
+	.dfs_tx_mode_ctrl = mt7996_vendor_dfs_tx_mode_ctrl,
 	.set_beacon = mt7996_set_beacon_vif,
 };
 
