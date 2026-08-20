@@ -50,6 +50,19 @@ mt76_vendor_mu_ctrl_policy[NUM_MTK_VENDOR_ATTRS_MU_CTRL] = {
 };
 EXPORT_SYMBOL_GPL(mt76_vendor_mu_ctrl_policy);
 
+const struct nla_policy
+mt76_vendor_edcca_ctrl_policy[NUM_MTK_VENDOR_ATTRS_EDCCA_CTRL] = {
+	[MTK_VENDOR_ATTR_EDCCA_CTRL_MODE] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_EDCCA_CTRL_PRI20_VAL] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_EDCCA_CTRL_SEC20_VAL] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_EDCCA_CTRL_SEC40_VAL] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_EDCCA_CTRL_SEC80_VAL] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_EDCCA_CTRL_COMPENSATE] = { .type = NLA_S8 },
+	[MTK_VENDOR_ATTR_EDCCA_CTRL_SEC160_VAL] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_EDCCA_CTRL_RADIO_IDX] = { .type = NLA_U8 },
+};
+EXPORT_SYMBOL_GPL(mt76_vendor_edcca_ctrl_policy);
+
 const struct nl80211_vendor_cmd_info mt76_vendor_events[MT76_VENDOR_N_EVENTS] = {
 	[MTK_NL80211_VENDOR_EVENT_PP_BMP_UPDATE] = {
 		.vendor_id = MTK_NL80211_VENDOR_ID,
@@ -313,6 +326,105 @@ int mt76_vendor_mu_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
 	return 1;
 }
 EXPORT_SYMBOL_GPL(mt76_vendor_mu_ctrl_dump);
+
+int mt76_vendor_edcca_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
+			   const void *data, int data_len)
+{
+	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
+	struct mt76_dev *dev = hw->priv;
+	const struct mt76_vendor_ops *ops = dev->vendor_ops;
+	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_EDCCA_CTRL];
+	u8 value[MT76_VENDOR_EDCCA_BW_NUM];
+	u8 mode, radio_idx;
+	int err;
+
+	if (!ops || !ops->edcca_ctrl || !ops->edcca_ctrl_threshold)
+		return -EOPNOTSUPP;
+
+	err = nla_parse(tb, MTK_VENDOR_ATTR_EDCCA_CTRL_MAX, data, data_len,
+			mt76_vendor_edcca_ctrl_policy, NULL);
+	if (err)
+		return err;
+
+	if (!tb[MTK_VENDOR_ATTR_EDCCA_CTRL_MODE] ||
+	    !tb[MTK_VENDOR_ATTR_EDCCA_CTRL_RADIO_IDX])
+		return -EINVAL;
+
+	mode = nla_get_u8(tb[MTK_VENDOR_ATTR_EDCCA_CTRL_MODE]);
+	radio_idx = nla_get_u8(tb[MTK_VENDOR_ATTR_EDCCA_CTRL_RADIO_IDX]);
+
+	switch (mode) {
+	case MT76_VENDOR_EDCCA_SET_EN:
+		if (!tb[MTK_VENDOR_ATTR_EDCCA_CTRL_PRI20_VAL])
+			return -EINVAL;
+
+		return ops->edcca_ctrl(dev, radio_idx,
+			!!nla_get_u8(tb[MTK_VENDOR_ATTR_EDCCA_CTRL_PRI20_VAL]));
+	case MT76_VENDOR_EDCCA_SET_THRES:
+		if (!tb[MTK_VENDOR_ATTR_EDCCA_CTRL_PRI20_VAL] ||
+		    !tb[MTK_VENDOR_ATTR_EDCCA_CTRL_SEC40_VAL] ||
+		    !tb[MTK_VENDOR_ATTR_EDCCA_CTRL_SEC80_VAL] ||
+		    !tb[MTK_VENDOR_ATTR_EDCCA_CTRL_SEC160_VAL])
+			return -EINVAL;
+
+		value[0] = nla_get_u8(tb[MTK_VENDOR_ATTR_EDCCA_CTRL_PRI20_VAL]);
+		value[1] = nla_get_u8(tb[MTK_VENDOR_ATTR_EDCCA_CTRL_SEC40_VAL]);
+		value[2] = nla_get_u8(tb[MTK_VENDOR_ATTR_EDCCA_CTRL_SEC80_VAL]);
+		value[3] = nla_get_u8(tb[MTK_VENDOR_ATTR_EDCCA_CTRL_SEC160_VAL]);
+
+		return ops->edcca_ctrl_threshold(dev, radio_idx, value);
+	default:
+		return -EINVAL;
+	}
+}
+EXPORT_SYMBOL_GPL(mt76_vendor_edcca_ctrl);
+
+int mt76_vendor_edcca_ctrl_dump(struct wiphy *wiphy,
+				struct wireless_dev *wdev,
+				struct sk_buff *skb, const void *data,
+				int data_len, unsigned long *storage)
+{
+	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
+	struct mt76_dev *dev = hw->priv;
+	const struct mt76_vendor_ops *ops = dev->vendor_ops;
+	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_EDCCA_CTRL];
+	u8 value[MT76_VENDOR_EDCCA_BW_NUM];
+	u8 radio_idx;
+	int err, i;
+
+	if (!ops || !ops->edcca_ctrl_dump)
+		return -EOPNOTSUPP;
+
+	if (*storage == 1)
+		return -ENOENT;
+	*storage = 1;
+
+	err = nla_parse(tb, MTK_VENDOR_ATTR_EDCCA_CTRL_MAX, data, data_len,
+			mt76_vendor_edcca_ctrl_policy, NULL);
+	if (err)
+		return err;
+
+	if (!tb[MTK_VENDOR_ATTR_EDCCA_CTRL_MODE] ||
+	    !tb[MTK_VENDOR_ATTR_EDCCA_CTRL_RADIO_IDX])
+		return -EINVAL;
+
+	if (nla_get_u8(tb[MTK_VENDOR_ATTR_EDCCA_CTRL_MODE]) !=
+	    MT76_VENDOR_EDCCA_GET_THRES)
+		return -EINVAL;
+
+	radio_idx = nla_get_u8(tb[MTK_VENDOR_ATTR_EDCCA_CTRL_RADIO_IDX]);
+	err = ops->edcca_ctrl_dump(dev, radio_idx, value);
+	if (err)
+		return err;
+
+	for (i = 0; i < MT76_VENDOR_EDCCA_BW_NUM; i++)
+		if (nla_put_u8(skb, MTK_VENDOR_ATTR_EDCCA_DUMP_PRI20_VAL + i,
+			       value[i]))
+			return -ENOMEM;
+
+	return MT76_VENDOR_EDCCA_BW_NUM;
+}
+EXPORT_SYMBOL_GPL(mt76_vendor_edcca_ctrl_dump);
 #endif
 
 void mt76_vendor_register(struct mt76_dev *dev,

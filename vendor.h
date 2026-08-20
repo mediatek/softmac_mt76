@@ -432,12 +432,20 @@ struct mt76_vendor_ops {
 	int (*mu_ctrl)(struct mt76_dev *dev, u8 radio_idx, u8 enabled);
 	int (*mu_ctrl_cfg)(struct mt76_dev *dev, const struct nlattr *attr);
 	int (*mu_ctrl_dump)(struct mt76_dev *dev, u8 radio_idx, u8 *enabled);
+	int (*edcca_ctrl)(struct mt76_dev *dev, u8 radio_idx, bool enabled);
+	int (*edcca_ctrl_threshold)(struct mt76_dev *dev, u8 radio_idx, u8 value[4]);
+	int (*edcca_ctrl_dump)(struct mt76_dev *dev, u8 radio_idx, u8 value[4]);
 };
 
 void mt76_vendor_register(struct mt76_dev *dev,
 			  const struct mt76_vendor_ops *ops);
 
 #ifdef CONFIG_MTK_VENDOR
+#define MT76_VENDOR_EDCCA_BW_NUM	4
+#define MT76_VENDOR_EDCCA_SET_EN	0
+#define MT76_VENDOR_EDCCA_SET_THRES	1
+#define MT76_VENDOR_EDCCA_GET_THRES	3
+
 extern const struct nl80211_vendor_cmd_info
 mt76_vendor_events[MT76_VENDOR_N_EVENTS];
 extern const struct nla_policy
@@ -450,6 +458,8 @@ extern const struct nla_policy
 mt76_vendor_3wire_ctrl_policy[NUM_MTK_VENDOR_ATTRS_3WIRE_CTRL];
 extern const struct nla_policy
 mt76_vendor_mu_ctrl_policy[NUM_MTK_VENDOR_ATTRS_MU_CTRL];
+extern const struct nla_policy
+mt76_vendor_edcca_ctrl_policy[NUM_MTK_VENDOR_ATTRS_EDCCA_CTRL];
 
 int mt76_vendor_bss_color_ctrl_dump(struct wiphy *wiphy,
 				    struct wireless_dev *wdev,
@@ -474,6 +484,13 @@ int mt76_vendor_mu_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 int mt76_vendor_mu_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
 			     struct sk_buff *skb, const void *data,
 			     int data_len, unsigned long *storage);
+
+int mt76_vendor_edcca_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
+			   const void *data, int data_len);
+int mt76_vendor_edcca_ctrl_dump(struct wiphy *wiphy,
+				struct wireless_dev *wdev,
+				struct sk_buff *skb, const void *data,
+				int data_len, unsigned long *storage);
 #endif
 
 #endif /* __MT76_VENDOR_H */
