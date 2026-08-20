@@ -13,6 +13,22 @@ mt76_vendor_bss_color_ctrl_policy[NUM_MTK_VENDOR_ATTRS_BSS_COLOR_CTRL] = {
 EXPORT_SYMBOL_GPL(mt76_vendor_bss_color_ctrl_policy);
 
 const struct nla_policy
+mt76_vendor_wireless_ctrl_policy[NUM_MTK_VENDOR_ATTRS_WIRELESS_CTRL] = {
+	[MTK_VENDOR_ATTR_WIRELESS_CTRL_AMSDU] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_WIRELESS_CTRL_AMPDU] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_WIRELESS_CTRL_CERT] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_WIRELESS_CTRL_RTS_SIGTA] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_WIRELESS_CTRL_FIXED_MCS] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_WIRELESS_CTRL_OFDMA] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_WIRELESS_CTRL_PPDU_TX_TYPE] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_WIRELESS_CTRL_NUSERS_OFDMA] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_WIRELESS_CTRL_MIMO] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_WIRELESS_CTRL_BA_BUFFER_SIZE] = { .type = NLA_U16 },
+	[MTK_VENDOR_ATTR_WIRELESS_CTRL_LINK_ID] = { .type = NLA_U8 },
+};
+EXPORT_SYMBOL_GPL(mt76_vendor_wireless_ctrl_policy);
+
+const struct nla_policy
 mt76_vendor_ibf_ctrl_policy[NUM_MTK_VENDOR_ATTRS_IBF_CTRL] = {
 	[MTK_VENDOR_ATTR_IBF_CTRL_ENABLE] = { .type = NLA_U8 },
 };
@@ -201,6 +217,25 @@ int mt76_vendor_3wire_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 				 sizeof(req), false);
 }
 EXPORT_SYMBOL_GPL(mt76_vendor_3wire_ctrl);
+
+int mt76_vendor_wireless_ctrl_dump(struct wiphy *wiphy,
+				   struct wireless_dev *wdev,
+				   struct sk_buff *skb, const void *data,
+				   int data_len, unsigned long *storage)
+{
+	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
+
+	if (*storage == 1)
+		return -ENOENT;
+	*storage = 1;
+
+	if (nla_put_u8(skb, MTK_VENDOR_ATTR_WIRELESS_DUMP_AMSDU,
+		       ieee80211_hw_check(hw, SUPPORTS_AMSDU_IN_AMPDU)))
+		return -ENOMEM;
+
+	return 1;
+}
+EXPORT_SYMBOL_GPL(mt76_vendor_wireless_ctrl_dump);
 #endif
 
 void mt76_vendor_register(struct mt76_dev *dev,

@@ -20,26 +20,6 @@ mu_ctrl_policy[NUM_MTK_VENDOR_ATTRS_MU_CTRL] = {
 };
 
 static const struct nla_policy
-wireless_ctrl_policy[NUM_MTK_VENDOR_ATTRS_WIRELESS_CTRL] = {
-	[MTK_VENDOR_ATTR_WIRELESS_CTRL_AMSDU] = {.type = NLA_U8 },
-	[MTK_VENDOR_ATTR_WIRELESS_CTRL_AMPDU] = {.type = NLA_U8 },
-	[MTK_VENDOR_ATTR_WIRELESS_CTRL_CERT] = {.type = NLA_U8 },
-	[MTK_VENDOR_ATTR_WIRELESS_CTRL_RTS_SIGTA] = {.type = NLA_U8 },
-	[MTK_VENDOR_ATTR_WIRELESS_CTRL_FIXED_MCS] = {.type = NLA_U8 },
-	[MTK_VENDOR_ATTR_WIRELESS_CTRL_OFDMA] = {.type = NLA_U8 },
-	[MTK_VENDOR_ATTR_WIRELESS_CTRL_PPDU_TX_TYPE] = {.type = NLA_U8 },
-	[MTK_VENDOR_ATTR_WIRELESS_CTRL_NUSERS_OFDMA] = {.type = NLA_U8 },
-	[MTK_VENDOR_ATTR_WIRELESS_CTRL_MIMO] = {.type = NLA_U8 },
-	[MTK_VENDOR_ATTR_WIRELESS_CTRL_BA_BUFFER_SIZE] = {.type = NLA_U16 },
-	[MTK_VENDOR_ATTR_WIRELESS_CTRL_LINK_ID] = {.type = NLA_U8 },
-};
-
-static const struct nla_policy
-wireless_dump_policy[NUM_MTK_VENDOR_ATTRS_WIRELESS_DUMP] = {
-	[MTK_VENDOR_ATTR_WIRELESS_DUMP_AMSDU] = { .type = NLA_U8 },
-};
-
-static const struct nla_policy
 amnt_ctrl_policy[NUM_MTK_VENDOR_ATTRS_AMNT_CTRL] = {
 	[MTK_VENDOR_ATTR_AMNT_CTRL_SET] = {.type = NLA_NESTED },
 	[MTK_VENDOR_ATTR_AMNT_CTRL_DUMP] = { .type = NLA_NESTED },
@@ -277,26 +257,6 @@ mt7996_set_wireless_rts_sigta(struct ieee80211_hw *hw, u8 value) {
 	/* Set RTS Threshold to a lower Value */
 	mt7996_mcu_set_rts_thresh(phy, 500);
 }
-
-static int
-mt7996_vendor_wireless_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
-				 struct sk_buff *skb, const void *data, int data_len,
-				 unsigned long *storage)
-{
-	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
-	int len = 0;
-
-	if (*storage == 1)
-		return -ENOENT;
-	*storage = 1;
-
-	if (nla_put_u8(skb, MTK_VENDOR_ATTR_WIRELESS_DUMP_AMSDU,
-		       ieee80211_hw_check(hw, SUPPORTS_AMSDU_IN_AMPDU)))
-	return -ENOMEM;
-	len += 1;
-
-	return len;
- }
 
 void mt7996_vendor_amnt_fill_rx(struct mt7996_phy *phy, struct sk_buff *skb)
 {
@@ -947,7 +907,7 @@ static int mt7996_vendor_wireless_ctrl(struct wiphy *wiphy,
 	bool band_idx_get = false;
 
 	err = nla_parse(tb, MTK_VENDOR_ATTR_WIRELESS_CTRL_MAX, data, data_len,
-			wireless_ctrl_policy, NULL);
+			mt76_vendor_wireless_ctrl_policy, NULL);
 	if (err)
 		return err;
 
@@ -1628,8 +1588,8 @@ static const struct wiphy_vendor_command mt7996_vendor_commands[] = {
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
 		        WIPHY_VENDOR_CMD_NEED_RUNNING,
 		.doit = mt7996_vendor_wireless_ctrl,
-		.dumpit = mt7996_vendor_wireless_ctrl_dump,
-		.policy = wireless_ctrl_policy,
+		.dumpit = mt76_vendor_wireless_ctrl_dump,
+		.policy = mt76_vendor_wireless_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_WIRELESS_CTRL_MAX,
 	},
 	{
