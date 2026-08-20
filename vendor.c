@@ -64,6 +64,12 @@ mt76_vendor_edcca_ctrl_policy[NUM_MTK_VENDOR_ATTRS_EDCCA_CTRL] = {
 EXPORT_SYMBOL_GPL(mt76_vendor_edcca_ctrl_policy);
 
 const struct nla_policy
+mt76_vendor_background_radar_ctrl_policy[NUM_MTK_VENDOR_ATTRS_BACKGROUND_RADAR_CTRL] = {
+	[MTK_VENDOR_ATTR_BACKGROUND_RADAR_CTRL_MODE] = { .type = NLA_U8 },
+};
+EXPORT_SYMBOL_GPL(mt76_vendor_background_radar_ctrl_policy);
+
+const struct nla_policy
 mt76_vendor_beacon_ctrl_policy[NUM_MTK_VENDOR_ATTRS_BEACON_CTRL] = {
 	[MTK_VENDOR_ATTR_BEACON_CTRL_MODE] = { .type = NLA_U8 },
 };
@@ -431,6 +437,31 @@ int mt76_vendor_edcca_ctrl_dump(struct wiphy *wiphy,
 	return MT76_VENDOR_EDCCA_BW_NUM;
 }
 EXPORT_SYMBOL_GPL(mt76_vendor_edcca_ctrl_dump);
+
+int mt76_vendor_background_radar_ctrl(struct wiphy *wiphy,
+				      struct wireless_dev *wdev,
+				      const void *data, int data_len)
+{
+	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
+	struct mt76_dev *dev = hw->priv;
+	const struct mt76_vendor_ops *ops = dev->vendor_ops;
+	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_BACKGROUND_RADAR_CTRL];
+	int err;
+
+	if (!ops || !ops->background_radar_ctrl)
+		return -EOPNOTSUPP;
+
+	err = nla_parse(tb, MTK_VENDOR_ATTR_BACKGROUND_RADAR_CTRL_MAX, data, data_len,
+			mt76_vendor_background_radar_ctrl_policy, NULL);
+	if (err)
+		return err;
+	if (!tb[MTK_VENDOR_ATTR_BACKGROUND_RADAR_CTRL_MODE])
+		return -EINVAL;
+
+	return ops->background_radar_ctrl(dev,
+			!!nla_get_u8(tb[MTK_VENDOR_ATTR_BACKGROUND_RADAR_CTRL_MODE]));
+}
+EXPORT_SYMBOL_GPL(mt76_vendor_background_radar_ctrl);
 
 int mt76_vendor_beacon_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 			    const void *data, int data_len)

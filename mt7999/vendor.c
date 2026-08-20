@@ -53,11 +53,6 @@ rfeature_ctrl_policy[NUM_MTK_VENDOR_ATTRS_RFEATURE_CTRL] = {
 };
 
 static const struct nla_policy
-background_radar_ctrl_policy[NUM_MTK_VENDOR_ATTRS_BACKGROUND_RADAR_CTRL] = {
-	[MTK_VENDOR_ATTR_BACKGROUND_RADAR_CTRL_MODE] = {.type = NLA_U8 },
-};
-
-static const struct nla_policy
 epcs_ctrl_policy[NUM_MTK_VENDOR_ATTRS_EPCS_CTRL] = {
 	[MTK_VENDOR_ATTR_EPCS_ADDR] = NLA_POLICY_ETH_ADDR,
 	[MTK_VENDOR_ATTR_EPCS_LINK_ID] = { .type = NLA_U8 },
@@ -746,27 +741,6 @@ static int mt7999_vendor_wireless_ctrl(struct wiphy *wiphy,
 	return 0;
 }
 
-static int mt7999_vendor_background_radar_mode_ctrl(struct wiphy *wiphy,
-						    struct wireless_dev *wdev,
-						    const void *data,
-						    int data_len)
-{
-	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
-	struct mt7999_dev *dev = mt7999_hw_dev(hw);
-	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_BACKGROUND_RADAR_CTRL];
-	int err;
-	u8 background_radar_mode;
-
-	err = nla_parse(tb, MTK_VENDOR_ATTR_BACKGROUND_RADAR_CTRL_MAX, data, data_len,
-			background_radar_ctrl_policy, NULL);
-	if (err)
-		return err;
-
-	background_radar_mode = nla_get_u8(tb[MTK_VENDOR_ATTR_BACKGROUND_RADAR_CTRL_MODE]);
-
-	return mt7999_mcu_rdd_background_disable_timer(dev, !!background_radar_mode);
-}
-
 static int
 mt7999_vendor_epcs_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 			const void *data, int data_len)
@@ -1426,8 +1400,8 @@ static const struct wiphy_vendor_command mt7999_vendor_commands[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
 			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = mt7999_vendor_background_radar_mode_ctrl,
-		.policy = background_radar_ctrl_policy,
+		.doit = mt76_vendor_background_radar_ctrl,
+		.policy = mt76_vendor_background_radar_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_BACKGROUND_RADAR_CTRL_MAX,
 	},
 	{
@@ -1600,6 +1574,14 @@ static int mt7999_vendor_edcca_ctrl_dump(struct mt76_dev *mdev, u8 radio_idx,
 					       false);
 }
 
+static int mt7999_vendor_background_radar_ctrl(struct mt76_dev *mdev,
+					       bool disable_timer)
+{
+	struct mt7999_dev *dev = container_of(mdev, struct mt7999_dev, mt76);
+
+	return mt7999_mcu_rdd_background_disable_timer(dev, disable_timer);
+}
+
 static const struct mt76_vendor_ops mt7999_vendor_ops = {
 	.commands = mt7999_vendor_commands,
 	.n_commands = ARRAY_SIZE(mt7999_vendor_commands),
@@ -1613,6 +1595,7 @@ static const struct mt76_vendor_ops mt7999_vendor_ops = {
 	.edcca_ctrl = mt7999_vendor_edcca_ctrl,
 	.edcca_ctrl_threshold = mt7999_vendor_edcca_ctrl_threshold,
 	.edcca_ctrl_dump = mt7999_vendor_edcca_ctrl_dump,
+	.background_radar_ctrl = mt7999_vendor_background_radar_ctrl,
 	.set_beacon = mt7999_set_beacon_vif,
 };
 
