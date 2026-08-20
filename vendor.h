@@ -456,6 +456,12 @@ mt76_vendor_bss_color_ctrl_policy[NUM_MTK_VENDOR_ATTRS_BSS_COLOR_CTRL];
 extern const struct nla_policy
 mt76_vendor_wireless_ctrl_policy[NUM_MTK_VENDOR_ATTRS_WIRELESS_CTRL];
 extern const struct nla_policy
+mt76_vendor_amnt_ctrl_policy[NUM_MTK_VENDOR_ATTRS_AMNT_CTRL];
+extern const struct nla_policy
+mt76_vendor_amnt_set_policy[NUM_MTK_VENDOR_ATTRS_AMNT_SET];
+extern const struct nla_policy
+mt76_vendor_amnt_dump_policy[NUM_MTK_VENDOR_ATTRS_AMNT_DUMP];
+extern const struct nla_policy
 mt76_vendor_ibf_ctrl_policy[NUM_MTK_VENDOR_ATTRS_IBF_CTRL];
 extern const struct nla_policy
 mt76_vendor_3wire_ctrl_policy[NUM_MTK_VENDOR_ATTRS_3WIRE_CTRL];

@@ -29,6 +29,29 @@ mt76_vendor_wireless_ctrl_policy[NUM_MTK_VENDOR_ATTRS_WIRELESS_CTRL] = {
 EXPORT_SYMBOL_GPL(mt76_vendor_wireless_ctrl_policy);
 
 const struct nla_policy
+mt76_vendor_amnt_ctrl_policy[NUM_MTK_VENDOR_ATTRS_AMNT_CTRL] = {
+	[MTK_VENDOR_ATTR_AMNT_CTRL_SET] = { .type = NLA_NESTED },
+	[MTK_VENDOR_ATTR_AMNT_CTRL_DUMP] = { .type = NLA_NESTED },
+	[MTK_VENDOR_ATTR_AMNT_CTRL_LINK_ID] = { .type = NLA_U8 },
+};
+EXPORT_SYMBOL_GPL(mt76_vendor_amnt_ctrl_policy);
+
+const struct nla_policy
+mt76_vendor_amnt_set_policy[NUM_MTK_VENDOR_ATTRS_AMNT_SET] = {
+	[MTK_VENDOR_ATTR_AMNT_SET_INDEX] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_AMNT_SET_MACADDR] = NLA_POLICY_ETH_ADDR,
+};
+EXPORT_SYMBOL_GPL(mt76_vendor_amnt_set_policy);
+
+const struct nla_policy
+mt76_vendor_amnt_dump_policy[NUM_MTK_VENDOR_ATTRS_AMNT_DUMP] = {
+	[MTK_VENDOR_ATTR_AMNT_DUMP_INDEX] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_AMNT_DUMP_LEN] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_AMNT_DUMP_RESULT] = { .type = NLA_NESTED },
+};
+EXPORT_SYMBOL_GPL(mt76_vendor_amnt_dump_policy);
+
+const struct nla_policy
 mt76_vendor_ibf_ctrl_policy[NUM_MTK_VENDOR_ATTRS_IBF_CTRL] = {
 	[MTK_VENDOR_ATTR_IBF_CTRL_ENABLE] = { .type = NLA_U8 },
 };

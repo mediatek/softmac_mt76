@@ -11,26 +11,6 @@
 #include "mtk_mcu.h"
 
 #ifdef CONFIG_MTK_VENDOR
-static const struct nla_policy
-amnt_ctrl_policy[NUM_MTK_VENDOR_ATTRS_AMNT_CTRL] = {
-	[MTK_VENDOR_ATTR_AMNT_CTRL_SET] = {.type = NLA_NESTED },
-	[MTK_VENDOR_ATTR_AMNT_CTRL_DUMP] = { .type = NLA_NESTED },
-	[MTK_VENDOR_ATTR_AMNT_CTRL_LINK_ID] = { .type = NLA_U8 },
-};
-
-static const struct nla_policy
-amnt_set_policy[NUM_MTK_VENDOR_ATTRS_AMNT_SET] = {
-	[MTK_VENDOR_ATTR_AMNT_SET_INDEX] = {.type = NLA_U8 },
-	[MTK_VENDOR_ATTR_AMNT_SET_MACADDR] = NLA_POLICY_ETH_ADDR,
-};
-
-static const struct nla_policy
-amnt_dump_policy[NUM_MTK_VENDOR_ATTRS_AMNT_DUMP] = {
-	[MTK_VENDOR_ATTR_AMNT_DUMP_INDEX] = {.type = NLA_U8 },
-	[MTK_VENDOR_ATTR_AMNT_DUMP_LEN] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_AMNT_DUMP_RESULT] = { .type = NLA_NESTED },
-};
-
 static struct nla_policy
 pp_ctrl_policy[NUM_MTK_VENDOR_ATTRS_PP_CTRL] = {
 	[MTK_VENDOR_ATTR_PP_MODE] = { .type = NLA_U8 },
@@ -333,7 +313,7 @@ mt7996_vendor_amnt_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 	int err;
 
 	err = nla_parse(tb1, MTK_VENDOR_ATTR_AMNT_CTRL_MAX, data, data_len,
-			amnt_ctrl_policy, NULL);
+			mt76_vendor_amnt_ctrl_policy, NULL);
 	if (err)
 		return err;
 
@@ -353,7 +333,7 @@ mt7996_vendor_amnt_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 		return -EINVAL;
 
 	err = nla_parse_nested(tb2, MTK_VENDOR_ATTR_AMNT_SET_MAX,
-		tb1[MTK_VENDOR_ATTR_AMNT_CTRL_SET], amnt_set_policy, NULL);
+		tb1[MTK_VENDOR_ATTR_AMNT_CTRL_SET], mt76_vendor_amnt_set_policy, NULL);
 	if (err)
 		return err;
 
@@ -439,7 +419,7 @@ mt7996_vendor_amnt_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
 	*storage = 1;
 
 	err = nla_parse(tb1, MTK_VENDOR_ATTR_AMNT_CTRL_MAX, data, data_len,
-			amnt_ctrl_policy, NULL);
+			mt76_vendor_amnt_ctrl_policy, NULL);
 	if (err)
 		return err;
 
@@ -460,7 +440,7 @@ mt7996_vendor_amnt_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
 
 	err = nla_parse_nested(tb2, MTK_VENDOR_ATTR_AMNT_DUMP_MAX,
 			       tb1[MTK_VENDOR_ATTR_AMNT_CTRL_DUMP],
-			       amnt_dump_policy, NULL);
+			       mt76_vendor_amnt_dump_policy, NULL);
 	if (err)
 		return err;
 
@@ -1268,7 +1248,7 @@ static const struct wiphy_vendor_command mt7996_vendor_commands[] = {
 			 WIPHY_VENDOR_CMD_NEED_RUNNING,
 		.doit = mt7996_vendor_amnt_ctrl,
 		.dumpit = mt7996_vendor_amnt_ctrl_dump,
-		.policy = amnt_ctrl_policy,
+		.policy = mt76_vendor_amnt_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_AMNT_CTRL_MAX,
 	},
 	{
