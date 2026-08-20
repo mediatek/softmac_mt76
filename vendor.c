@@ -85,6 +85,17 @@ mt76_vendor_epcs_ctrl_policy[NUM_MTK_VENDOR_ATTRS_EPCS_CTRL] = {
 EXPORT_SYMBOL_GPL(mt76_vendor_epcs_ctrl_policy);
 
 const struct nla_policy
+mt76_vendor_scs_ctrl_policy[NUM_MTK_VENDOR_ATTRS_SCS_CTRL] = {
+	[MTK_VENDOR_ATTR_SCS_ID] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_SCS_REQ_TYPE] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_SCS_DIR] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_SCS_QOS_IE] = { .type = NLA_BINARY },
+	[MTK_VENDOR_ATTR_SCS_MAC_ADDR] = NLA_POLICY_ETH_ADDR,
+	[MTK_VENDOR_ATTR_SCS_LINK_ID] = { .type = NLA_U8 },
+};
+EXPORT_SYMBOL_GPL(mt76_vendor_scs_ctrl_policy);
+
+const struct nla_policy
 mt76_vendor_ibf_ctrl_policy[NUM_MTK_VENDOR_ATTRS_IBF_CTRL] = {
 	[MTK_VENDOR_ATTR_IBF_CTRL_ENABLE] = { .type = NLA_U8 },
 };
