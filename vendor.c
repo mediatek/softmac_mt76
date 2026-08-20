@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: ISC
 
 #include "mt76.h"
+#include "mt76_connac_mcu.h"
 #include "vendor.h"
 
 #ifdef CONFIG_MTK_VENDOR
@@ -16,6 +17,13 @@ mt76_vendor_ibf_ctrl_policy[NUM_MTK_VENDOR_ATTRS_IBF_CTRL] = {
 	[MTK_VENDOR_ATTR_IBF_CTRL_ENABLE] = { .type = NLA_U8 },
 };
 EXPORT_SYMBOL_GPL(mt76_vendor_ibf_ctrl_policy);
+
+const struct nla_policy
+mt76_vendor_3wire_ctrl_policy[NUM_MTK_VENDOR_ATTRS_3WIRE_CTRL] = {
+	[MTK_VENDOR_ATTR_3WIRE_EXT_SEL] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_3WIRE_CEB_BAND_SEL] = { .type = NLA_U8 },
+};
+EXPORT_SYMBOL_GPL(mt76_vendor_3wire_ctrl_policy);
 
 const struct nl80211_vendor_cmd_info mt76_vendor_events[MT76_VENDOR_N_EVENTS] = {
 	[MTK_NL80211_VENDOR_EVENT_PP_BMP_UPDATE] = {
@@ -152,6 +160,47 @@ int mt76_vendor_ibf_ctrl_dump(struct wiphy *wiphy,
 	return 1;
 }
 EXPORT_SYMBOL_GPL(mt76_vendor_ibf_ctrl_dump);
+
+int mt76_vendor_3wire_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
+			   const void *data, int data_len)
+{
+#define UNI_PTA_3WIRE_CTRL_EXT_EN	0
+#define EXT_SEL_MASK			GENMASK(2, 0)
+#define CEB_BAND_SEL_MASK		GENMASK(4, 3)
+	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
+	struct mt76_dev *dev = hw->priv;
+	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_3WIRE_CTRL];
+	struct {
+		u8 __rsv1[4];
+
+		__le16 tag;
+		__le16 len;
+		u8 three_wire_mode;
+	} __packed req = {
+		.tag = cpu_to_le16(UNI_PTA_3WIRE_CTRL_EXT_EN),
+		.len = cpu_to_le16(sizeof(req) - 4),
+	};
+	u8 ext_sel, ceb_band_sel;
+	int err;
+
+	err = nla_parse(tb, MTK_VENDOR_ATTR_3WIRE_CTRL_MAX, data, data_len,
+			mt76_vendor_3wire_ctrl_policy, NULL);
+	if (err)
+		return err;
+
+	if (!tb[MTK_VENDOR_ATTR_3WIRE_EXT_SEL] ||
+	    !tb[MTK_VENDOR_ATTR_3WIRE_CEB_BAND_SEL])
+		return -EINVAL;
+
+	ext_sel = nla_get_u8(tb[MTK_VENDOR_ATTR_3WIRE_EXT_SEL]);
+	ceb_band_sel = nla_get_u8(tb[MTK_VENDOR_ATTR_3WIRE_CEB_BAND_SEL]);
+	req.three_wire_mode = u8_encode_bits(ext_sel, EXT_SEL_MASK) |
+			      u8_encode_bits(ceb_band_sel, CEB_BAND_SEL_MASK);
+
+	return mt76_mcu_send_msg(dev, MCU_WM_UNI_CMD(PTA_3WIRE_CTRL), &req,
+				 sizeof(req), false);
+}
+EXPORT_SYMBOL_GPL(mt76_vendor_3wire_ctrl);
 #endif
 
 void mt76_vendor_register(struct mt76_dev *dev,

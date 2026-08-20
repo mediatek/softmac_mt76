@@ -441,6 +441,8 @@ extern const struct nla_policy
 mt76_vendor_bss_color_ctrl_policy[NUM_MTK_VENDOR_ATTRS_BSS_COLOR_CTRL];
 extern const struct nla_policy
 mt76_vendor_ibf_ctrl_policy[NUM_MTK_VENDOR_ATTRS_IBF_CTRL];
+extern const struct nla_policy
+mt76_vendor_3wire_ctrl_policy[NUM_MTK_VENDOR_ATTRS_3WIRE_CTRL];
 
 int mt76_vendor_bss_color_ctrl_dump(struct wiphy *wiphy,
 				    struct wireless_dev *wdev,
@@ -454,6 +456,8 @@ int mt76_vendor_ibf_ctrl_dump(struct wiphy *wiphy,
 			      struct wireless_dev *wdev,
 			      struct sk_buff *skb, const void *data,
 			      int data_len, unsigned long *storage);
+int mt76_vendor_3wire_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
+			   const void *data, int data_len);
 #endif
 
 #endif /* __MT76_VENDOR_H */
