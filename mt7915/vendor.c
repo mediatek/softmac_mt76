@@ -1360,54 +1360,6 @@ static int mt7915_vendor_3wire_ctrl(struct wiphy *wiphy,
 	return mt7915_mcu_set_cfg(phy, CFGINFO_3WIRE_EN_CFG, ext_sel);
 }
 
-static int mt7915_vendor_ibf_ctrl(struct wiphy *wiphy,
-				  struct wireless_dev *wdev,
-				  const void *data,
-				  int data_len)
-{
-	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
-	struct mt7915_phy *phy = mt7915_hw_phy(hw);
-	struct mt7915_dev *dev = phy->dev;
-	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_IBF_CTRL];
-	int err;
-	u8 val;
-
-	err = nla_parse(tb, MTK_VENDOR_ATTR_IBF_CTRL_MAX, data, data_len,
-			mt76_vendor_ibf_ctrl_policy, NULL);
-	if (err)
-		return err;
-
-	if (tb[MTK_VENDOR_ATTR_IBF_CTRL_ENABLE]) {
-		val = nla_get_u8(tb[MTK_VENDOR_ATTR_IBF_CTRL_ENABLE]);
-
-		dev->ibf = !!val;
-
-		err = mt7915_mcu_set_txbf(dev, MT_BF_TYPE_UPDATE);
-		if (err)
-			return err;
-	}
-	return 0;
-}
-
-static int
-mt7915_vendor_ibf_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
-			     struct sk_buff *skb, const void *data, int data_len,
-			     unsigned long *storage)
-{
-	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
-	struct mt7915_phy *phy = mt7915_hw_phy(hw);
-	struct mt7915_dev *dev = phy->dev;
-
-	if (*storage == 1)
-		return -ENOENT;
-	*storage = 1;
-
-	if (nla_put_u8(skb, MTK_VENDOR_ATTR_IBF_DUMP_ENABLE, dev->ibf))
-		return -ENOMEM;
-
-	return 1;
-}
-
 static int
 mt7915_vendor_bss_color_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
 			     struct sk_buff *skb, const void *data, int data_len,
@@ -1614,8 +1566,8 @@ static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
 			 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = mt7915_vendor_ibf_ctrl,
-		.dumpit = mt7915_vendor_ibf_ctrl_dump,
+		.doit = mt76_vendor_ibf_ctrl,
+		.dumpit = mt76_vendor_ibf_ctrl_dump,
 		.policy = mt76_vendor_ibf_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_IBF_CTRL_MAX,
 	},
@@ -1654,9 +1606,29 @@ static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 	},
 };
 
+static int mt7915_vendor_ibf_ctrl(struct mt76_dev *mdev, bool enabled)
+{
+	struct mt7915_dev *dev = container_of(mdev, struct mt7915_dev, mt76);
+
+	dev->ibf = enabled;
+
+	return mt7915_mcu_set_txbf(dev, MT_BF_TYPE_UPDATE);
+}
+
+static int mt7915_vendor_ibf_ctrl_dump(struct mt76_dev *mdev, bool *enabled)
+{
+	struct mt7915_dev *dev = container_of(mdev, struct mt7915_dev, mt76);
+
+	*enabled = dev->ibf;
+
+	return 0;
+}
+
 static const struct mt76_vendor_ops mt7915_vendor_ops = {
 	.commands = mt7915_vendor_commands,
 	.n_commands = ARRAY_SIZE(mt7915_vendor_commands),
+	.ibf_ctrl = mt7915_vendor_ibf_ctrl,
+	.ibf_ctrl_dump = mt7915_vendor_ibf_ctrl_dump,
 };
 
 void mt7915_vendor_register(struct mt7915_phy *phy)
