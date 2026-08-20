@@ -58,11 +58,6 @@ background_radar_ctrl_policy[NUM_MTK_VENDOR_ATTRS_BACKGROUND_RADAR_CTRL] = {
 };
 
 static const struct nla_policy
-beacon_ctrl_policy[NUM_MTK_VENDOR_ATTRS_BEACON_CTRL] = {
-	[MTK_VENDOR_ATTR_BEACON_CTRL_MODE] = { .type = NLA_U8 },
-};
-
-static const struct nla_policy
 epcs_ctrl_policy[NUM_MTK_VENDOR_ATTRS_EPCS_CTRL] = {
 	[MTK_VENDOR_ATTR_EPCS_ADDR] = NLA_POLICY_ETH_ADDR,
 	[MTK_VENDOR_ATTR_EPCS_LINK_ID] = { .type = NLA_U8 },
@@ -772,29 +767,6 @@ static int mt7999_vendor_background_radar_mode_ctrl(struct wiphy *wiphy,
 	return mt7999_mcu_rdd_background_disable_timer(dev, !!background_radar_mode);
 }
 
-static int mt7999_vendor_beacon_ctrl(struct wiphy *wiphy,
-				     struct wireless_dev *wdev,
-				     const void *data,
-				     int data_len)
-{
-	struct ieee80211_vif *vif = wdev_to_ieee80211_vif(wdev);
-	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_BEACON_CTRL];
-	int err;
-	u8 val8;
-
-	err = nla_parse(tb, MTK_VENDOR_ATTR_BEACON_CTRL_MAX, data, data_len,
-			beacon_ctrl_policy, NULL);
-	if (err)
-		return err;
-
-	if (tb[MTK_VENDOR_ATTR_BEACON_CTRL_MODE]) {
-		val8 = nla_get_u8(tb[MTK_VENDOR_ATTR_BEACON_CTRL_MODE]);
-		mt7999_set_beacon_vif(vif, val8);
-	}
-
-	return 0;
-}
-
 static int
 mt7999_vendor_epcs_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 			const void *data, int data_len)
@@ -1465,8 +1437,8 @@ static const struct wiphy_vendor_command mt7999_vendor_commands[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
 			 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = mt7999_vendor_beacon_ctrl,
-		.policy = beacon_ctrl_policy,
+		.doit = mt76_vendor_beacon_ctrl,
+		.policy = mt76_vendor_beacon_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_BEACON_CTRL_MAX,
 	},
 	{
@@ -1641,6 +1613,7 @@ static const struct mt76_vendor_ops mt7999_vendor_ops = {
 	.edcca_ctrl = mt7999_vendor_edcca_ctrl,
 	.edcca_ctrl_threshold = mt7999_vendor_edcca_ctrl_threshold,
 	.edcca_ctrl_dump = mt7999_vendor_edcca_ctrl_dump,
+	.set_beacon = mt7999_set_beacon_vif,
 };
 
 void mt7999_vendor_register(struct mt7999_phy *phy)

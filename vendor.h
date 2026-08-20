@@ -435,6 +435,7 @@ struct mt76_vendor_ops {
 	int (*edcca_ctrl)(struct mt76_dev *dev, u8 radio_idx, bool enabled);
 	int (*edcca_ctrl_threshold)(struct mt76_dev *dev, u8 radio_idx, u8 value[4]);
 	int (*edcca_ctrl_dump)(struct mt76_dev *dev, u8 radio_idx, u8 value[4]);
+	void (*set_beacon)(struct ieee80211_vif *vif, u8 mode);
 };
 
 void mt76_vendor_register(struct mt76_dev *dev,
@@ -460,6 +461,8 @@ extern const struct nla_policy
 mt76_vendor_mu_ctrl_policy[NUM_MTK_VENDOR_ATTRS_MU_CTRL];
 extern const struct nla_policy
 mt76_vendor_edcca_ctrl_policy[NUM_MTK_VENDOR_ATTRS_EDCCA_CTRL];
+extern const struct nla_policy
+mt76_vendor_beacon_ctrl_policy[NUM_MTK_VENDOR_ATTRS_BEACON_CTRL];
 
 int mt76_vendor_bss_color_ctrl_dump(struct wiphy *wiphy,
 				    struct wireless_dev *wdev,
@@ -491,6 +494,8 @@ int mt76_vendor_edcca_ctrl_dump(struct wiphy *wiphy,
 				struct wireless_dev *wdev,
 				struct sk_buff *skb, const void *data,
 				int data_len, unsigned long *storage);
+int mt76_vendor_beacon_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
+			    const void *data, int data_len);
 #endif
 
 #endif /* __MT76_VENDOR_H */
