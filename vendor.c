@@ -41,6 +41,15 @@ mt76_vendor_3wire_ctrl_policy[NUM_MTK_VENDOR_ATTRS_3WIRE_CTRL] = {
 };
 EXPORT_SYMBOL_GPL(mt76_vendor_3wire_ctrl_policy);
 
+const struct nla_policy
+mt76_vendor_mu_ctrl_policy[NUM_MTK_VENDOR_ATTRS_MU_CTRL] = {
+	[MTK_VENDOR_ATTR_MU_CTRL_ONOFF] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_MU_CTRL_DUMP] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_MU_CTRL_STRUCT] = { .type = NLA_BINARY },
+	[MTK_VENDOR_ATTR_MU_CTRL_RADIO_IDX] = { .type = NLA_U8 },
+};
+EXPORT_SYMBOL_GPL(mt76_vendor_mu_ctrl_policy);
+
 const struct nl80211_vendor_cmd_info mt76_vendor_events[MT76_VENDOR_N_EVENTS] = {
 	[MTK_NL80211_VENDOR_EVENT_PP_BMP_UPDATE] = {
 		.vendor_id = MTK_NL80211_VENDOR_ID,
@@ -236,6 +245,74 @@ int mt76_vendor_wireless_ctrl_dump(struct wiphy *wiphy,
 	return 1;
 }
 EXPORT_SYMBOL_GPL(mt76_vendor_wireless_ctrl_dump);
+
+int mt76_vendor_mu_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
+			const void *data, int data_len)
+{
+	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
+	struct mt76_dev *dev = hw->priv;
+	const struct mt76_vendor_ops *ops = dev->vendor_ops;
+	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_MU_CTRL];
+	int err;
+
+	if (!ops || !ops->mu_ctrl || !ops->mu_ctrl_cfg)
+		return -EOPNOTSUPP;
+
+	err = nla_parse(tb, MTK_VENDOR_ATTR_MU_CTRL_MAX, data, data_len,
+			mt76_vendor_mu_ctrl_policy, NULL);
+	if (err)
+		return err;
+
+	if (tb[MTK_VENDOR_ATTR_MU_CTRL_ONOFF] &&
+	    tb[MTK_VENDOR_ATTR_MU_CTRL_RADIO_IDX])
+		return ops->mu_ctrl(dev,
+			nla_get_u8(tb[MTK_VENDOR_ATTR_MU_CTRL_RADIO_IDX]),
+			nla_get_u8(tb[MTK_VENDOR_ATTR_MU_CTRL_ONOFF]));
+
+	if (tb[MTK_VENDOR_ATTR_MU_CTRL_STRUCT])
+		return ops->mu_ctrl_cfg(dev, tb[MTK_VENDOR_ATTR_MU_CTRL_STRUCT]);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(mt76_vendor_mu_ctrl);
+
+int mt76_vendor_mu_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
+			     struct sk_buff *skb, const void *data,
+			     int data_len, unsigned long *storage)
+{
+	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
+	struct mt76_dev *dev = hw->priv;
+	const struct mt76_vendor_ops *ops = dev->vendor_ops;
+	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_MU_CTRL];
+	u8 enabled, radio_idx;
+	int err;
+
+	if (!ops || !ops->mu_ctrl_dump)
+		return -EOPNOTSUPP;
+
+	if (*storage == 1)
+		return -ENOENT;
+	*storage = 1;
+
+	err = nla_parse(tb, MTK_VENDOR_ATTR_MU_CTRL_MAX, data, data_len,
+			mt76_vendor_mu_ctrl_policy, NULL);
+	if (err)
+		return err;
+
+	if (!tb[MTK_VENDOR_ATTR_MU_CTRL_RADIO_IDX])
+		return -EINVAL;
+
+	radio_idx = nla_get_u8(tb[MTK_VENDOR_ATTR_MU_CTRL_RADIO_IDX]);
+	err = ops->mu_ctrl_dump(dev, radio_idx, &enabled);
+	if (err)
+		return err;
+
+	if (nla_put_u8(skb, MTK_VENDOR_ATTR_MU_CTRL_DUMP, enabled))
+		return -ENOMEM;
+
+	return 1;
+}
+EXPORT_SYMBOL_GPL(mt76_vendor_mu_ctrl_dump);
 #endif
 
 void mt76_vendor_register(struct mt76_dev *dev,

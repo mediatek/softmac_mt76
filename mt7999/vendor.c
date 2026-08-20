@@ -12,14 +12,6 @@
 
 #ifdef CONFIG_MTK_VENDOR
 static const struct nla_policy
-mu_ctrl_policy[NUM_MTK_VENDOR_ATTRS_MU_CTRL] = {
-	[MTK_VENDOR_ATTR_MU_CTRL_ONOFF] = {.type = NLA_U8 },
-	[MTK_VENDOR_ATTR_MU_CTRL_DUMP] = {.type = NLA_U8 },
-	[MTK_VENDOR_ATTR_MU_CTRL_STRUCT] = {.type = NLA_BINARY },
-	[MTK_VENDOR_ATTR_MU_CTRL_RADIO_IDX] = {.type = NLA_U8 },
-};
-
-static const struct nla_policy
 amnt_ctrl_policy[NUM_MTK_VENDOR_ATTRS_AMNT_CTRL] = {
 	[MTK_VENDOR_ATTR_AMNT_CTRL_SET] = {.type = NLA_NESTED },
 	[MTK_VENDOR_ATTR_AMNT_CTRL_DUMP] = { .type = NLA_NESTED },
@@ -146,93 +138,6 @@ struct mt7999_amnt_data {
 	s8 rssi[4];
 	u32 last_seen;
 };
-
-static int mt7999_vendor_mu_ctrl(struct wiphy *wiphy,
-				 struct wireless_dev *wdev,
-				 const void *data,
-				 int data_len)
-{
-	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
-	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_MU_CTRL];
-	struct mt7999_dev *dev = mt7999_hw_dev(hw);
-	struct mt7999_phy *phy;
-	struct mt7999_muru *muru;
-	int err;
-	u8 val8, radio_idx;
-	u32 val32 = 0;
-
-	err = nla_parse(tb, MTK_VENDOR_ATTR_MU_CTRL_MAX, data, data_len,
-			mu_ctrl_policy, NULL);
-	if (err)
-		return err;
-
-	if (tb[MTK_VENDOR_ATTR_MU_CTRL_ONOFF] &&
-	    tb[MTK_VENDOR_ATTR_MU_CTRL_RADIO_IDX]) {
-		val8 = nla_get_u8(tb[MTK_VENDOR_ATTR_MU_CTRL_ONOFF]);
-		radio_idx = nla_get_u8(tb[MTK_VENDOR_ATTR_MU_CTRL_RADIO_IDX]);
-		if (!mt7999_radio_valid(dev, radio_idx))
-			return -EINVAL;
-		phy = dev->radio_phy[radio_idx];
-
-		val32 |= FIELD_PREP(RATE_CFG_MODE, RATE_PARAM_AUTO_MU) |
-			 FIELD_PREP(RATE_CFG_VAL, val8) |
-			 FIELD_PREP(RATE_CFG_BAND_IDX, phy->mt76->band_idx);
-		ieee80211_iterate_active_interfaces_atomic(hw, IEEE80211_IFACE_ITER_RESUME_ALL,
-							   mt7999_set_wireless_vif, &val32);
-	} else if (tb[MTK_VENDOR_ATTR_MU_CTRL_STRUCT]) {
-		muru = kzalloc(sizeof(struct mt7999_muru), GFP_KERNEL);
-		if (!muru)
-			return -ENOMEM;
-
-		nla_memcpy(muru, tb[MTK_VENDOR_ATTR_MU_CTRL_STRUCT],
-			   sizeof(struct mt7999_muru));
-
-		err = mt7999_mcu_set_muru_cfg(dev, muru);
-		kfree(muru);
-	}
-
-	return err;
-}
-
-static int
-mt7999_vendor_mu_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
-			   struct sk_buff *skb, const void *data, int data_len,
-			   unsigned long *storage)
-{
-	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
-	struct mt7999_dev *dev = mt7999_hw_dev(hw);
-	struct mt7999_phy *phy;
-	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_MU_CTRL];
-	int len = 0, err;
-	u8 radio_idx;
-
-	if (*storage == 1)
-		return -ENOENT;
-	*storage = 1;
-
-	err = nla_parse(tb, MTK_VENDOR_ATTR_MU_CTRL_MAX, data, data_len,
-			mu_ctrl_policy, NULL);
-	if (err)
-		return err;
-
-	if (!tb[MTK_VENDOR_ATTR_MU_CTRL_RADIO_IDX])
-		return -EINVAL;
-
-	radio_idx = nla_get_u8(tb[MTK_VENDOR_ATTR_MU_CTRL_RADIO_IDX]);
-	if (!mt7999_radio_valid(dev, radio_idx))
-		goto error;
-	phy = dev->radio_phy[radio_idx];
-
-	if (nla_put_u8(skb, MTK_VENDOR_ATTR_MU_CTRL_DUMP, phy->muru_onoff))
-		return -ENOMEM;
-	len += 1;
-
-	return len;
-
-error:
-	dev_err(dev->mt76.dev, "Invalid radio idx to dump\n");
-	return -EINVAL;
-}
 
 static void
 mt7999_set_wireless_rts_sigta(struct ieee80211_hw *hw, u8 value) {
@@ -1573,9 +1478,9 @@ static const struct wiphy_vendor_command mt7999_vendor_commands[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
 			 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = mt7999_vendor_mu_ctrl,
-		.dumpit = mt7999_vendor_mu_ctrl_dump,
-		.policy = mu_ctrl_policy,
+		.doit = mt76_vendor_mu_ctrl,
+		.dumpit = mt76_vendor_mu_ctrl_dump,
+		.policy = mt76_vendor_mu_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_MU_CTRL_MAX,
 	},
 	{
@@ -1766,6 +1671,56 @@ static int mt7999_vendor_ibf_ctrl_dump(struct mt76_dev *mdev, bool *enabled)
 	return 0;
 }
 
+static int mt7999_vendor_mu_ctrl(struct mt76_dev *mdev, u8 radio_idx, u8 muru_onoff)
+{
+	struct mt7999_dev *dev = container_of(mdev, struct mt7999_dev, mt76);
+	struct mt7999_phy *phy;
+	u32 value;
+
+	if (!mt7999_radio_valid(dev, radio_idx))
+		return -EINVAL;
+
+	phy = dev->radio_phy[radio_idx];
+	value = FIELD_PREP(RATE_CFG_MODE, RATE_PARAM_AUTO_MU) |
+		FIELD_PREP(RATE_CFG_VAL, muru_onoff) |
+		FIELD_PREP(RATE_CFG_BAND_IDX, phy->mt76->band_idx);
+	ieee80211_iterate_active_interfaces_atomic(dev->mt76.hw,
+						   IEEE80211_IFACE_ITER_RESUME_ALL,
+						   mt7999_set_wireless_vif, &value);
+
+	return 0;
+}
+
+static int mt7999_vendor_mu_ctrl_cfg(struct mt76_dev *mdev,
+				     const struct nlattr *attr)
+{
+	struct mt7999_dev *dev = container_of(mdev, struct mt7999_dev, mt76);
+	struct mt7999_muru *muru;
+	int err;
+
+	muru = kzalloc(sizeof(*muru), GFP_KERNEL);
+	if (!muru)
+		return -ENOMEM;
+
+	nla_memcpy(muru, attr, sizeof(*muru));
+	err = mt7999_mcu_set_muru_cfg(dev, muru);
+	kfree(muru);
+
+	return err;
+}
+
+static int mt7999_vendor_mu_ctrl_dump(struct mt76_dev *mdev, u8 radio_idx,
+				      u8 *muru_onoff)
+{
+	struct mt7999_dev *dev = container_of(mdev, struct mt7999_dev, mt76);
+
+	if (!mt7999_radio_valid(dev, radio_idx))
+		return -EINVAL;
+
+	*muru_onoff = dev->radio_phy[radio_idx]->muru_onoff;
+	return 0;
+}
+
 static const struct mt76_vendor_ops mt7999_vendor_ops = {
 	.commands = mt7999_vendor_commands,
 	.n_commands = ARRAY_SIZE(mt7999_vendor_commands),
@@ -1773,6 +1728,9 @@ static const struct mt76_vendor_ops mt7999_vendor_ops = {
 	.n_events = MT76_VENDOR_N_EVENTS,
 	.ibf_ctrl = mt7999_vendor_ibf_ctrl,
 	.ibf_ctrl_dump = mt7999_vendor_ibf_ctrl_dump,
+	.mu_ctrl = mt7999_vendor_mu_ctrl,
+	.mu_ctrl_cfg = mt7999_vendor_mu_ctrl_cfg,
+	.mu_ctrl_dump = mt7999_vendor_mu_ctrl_dump,
 };
 
 void mt7999_vendor_register(struct mt7999_phy *phy)
