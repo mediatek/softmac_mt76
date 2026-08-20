@@ -12,15 +12,6 @@
 
 #ifdef CONFIG_MTK_VENDOR
 static const struct nla_policy
-epcs_ctrl_policy[NUM_MTK_VENDOR_ATTRS_EPCS_CTRL] = {
-	[MTK_VENDOR_ATTR_EPCS_ADDR] = NLA_POLICY_ETH_ADDR,
-	[MTK_VENDOR_ATTR_EPCS_LINK_ID] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_EPCS_ENABLE] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_EPCS_WMM_IDX] = { .type = NLA_U16 },
-	[MTK_VENDOR_ATTR_EPCS_WMM_PARAMS] = { .type = NLA_BINARY }
-};
-
-static const struct nla_policy
 scs_ctrl_policy[NUM_MTK_VENDOR_ATTRS_SCS_CTRL] = {
 	[MTK_VENDOR_ATTR_SCS_ID] = { .type = NLA_U8 },
 	[MTK_VENDOR_ATTR_SCS_REQ_TYPE] = { .type = NLA_U8 },
@@ -714,7 +705,7 @@ mt7996_vendor_epcs_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 		return -EPERM;
 
 	ret = nla_parse(tb, MTK_VENDOR_ATTR_EPCS_CTRL_MAX, data, data_len,
-			epcs_ctrl_policy, NULL);
+			mt76_vendor_epcs_ctrl_policy, NULL);
 	if (ret)
 		return ret;
 
@@ -1340,7 +1331,7 @@ static const struct wiphy_vendor_command mt7996_vendor_commands[] = {
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
 			 WIPHY_VENDOR_CMD_NEED_RUNNING,
 		.doit = mt7996_vendor_epcs_ctrl,
-		.policy = epcs_ctrl_policy,
+		.policy = mt76_vendor_epcs_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_EPCS_CTRL_MAX,
 	},
 	{
