@@ -31,6 +31,7 @@ enum mtk_nl80211_vendor_subcmds {
 
 enum mtk_nl80211_vendor_events {
 	MTK_NL80211_VENDOR_EVENT_PP_BMP_UPDATE = 0x5,
+	MT76_VENDOR_N_EVENTS
 };
 
 enum mtk_vendor_attr_edcca_ctrl {
@@ -430,5 +431,19 @@ struct mt76_vendor_ops {
 
 void mt76_vendor_register(struct mt76_dev *dev,
 			  const struct mt76_vendor_ops *ops);
+
+#ifdef CONFIG_MTK_VENDOR
+extern const struct nl80211_vendor_cmd_info
+mt76_vendor_events[MT76_VENDOR_N_EVENTS];
+extern const struct nla_policy
+mt76_vendor_bss_color_ctrl_policy[NUM_MTK_VENDOR_ATTRS_BSS_COLOR_CTRL];
+
+int mt76_vendor_bss_color_ctrl_dump(struct wiphy *wiphy,
+				    struct wireless_dev *wdev,
+				    struct sk_buff *skb,
+				    const void *data, int data_len,
+				    unsigned long *storage);
+int mt76_vendor_pp_bitmap_update(struct mt76_phy *phy, u16 bitmap);
+#endif
 
 #endif /* __MT76_VENDOR_H */

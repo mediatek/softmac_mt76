@@ -59,12 +59,6 @@ amnt_dump_policy[NUM_MTK_VENDOR_ATTRS_AMNT_DUMP] = {
 	[MTK_VENDOR_ATTR_AMNT_DUMP_RESULT] = { .type = NLA_NESTED },
 };
 
-static struct nla_policy
-bss_color_ctrl_policy[NUM_MTK_VENDOR_ATTRS_BSS_COLOR_CTRL] = {
-	[MTK_VENDOR_ATTR_AVAL_BSS_COLOR_BMP] = { .type = NLA_U64 },
-	[MTK_VENDOR_ATTR_AVAL_BSS_COLOR_LINK_ID] = { .type = NLA_U8 },
-};
-
 static const struct nla_policy
 edcca_ctrl_policy[NUM_MTK_VENDOR_ATTRS_EDCCA_CTRL] = {
 	[MTK_VENDOR_ATTR_EDCCA_CTRL_MODE] = { .type = NLA_U8 },
@@ -680,52 +674,6 @@ mt7996_vendor_amnt_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
 	return len + 1;
 }
 
-static int
-mt7996_vendor_bss_color_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
-				  struct sk_buff *skb, const void *data, int data_len,
-				  unsigned long *storage)
-{
-	struct ieee80211_vif *vif = wdev_to_ieee80211_vif(wdev);
-	struct ieee80211_bss_conf *bss_conf;
-	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_BSS_COLOR_CTRL];
-	int len = 0, err;
-	u8 link_id = 0;
-
-	if (*storage == 1)
-		return -ENOENT;
-	*storage = 1;
-
-	err = nla_parse(tb, MTK_VENDOR_ATTR_BSS_COLOR_CTRL_MAX, data, data_len,
-			bss_color_ctrl_policy, NULL);
-
-	if (err)
-		return err;
-
-	if (ieee80211_vif_is_mld(vif) &&
-	    tb[MTK_VENDOR_ATTR_AVAL_BSS_COLOR_LINK_ID]) {
-		link_id = nla_get_u8(tb[MTK_VENDOR_ATTR_AVAL_BSS_COLOR_LINK_ID]);
-		if (link_id >= IEEE80211_LINK_UNSPECIFIED)
-			return -EINVAL;
-	}
-
-	rcu_read_lock();
-	bss_conf = rcu_dereference(vif->link_conf[link_id]);
-	if (!bss_conf) {
-		rcu_read_unlock();
-		return -ENOLINK;
-	}
-
-	if (nla_put_u64_64bit(skb, MTK_VENDOR_ATTR_AVAL_BSS_COLOR_BMP,
-			      ~bss_conf->used_color_bitmap, NL80211_ATTR_PAD)) {
-		rcu_read_unlock();
-		return -ENOMEM;
-	}
-	len += 1;
-
-	rcu_read_unlock();
-	return len;
-}
-
 static int mt7996_vendor_edcca_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 				    const void *data, int data_len)
 {
@@ -990,39 +938,6 @@ static int mt7996_vendor_pp_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 error:
 	dev_err(dev->mt76.dev, "Invalid link id: %d\n", link_id);
 	return -EINVAL;
-}
-
-int mt7996_vendor_pp_bitmap_update(struct mt7996_phy *phy, u16 bitmap)
-{
-	struct sk_buff *skb;
-	struct mt76_phy *mphy = phy->mt76;
-	struct cfg80211_chan_def *chandef;
-	struct nlattr *data;
-
-	chandef = &mphy->main_chandef;
-
-	skb = cfg80211_vendor_event_alloc(mphy->hw->wiphy, NULL, 20,
-					  MTK_NL80211_VENDOR_EVENT_PP_BMP_UPDATE,
-					  GFP_ATOMIC);
-
-	if (!skb)
-		return -ENOMEM;
-
-	if (nla_put_u32(skb, NL80211_ATTR_WIPHY_FREQ, chandef->chan->center_freq))
-		goto out;
-
-	data = nla_nest_start(skb, NL80211_ATTR_VENDOR_DATA);
-	if (!data || nla_put_u16(skb, MTK_VENDOR_ATTR_PP_BITMAP, bitmap))
-		goto out;
-
-	nla_nest_end(skb, data);
-
-	cfg80211_vendor_event(skb, GFP_ATOMIC);
-
-	return 0;
-out:
-	dev_kfree_skb(skb);
-	return -ENOMEM;
 }
 
 static int mt7996_vendor_rfeature_ctrl(struct wiphy *wiphy,
@@ -1832,8 +1747,8 @@ static const struct wiphy_vendor_command mt7996_vendor_commands[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
 			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.dumpit = mt7996_vendor_bss_color_ctrl_dump,
-		.policy = bss_color_ctrl_policy,
+		.dumpit = mt76_vendor_bss_color_ctrl_dump,
+		.policy = mt76_vendor_bss_color_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_BSS_COLOR_CTRL_MAX,
 	},
 	{
@@ -1973,18 +1888,11 @@ static const struct wiphy_vendor_command mt7996_vendor_commands[] = {
 	},
 };
 
-static const struct nl80211_vendor_cmd_info mt7996_vendor_events[] = {
-	[MTK_NL80211_VENDOR_EVENT_PP_BMP_UPDATE] = {
-		.vendor_id = MTK_NL80211_VENDOR_ID,
-		.subcmd = MTK_NL80211_VENDOR_EVENT_PP_BMP_UPDATE,
-	},
-};
-
 static const struct mt76_vendor_ops mt7996_vendor_ops = {
 	.commands = mt7996_vendor_commands,
 	.n_commands = ARRAY_SIZE(mt7996_vendor_commands),
-	.events = mt7996_vendor_events,
-	.n_events = ARRAY_SIZE(mt7996_vendor_events),
+	.events = mt76_vendor_events,
+	.n_events = MT76_VENDOR_N_EVENTS,
 };
 
 void mt7996_vendor_register(struct mt7996_phy *phy)
