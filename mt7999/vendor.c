@@ -11,17 +11,6 @@
 #include "mtk_mcu.h"
 
 #ifdef CONFIG_MTK_VENDOR
-static const struct nla_policy
-txpower_ctrl_policy[NUM_MTK_VENDOR_ATTRS_TXPOWER_CTRL] = {
-	[MTK_VENDOR_ATTR_TXPOWER_CTRL_LPI_PSD] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_IDX] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_TXPOWER_CTRL_LPI_BCN_ENHANCE] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_TXPOWER_CTRL_LINK_ID] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_TXPOWER_CTRL_AFC_TABLE] = { .type = NLA_BINARY },
-	[MTK_VENDOR_ATTR_TXPOWER_CTRL_AFC_LPI] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_FILENAME] = { .type = NLA_STRING },
-};
-
 struct mt7999_amnt_data {
 	u8 idx;
 	u8 addr[ETH_ALEN];
@@ -1039,7 +1028,7 @@ static int mt7999_vendor_txpower_ctrl(struct wiphy *wiphy,
 	s8 new_power_limit = 127;
 
 	err = nla_parse(tb, MTK_VENDOR_ATTR_TXPOWER_CTRL_MAX, data, data_len,
-			txpower_ctrl_policy, NULL);
+			mt76_vendor_txpower_ctrl_policy, NULL);
 	if (err)
 		return err;
 
@@ -1317,7 +1306,7 @@ static const struct wiphy_vendor_command mt7999_vendor_commands[] = {
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
 			 WIPHY_VENDOR_CMD_NEED_RUNNING,
 		.doit = mt7999_vendor_txpower_ctrl,
-		.policy = txpower_ctrl_policy,
+		.policy = mt76_vendor_txpower_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_TXPOWER_CTRL_MAX,
 	},
 	{

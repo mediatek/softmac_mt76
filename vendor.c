@@ -110,6 +110,18 @@ mt76_vendor_csi_ctrl_policy[NUM_MTK_VENDOR_ATTRS_CSI_CTRL] = {
 EXPORT_SYMBOL_GPL(mt76_vendor_csi_ctrl_policy);
 
 const struct nla_policy
+mt76_vendor_txpower_ctrl_policy[NUM_MTK_VENDOR_ATTRS_TXPOWER_CTRL] = {
+	[MTK_VENDOR_ATTR_TXPOWER_CTRL_LPI_PSD] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_IDX] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_TXPOWER_CTRL_LPI_BCN_ENHANCE] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_TXPOWER_CTRL_LINK_ID] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_TXPOWER_CTRL_AFC_TABLE] = { .type = NLA_BINARY },
+	[MTK_VENDOR_ATTR_TXPOWER_CTRL_AFC_LPI] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_FILENAME] = { .type = NLA_STRING },
+};
+EXPORT_SYMBOL_GPL(mt76_vendor_txpower_ctrl_policy);
+
+const struct nla_policy
 mt76_vendor_ibf_ctrl_policy[NUM_MTK_VENDOR_ATTRS_IBF_CTRL] = {
 	[MTK_VENDOR_ATTR_IBF_CTRL_ENABLE] = { .type = NLA_U8 },
 };
