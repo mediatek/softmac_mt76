@@ -427,6 +427,8 @@ struct mt76_vendor_ops {
 	unsigned int n_commands;
 	const struct nl80211_vendor_cmd_info *events;
 	unsigned int n_events;
+	int (*ibf_ctrl)(struct mt76_dev *dev, bool enabled);
+	int (*ibf_ctrl_dump)(struct mt76_dev *dev, bool *enabled);
 };
 
 void mt76_vendor_register(struct mt76_dev *dev,
@@ -437,6 +439,8 @@ extern const struct nl80211_vendor_cmd_info
 mt76_vendor_events[MT76_VENDOR_N_EVENTS];
 extern const struct nla_policy
 mt76_vendor_bss_color_ctrl_policy[NUM_MTK_VENDOR_ATTRS_BSS_COLOR_CTRL];
+extern const struct nla_policy
+mt76_vendor_ibf_ctrl_policy[NUM_MTK_VENDOR_ATTRS_IBF_CTRL];
 
 int mt76_vendor_bss_color_ctrl_dump(struct wiphy *wiphy,
 				    struct wireless_dev *wdev,
@@ -444,6 +448,12 @@ int mt76_vendor_bss_color_ctrl_dump(struct wiphy *wiphy,
 				    const void *data, int data_len,
 				    unsigned long *storage);
 int mt76_vendor_pp_bitmap_update(struct mt76_phy *phy, u16 bitmap);
+int mt76_vendor_ibf_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
+			 const void *data, int data_len);
+int mt76_vendor_ibf_ctrl_dump(struct wiphy *wiphy,
+			      struct wireless_dev *wdev,
+			      struct sk_buff *skb, const void *data,
+			      int data_len, unsigned long *storage);
 #endif
 
 #endif /* __MT76_VENDOR_H */

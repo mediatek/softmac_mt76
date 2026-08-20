@@ -11,6 +11,12 @@ mt76_vendor_bss_color_ctrl_policy[NUM_MTK_VENDOR_ATTRS_BSS_COLOR_CTRL] = {
 };
 EXPORT_SYMBOL_GPL(mt76_vendor_bss_color_ctrl_policy);
 
+const struct nla_policy
+mt76_vendor_ibf_ctrl_policy[NUM_MTK_VENDOR_ATTRS_IBF_CTRL] = {
+	[MTK_VENDOR_ATTR_IBF_CTRL_ENABLE] = { .type = NLA_U8 },
+};
+EXPORT_SYMBOL_GPL(mt76_vendor_ibf_ctrl_policy);
+
 const struct nl80211_vendor_cmd_info mt76_vendor_events[MT76_VENDOR_N_EVENTS] = {
 	[MTK_NL80211_VENDOR_EVENT_PP_BMP_UPDATE] = {
 		.vendor_id = MTK_NL80211_VENDOR_ID,
@@ -93,6 +99,59 @@ out:
 	return -ENOMEM;
 }
 EXPORT_SYMBOL_GPL(mt76_vendor_pp_bitmap_update);
+
+int mt76_vendor_ibf_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
+			 const void *data, int data_len)
+{
+	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
+	struct mt76_dev *dev = hw->priv;
+	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_IBF_CTRL];
+	const struct mt76_vendor_ops *ops = dev->vendor_ops;
+	int err;
+
+	if (!ops || !ops->ibf_ctrl)
+		return -EOPNOTSUPP;
+
+	err = nla_parse(tb, MTK_VENDOR_ATTR_IBF_CTRL_MAX, data, data_len,
+			mt76_vendor_ibf_ctrl_policy, NULL);
+	if (err)
+		return err;
+
+	if (!tb[MTK_VENDOR_ATTR_IBF_CTRL_ENABLE])
+		return 0;
+
+	return ops->ibf_ctrl(dev, nla_get_u8(tb[MTK_VENDOR_ATTR_IBF_CTRL_ENABLE]));
+}
+EXPORT_SYMBOL_GPL(mt76_vendor_ibf_ctrl);
+
+int mt76_vendor_ibf_ctrl_dump(struct wiphy *wiphy,
+			      struct wireless_dev *wdev,
+			      struct sk_buff *skb, const void *data,
+			      int data_len, unsigned long *storage)
+{
+	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
+	struct mt76_dev *dev = hw->priv;
+	const struct mt76_vendor_ops *ops = dev->vendor_ops;
+	bool enabled;
+	int err;
+
+	if (!ops || !ops->ibf_ctrl_dump)
+		return -EOPNOTSUPP;
+
+	if (*storage == 1)
+		return -ENOENT;
+	*storage = 1;
+
+	err = ops->ibf_ctrl_dump(dev, &enabled);
+	if (err)
+		return err;
+
+	if (nla_put_u8(skb, MTK_VENDOR_ATTR_IBF_DUMP_ENABLE, enabled))
+		return -ENOMEM;
+
+	return 1;
+}
+EXPORT_SYMBOL_GPL(mt76_vendor_ibf_ctrl_dump);
 #endif
 
 void mt76_vendor_register(struct mt76_dev *dev,

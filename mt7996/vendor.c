@@ -86,11 +86,6 @@ three_wire_ctrl_policy[NUM_MTK_VENDOR_ATTRS_3WIRE_CTRL] = {
 	[MTK_VENDOR_ATTR_3WIRE_CEB_BAND_SEL] = {.type = NLA_U8 },
 };
 
-static const struct nla_policy
-ibf_ctrl_policy[NUM_MTK_VENDOR_ATTRS_IBF_CTRL] = {
-	[MTK_VENDOR_ATTR_IBF_CTRL_ENABLE] = { .type = NLA_U8 },
-};
-
 static struct nla_policy
 pp_ctrl_policy[NUM_MTK_VENDOR_ATTRS_PP_CTRL] = {
 	[MTK_VENDOR_ATTR_PP_MODE] = { .type = NLA_U8 },
@@ -818,52 +813,6 @@ static int mt7996_vendor_3wire_ctrl(struct wiphy *wiphy, struct wireless_dev *wd
 
 	return mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(PTA_3WIRE_CTRL), &req,
 				 sizeof(req), false);
-}
-
-static int mt7996_vendor_ibf_ctrl(struct wiphy *wiphy,
-				  struct wireless_dev *wdev,
-				  const void *data,
-				  int data_len)
-{
-	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
-	struct mt7996_dev *dev = mt7996_hw_dev(hw);
-	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_IBF_CTRL];
-	int err;
-	u8 val;
-
-	err = nla_parse(tb, MTK_VENDOR_ATTR_IBF_CTRL_MAX, data, data_len,
-			ibf_ctrl_policy, NULL);
-	if (err)
-		return err;
-
-	if (tb[MTK_VENDOR_ATTR_IBF_CTRL_ENABLE]) {
-		val = nla_get_u8(tb[MTK_VENDOR_ATTR_IBF_CTRL_ENABLE]);
-
-		dev->ibf = !!val;
-
-		err = mt7996_mcu_set_txbf(dev, BF_HW_EN_UPDATE);
-		if (err)
-			return err;
-	}
-	return 0;
-}
-
-static int
-mt7996_vendor_ibf_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
-			    struct sk_buff *skb, const void *data, int data_len,
-			    unsigned long *storage)
-{
-	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
-	struct mt7996_dev *dev = mt7996_hw_dev(hw);
-
-	if (*storage == 1)
-		return -ENOENT;
-	*storage = 1;
-
-	if (nla_put_u8(skb, MTK_VENDOR_ATTR_IBF_DUMP_ENABLE, dev->ibf))
-		return -ENOMEM;
-
-	return 1;
 }
 
 static int mt7996_vendor_pp_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
@@ -1781,9 +1730,9 @@ static const struct wiphy_vendor_command mt7996_vendor_commands[] = {
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
 			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = mt7996_vendor_ibf_ctrl,
-		.dumpit = mt7996_vendor_ibf_ctrl_dump,
-		.policy = ibf_ctrl_policy,
+		.doit = mt76_vendor_ibf_ctrl,
+		.dumpit = mt76_vendor_ibf_ctrl_dump,
+		.policy = mt76_vendor_ibf_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_IBF_CTRL_MAX,
 	},
 	{
@@ -1888,11 +1837,29 @@ static const struct wiphy_vendor_command mt7996_vendor_commands[] = {
 	},
 };
 
+static int mt7996_vendor_ibf_ctrl(struct mt76_dev *mdev, bool enabled)
+{
+	struct mt7996_dev *dev = container_of(mdev, struct mt7996_dev, mt76);
+
+	dev->ibf = enabled;
+	return mt7996_mcu_set_txbf(dev, BF_HW_EN_UPDATE);
+}
+
+static int mt7996_vendor_ibf_ctrl_dump(struct mt76_dev *mdev, bool *enabled)
+{
+	struct mt7996_dev *dev = container_of(mdev, struct mt7996_dev, mt76);
+
+	*enabled = dev->ibf;
+	return 0;
+}
+
 static const struct mt76_vendor_ops mt7996_vendor_ops = {
 	.commands = mt7996_vendor_commands,
 	.n_commands = ARRAY_SIZE(mt7996_vendor_commands),
 	.events = mt76_vendor_events,
 	.n_events = MT76_VENDOR_N_EVENTS,
+	.ibf_ctrl = mt7996_vendor_ibf_ctrl,
+	.ibf_ctrl_dump = mt7996_vendor_ibf_ctrl_dump,
 };
 
 void mt7996_vendor_register(struct mt7996_phy *phy)
