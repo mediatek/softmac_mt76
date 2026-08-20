@@ -7,7 +7,7 @@
 
 #include "mt7915.h"
 #include "mcu.h"
-#include "vendor.h"
+#include "../vendor.h"
 
 static const struct nla_policy
 csi_ctrl_policy[NUM_MTK_VENDOR_ATTRS_CSI_CTRL] = {
@@ -53,7 +53,7 @@ mu_ctrl_policy[NUM_MTK_VENDOR_ATTRS_MU_CTRL] = {
 
 static const struct nla_policy
 three_wire_ctrl_policy[NUM_MTK_VENDOR_ATTRS_3WIRE_CTRL] = {
-	[MTK_VENDOR_ATTR_3WIRE_CTRL_MODE] = {.type = NLA_U8 },
+	[MTK_VENDOR_ATTR_3WIRE_EXT_SEL] = {.type = NLA_U8 },
 };
 
 static const struct nla_policy
@@ -1399,19 +1399,19 @@ static int mt7915_vendor_3wire_ctrl(struct wiphy *wiphy,
 	struct mt7915_phy *phy = mt7915_hw_phy(hw);
 	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_3WIRE_CTRL];
 	int err;
-	u8 three_wire_mode;
+	u8 ext_sel;
 
 	err = nla_parse(tb, MTK_VENDOR_ATTR_3WIRE_CTRL_MAX, data, data_len,
 			three_wire_ctrl_policy, NULL);
 	if (err)
 		return err;
 
-	if (!tb[MTK_VENDOR_ATTR_3WIRE_CTRL_MODE])
+	if (!tb[MTK_VENDOR_ATTR_3WIRE_EXT_SEL])
 		return -EINVAL;
 
-	three_wire_mode = nla_get_u8(tb[MTK_VENDOR_ATTR_3WIRE_CTRL_MODE]);
+	ext_sel = nla_get_u8(tb[MTK_VENDOR_ATTR_3WIRE_EXT_SEL]);
 
-	return mt7915_mcu_set_cfg(phy, CFGINFO_3WIRE_EN_CFG, three_wire_mode);
+	return mt7915_mcu_set_cfg(phy, CFGINFO_3WIRE_EN_CFG, ext_sel);
 }
 
 static int mt7915_vendor_ibf_ctrl(struct wiphy *wiphy,
@@ -1708,14 +1708,12 @@ static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 	},
 };
 
+static const struct mt76_vendor_ops mt7915_vendor_ops = {
+	.commands = mt7915_vendor_commands,
+	.n_commands = ARRAY_SIZE(mt7915_vendor_commands),
+};
+
 void mt7915_vendor_register(struct mt7915_phy *phy)
 {
-	/* Temporarily disable vendor commands to avoid command
-	 * failures during Wi-Fi 6 and 7 codebase integration
-	 */
-	dev_warn(phy->mt76->dev->dev, "temporarily disable vendor commands\n");
-	return;
-
-	phy->mt76->hw->wiphy->vendor_commands = mt7915_vendor_commands;
-	phy->mt76->hw->wiphy->n_vendor_commands = ARRAY_SIZE(mt7915_vendor_commands);
+	mt76_vendor_register(phy->mt76->dev, &mt7915_vendor_ops);
 }

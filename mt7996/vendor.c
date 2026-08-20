@@ -7,7 +7,7 @@
 
 #include "mt7996.h"
 #include "mcu.h"
-#include "vendor.h"
+#include "../vendor.h"
 #include "mtk_mcu.h"
 
 #ifdef CONFIG_MTK_VENDOR
@@ -1980,12 +1980,16 @@ static const struct nl80211_vendor_cmd_info mt7996_vendor_events[] = {
 	},
 };
 
+static const struct mt76_vendor_ops mt7996_vendor_ops = {
+	.commands = mt7996_vendor_commands,
+	.n_commands = ARRAY_SIZE(mt7996_vendor_commands),
+	.events = mt7996_vendor_events,
+	.n_events = ARRAY_SIZE(mt7996_vendor_events),
+};
+
 void mt7996_vendor_register(struct mt7996_phy *phy)
 {
-	phy->mt76->hw->wiphy->vendor_commands = mt7996_vendor_commands;
-	phy->mt76->hw->wiphy->n_vendor_commands = ARRAY_SIZE(mt7996_vendor_commands);
-	phy->mt76->hw->wiphy->vendor_events = mt7996_vendor_events;
-	phy->mt76->hw->wiphy->n_vendor_events = ARRAY_SIZE(mt7996_vendor_events);
+	mt76_vendor_register(phy->mt76->dev, &mt7996_vendor_ops);
 
 	INIT_LIST_HEAD(&phy->csi.list);
 	spin_lock_init(&phy->csi.lock);

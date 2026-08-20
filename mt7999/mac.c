@@ -12,7 +12,7 @@
 #include "../dma.h"
 #include "mac.h"
 #include "mcu.h"
-#include "vendor.h"
+#include "../vendor.h"
 #include "mt7999_trace.h"
 
 static int mt7999_mac_btwt_add_member(struct mt7999_twt_flow *flow, u16 idx);

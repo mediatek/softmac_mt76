@@ -5486,7 +5486,7 @@ int mt7915_mcu_set_cfg(struct mt7915_phy *phy, u8 cfg_info, u8 type)
 		tlv_len = sizeof(struct three_wire_cfg);
 		req.three_wire.tag = cpu_to_le16(cfg_info);
 		req.three_wire.length = cpu_to_le16(tlv_len);
-		req.three_wire.three_wire_en = type;
+		req.three_wire.ext_sel = type;
 		break;
 	default:
 		return -EOPNOTSUPP;
