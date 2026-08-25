@@ -2348,9 +2348,6 @@ mt7999_link_sta_info_show(struct seq_file *file, void *data)
 
 	dump_chain_signal(ack_signal, buf, sizeof(buf), msta_link, rx_mask, true);
 	seq_printf(file, "\tACK RSSI: %d %s", msta_link->ack_signal, buf);
-
-	dump_chain_signal(ack_snr, buf, sizeof(buf), msta_link, rx_mask, false);
-	seq_printf(file, "\tACK SNR: %s", buf);
 #undef dump_chain_signal
 
 	seq_printf(file, "Rate:\n");

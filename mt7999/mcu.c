@@ -5682,6 +5682,45 @@ int mt7999_mcu_fw_time_sync(struct mt76_dev *dev)
 	                         sizeof(data), true);
 }
 
+int mt7999_mcu_set_rssi_param(struct mt7999_dev *dev)
+{
+	enum {
+		RESPONSE_FRAMES,
+		DATA_FRAMES,
+		RESPONSE_DATA_FRAMES,
+	};
+	struct {
+		u8 _rsv[4];
+
+		__le16 tag;
+		__le16 len;
+
+		u8 version;
+		u8 _rsv1;
+		__le16 bitmap;
+
+		u8 rcpi_src;
+		u8 rcpi_moving_avg;
+		u8 snr_src;
+		u8 snr_overwrite;
+		u8 snr_moving_avg;
+		u8 _rsv2[7];
+	} data = {
+		.tag = cpu_to_le16(UNI_WSYS_CONFIG_RSSI_STAT_PARAM),
+		.len = cpu_to_le16(sizeof(data) - 4),
+		.version = 0,
+		.bitmap = cpu_to_le16(RSSI_STAT_PARAM),
+		.rcpi_src = RESPONSE_FRAMES,
+		.rcpi_moving_avg = 3,	/* ignore last moving average value */
+		.snr_src = DATA_FRAMES,
+		.snr_overwrite = 1,	/* Overwrite SNR field by data frames rssi */
+		.snr_moving_avg = 3,	/* ignore last moving average value */
+	};
+
+	return mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(WSYS_CONFIG), &data,
+				 sizeof(data), true);
+}
+
 /*static int mt7999_mcu_set_mwds(struct mt7999_dev *dev, bool enabled)
 {
 	struct {
@@ -7927,13 +7966,17 @@ int mt7999_mcu_get_per_sta_info(struct mt76_dev *dev, u16 tag,
 	rcu_read_lock();
 	switch (tag) {
 	case UNI_PER_STA_RSSI:
+	case UNI_PER_STA_RSSI_SRC2:
 		for (i = 0; i < sta_num; ++i) {
 			struct per_sta_rssi *rssi = &res->rssi[i];
 			struct mt76_phy *mphy;
 			struct mt7999_phy *phy;
 			u8 *rcpi = rssi->rcpi;
 			u16 rx_mask;
-			s16 chain_ack_signal[IEEE80211_MAX_CHAINS];
+			s16 chain_signal[IEEE80211_MAX_CHAINS];
+			s8 *msta_link_chain_signal;
+			int *msta_link_signal;
+			struct ewma_avg_signal *msta_link_signal_avg;
 
 			wlan_idx = le16_to_cpu(rssi->wlan_idx);
 			wcid = __mt76_wcid_ptr(dev, wlan_idx);
@@ -7941,33 +7984,39 @@ int mt7999_mcu_get_per_sta_info(struct mt76_dev *dev, u16 tag,
 				continue;
 
 			msta_link = container_of(wcid, struct mt7999_sta_link, wcid);
+
+			if (tag == UNI_PER_STA_RSSI) {
+				msta_link_chain_signal = msta_link->chain_ack_signal;
+				msta_link_signal = &msta_link->ack_signal;
+				msta_link_signal_avg = &msta_link->avg_ack_signal;
+			} else {
+				msta_link_chain_signal = msta_link->chain_signal;
+				msta_link_signal = &msta_link->signal;
+				msta_link_signal_avg = &msta_link->signal_avg;
+			}
+
 			mphy = dev->phys[wcid->phy_idx];
 			phy = mphy->priv;
 			rx_mask = mt7999_rx_chainmask(phy);
 
 			for (j = 0; j < ARRAY_SIZE(rssi->rcpi); ++j)
-				chain_ack_signal[j] = to_rssi_double(MT_PRXV4_RCPI0, rcpi[j]);
-			chain_ack_signal[4] = to_rssi_double(MT_PRXV4_RCPI0, rssi->rcpi_wf4);
+				chain_signal[j] = to_rssi_double(MT_PRXV4_RCPI0, rcpi[j]);
+			chain_signal[4] = to_rssi_double(MT_PRXV4_RCPI0, rssi->rcpi_wf4);
 
 			for (j = 0; j < IEEE80211_MAX_CHAINS; ++j)
-				msta_link->chain_ack_signal[j] = chain_ack_signal[j] / 2;
+				msta_link_chain_signal[j] = chain_signal[j] / 2;
 
-			msta_link->ack_signal = mt7999_rx_signal(rx_mask, chain_ack_signal);
-			ewma_avg_signal_add(&msta_link->avg_ack_signal,
-					    -msta_link->ack_signal);
-		}
-		break;
-	case UNI_PER_STA_SNR:
-		for (i = 0; i < sta_num; ++i) {
-			wlan_idx = le16_to_cpu(res->snr[i].wlan_idx);
-			wcid = __mt76_wcid_ptr(dev, wlan_idx);
-			if (!wcid || !wcid->sta)
+			*msta_link_signal = mt7999_rx_signal(rx_mask, chain_signal);
+
+			ewma_avg_signal_add(msta_link_signal_avg,
+					    -*msta_link_signal);
+
+			if (tag == UNI_PER_STA_RSSI)
 				continue;
 
-			msta_link = container_of(wcid, struct mt7999_sta_link, wcid);
-			memcpy(msta_link->chain_ack_snr, res->snr[i].val,
-			       sizeof(res->snr[i].val));
-			msta_link->chain_ack_snr[4] = res->snr[i].snr_wf4;
+			for (j = 0; j < hweight16(rx_mask); ++j)
+				ewma_avg_signal_add(msta_link->chain_signal_avg + j,
+						    -msta_link->chain_signal[j]);
 		}
 		break;
 	case UNI_PER_STA_PKT_CNT:

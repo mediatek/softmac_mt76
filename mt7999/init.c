@@ -616,8 +616,6 @@ mt7999_init_wiphy(struct ieee80211_hw *hw, struct mtk_wed_device *wed)
 static void
 mt7999_mac_init_band(struct mt7999_dev *dev, u8 band)
 {
-	u32 mask, set;
-
 	if (!mt7999_band_valid(dev, band))
 		return;
 
@@ -625,12 +623,6 @@ mt7999_mac_init_band(struct mt7999_dev *dev, u8 band)
 	/* clear backoff time for Tx duration */
 	mt76_clear(dev, MT_WTBLOFF_ACR(band),
 		   MT_WTBLOFF_ADM_BACKOFFTIME);
-
-	/* filter out non-resp frames and get instanstaeous signal reporting */
-	mask = MT_WTBLOFF_RSCR_RCPI_MODE | MT_WTBLOFF_RSCR_RCPI_PARAM;
-	set = FIELD_PREP(MT_WTBLOFF_RSCR_RCPI_MODE, 0) |
-	      FIELD_PREP(MT_WTBLOFF_RSCR_RCPI_PARAM, 0x3);
-	mt76_rmw(dev, MT_WTBLOFF_RSCR(band), mask, set);
 
 	mt7999_mcu_set_bssid_mapping_addr(&dev->mt76, band);
 }
@@ -999,6 +991,7 @@ void mt7999_init_work_reset(struct mt7999_dev *dev)
 	mt7999_mcu_init_rx_airtime(dev);
 	mt7999_mcu_red_config(dev, true);
 	mt7999_mcu_set_ra_option_ctrl(dev, RA_OPTION_VHT_1024_QAM, false);
+	mt7999_mcu_set_rssi_param(dev);
 }
 
 static void mt7999_init_work(struct work_struct *work)

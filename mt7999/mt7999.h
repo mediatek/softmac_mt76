@@ -448,8 +448,6 @@ struct mt7999_sta_link {
 	int ack_signal;
 	struct ewma_avg_signal avg_ack_signal;
 
-	u8 chain_ack_snr[IEEE80211_MAX_CHAINS];
-
 	unsigned long changed;
 
 	struct mt76_connac_sta_key_conf bip;
@@ -1445,6 +1443,7 @@ int mt7999_mcu_red_config(struct mt7999_dev *dev, bool enable);
 int mt7999_mcu_fw_log_2_host(struct mt7999_dev *dev, u8 ctrl);
 int mt7999_mcu_fw_dbg_ctrl(struct mt7999_dev *dev, u32 module, u8 level);
 int mt7999_mcu_fw_time_sync(struct mt76_dev *dev);
+int mt7999_mcu_set_rssi_param(struct mt7999_dev *dev);
 void mt7999_mcu_rx_event(struct mt7999_dev *dev, struct sk_buff *skb);
 void mt7999_mcu_exit(struct mt7999_dev *dev);
 int mt7999_mcu_get_per_sta_info(struct mt76_dev *dev, u16 tag,
