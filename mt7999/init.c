@@ -1895,6 +1895,8 @@ mt7999_init_uhr_caps(struct mt7999_phy *phy, enum nl80211_band band,
 	uhr_cap->has_uhr = true;
 	uhr_cap->phy.cap = IEEE80211_UHR_PHY_CAP_ELR_RX |
 			   IEEE80211_UHR_PHY_CAP_ELR_TX |
+			   IEEE80211_UHR_PHY_CAP_2XLDPC_TX |
+			   IEEE80211_UHR_PHY_CAP_2XLDPC_RX |
 			   FIELD_PREP(IEEE80211_UHR_PHY_CAP_UEQM_TX_MAX_NSS, nss - 1) |
 			   FIELD_PREP(IEEE80211_UHR_PHY_CAP_UEQM_RX_MAX_NSS, nss - 1);
 	/* TODO: add default uhr mac & phy cap */
