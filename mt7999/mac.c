@@ -1069,7 +1069,9 @@ int mt7999_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
 	if (!wcid)
 		wcid = &dev->mt76.global_wcid;
 
-	if ((is_8023 || ieee80211_is_data_qos(hdr->frame_control)) && sta && sta->mlo &&
+	if ((is_8023 || (ieee80211_is_data_qos(hdr->frame_control) &&
+			 ieee80211_is_data_present(hdr->frame_control))) &&
+	    sta && sta->mlo &&
 	    likely(tx_info->skb->protocol != cpu_to_be16(ETH_P_PAE)))
 		link_id = (tid % 2) ? msta->seclink_id : msta->deflink_id;
 	else
