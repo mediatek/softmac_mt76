@@ -1026,6 +1026,13 @@ struct sta_rec_peer_mesh {
 	__le32 update_mask;
 } __packed;
 
+struct sta_rec_bw_update {
+	__le16 tag;
+	__le16 len;
+	u8 bw;
+	u8 rsv[3];
+} __packed;
+
 struct mld_setup_link {
 	__le16 wcid;
 	u8 bss_idx;
@@ -1383,7 +1390,7 @@ enum {
 
 #define MT7999_STA_UPDATE_MAX_SIZE	(sizeof(struct sta_req_hdr) +		\
 					 sizeof(struct sta_rec_basic) +		\
-					 sizeof(struct sta_rec_bf_uni) +		\
+					 sizeof(struct sta_rec_bf_uni) +	\
 					 sizeof(struct sta_rec_ht_uni) +	\
 					 sizeof(struct sta_rec_he_v2) +		\
 					 sizeof(struct sta_rec_ba_uni) +	\
@@ -1401,8 +1408,10 @@ enum {
 					 sizeof(struct sta_rec_mld_setup) +	\
 					 sizeof(struct mld_setup_link) * 3 +	\
 					 sizeof(struct sta_rec_eht_mld) +	\
+					 sizeof(struct sta_rec_uhr) +		\
 					 sizeof(struct sta_rec_link_mesh) +	\
 					 sizeof(struct sta_rec_peer_mesh) +	\
+					 sizeof(struct sta_rec_bw_update) +	\
 					 sizeof(struct tlv))
 
 #define MT7999_BEACON_UPDATE_SIZE	(sizeof(struct bss_req_hdr) +		\

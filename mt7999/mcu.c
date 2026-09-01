@@ -4036,6 +4036,20 @@ int mt7999_mcu_teardown_mld_sta(struct mt7999_dev *dev,
 				     MCU_WMWA_UNI_CMD(STA_REC_UPDATE), true);
 }
 
+static void
+mt7999_mcu_sta_bw_update_tlv(struct mt7999_dev *dev, struct sk_buff *skb,
+			     struct ieee80211_link_sta *link_sta)
+{
+	enum ieee80211_sta_rx_bandwidth bandwidth = link_sta->bandwidth;
+	struct sta_rec_bw_update *bw;
+	struct tlv *tlv;
+
+	tlv = mt76_connac_mcu_add_tlv(skb, STA_REC_BW_UPDATE, sizeof(*bw));
+	bw = (struct sta_rec_bw_update *)tlv;
+
+	bw->bw = (bandwidth == IEEE80211_STA_RX_BW_320) ? CMD_CBW_320MHZ : bandwidth;
+}
+
 void mt7999_mcu_update_sta_rec_bw(void *data, struct ieee80211_sta *sta)
 {
 	struct mt7999_vif_link *link = (struct mt7999_vif_link *)data;
@@ -4077,7 +4091,7 @@ void mt7999_mcu_update_sta_rec_bw(void *data, struct ieee80211_sta *sta)
 		return;
 
 	mt7999_mcu_sta_bfer_tlv(dev, skb, link_conf, link_sta, link);
-	mt7999_mcu_sta_rate_ctrl_tlv(skb, dev, vif, link_conf, link_sta, link);
+	mt7999_mcu_sta_bw_update_tlv(dev, skb, link_sta);
 
 	mt76_mcu_skb_send_msg(&dev->mt76, skb,
 			      MCU_WMWA_UNI_CMD(STA_REC_UPDATE), true);
