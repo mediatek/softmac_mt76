@@ -2545,8 +2545,10 @@ mt7999_mac_restart(struct mt7999_dev *dev)
 	}
 
 	/* Clear running state for subsequent mt7999_run to reset it again */
-	mt7999_for_each_phy(dev, phy)
+	mt7999_for_each_phy(dev, phy) {
 		clear_bit(MT76_STATE_RUNNING, &phy->mt76->state);
+		clear_bit(MT76_STATE_SKIP_CAL, &phy->mt76->state);
+	}
 
 out:
 	/* reset done */

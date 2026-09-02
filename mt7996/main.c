@@ -14,6 +14,21 @@ static bool bkg_max80;
 module_param(bkg_max80, bool, 0644);
 MODULE_PARM_DESC(bkg_max80, "Restrict the max bandwidth of background radar to 80MHz");
 
+int mt7996_set_chan_info(struct mt7996_phy *phy, bool sta)
+{
+	int ret;
+
+	ret = mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_SWITCH, sta);
+	if (ret)
+		return ret;
+
+	ret = mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_RX_PATH, sta);
+	if (ret)
+		return ret;
+
+	return 0;
+}
+
 int mt7996_run(struct mt7996_phy *phy)
 {
 	struct mt7996_dev *dev = phy->dev;
@@ -29,12 +44,8 @@ int mt7996_run(struct mt7996_phy *phy)
 	if (ret)
 		return ret;
 
-	ret = mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_RX_PATH, false);
-	if (ret)
-		return ret;
-
 	/* set a parking channel */
-	ret = mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_SWITCH, false);
+	ret = mt7996_set_chan_info(phy, false);
 	if (ret)
 		return ret;
 
@@ -125,6 +136,7 @@ static void mt7996_stop_phy(struct mt7996_phy *phy)
 	mt7996_mcu_set_radio_en(phy, false);
 
 	clear_bit(MT76_STATE_RUNNING, &phy->mt76->state);
+	clear_bit(MT76_STATE_SKIP_CAL, &phy->mt76->state);
 
 	mutex_unlock(&dev->mt76.mutex);
 }
@@ -679,12 +691,8 @@ static int mt7996_testmode_init(struct mt7996_dev *dev, struct ieee80211_vif *vi
 		if (err)
 			goto out;
 
-		err = mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_RX_PATH, false);
-		if (err)
-			goto out;
-
 		/* set a parking channel */
-		err = mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_SWITCH, false);
+		err = mt7996_set_chan_info(phy, false);
 		if (err)
 			goto out;
 
@@ -891,11 +899,7 @@ int mt7996_set_channel(struct mt76_phy *mphy)
 		mphy->offchan_bcn_stopped = true;
 	}
 
-	ret = mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_SWITCH, false);
-	if (ret)
-		goto out;
-
-	ret = mt7996_mcu_set_chan_info(phy, UNI_CHANNEL_RX_PATH, false);
+	ret = mt7996_set_chan_info(phy, false);
 	if (ret)
 		goto out;
 

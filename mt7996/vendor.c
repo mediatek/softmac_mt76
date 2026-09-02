@@ -11,6 +11,12 @@
 #include "mtk_mcu.h"
 
 #ifdef CONFIG_MTK_VENDOR
+
+static bool dfs_cal_ctrl = true;
+module_param(dfs_cal_ctrl, bool, 0644);
+MODULE_PARM_DESC(dfs_cal_ctrl,
+	"Enable DFS calibration control to skip calibration during background radar CAC");
+
 struct mt7996_amnt_data {
 	u8 idx;
 	u8 addr[ETH_ALEN];
@@ -1341,6 +1347,17 @@ static const struct wiphy_vendor_command mt7996_vendor_commands[] = {
 		.policy = mt76_vendor_dfs_tx_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_DFS_TX_CTRL_MAX,
 	},
+	{
+		.info = {
+			.vendor_id = MTK_NL80211_VENDOR_ID,
+			.subcmd = MTK_NL80211_VENDOR_SUBCMD_DFS_CAL_CTRL,
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
+			WIPHY_VENDOR_CMD_NEED_RUNNING,
+		.doit = mt76_vendor_dfs_cal_ctrl,
+		.policy = mt76_vendor_dfs_cal_ctrl_policy,
+		.maxattr = MTK_VENDOR_ATTR_DFS_CAL_CTRL_MAX,
+	},
 };
 
 static int mt7996_vendor_ibf_ctrl(struct mt76_dev *mdev, bool enabled)
@@ -1499,6 +1516,13 @@ static int mt7996_vendor_dfs_tx_ctrl(struct mt76_phy *mphy, u8 radio_idx, u8 mod
 	return err;
 }
 
+static int mt7996_vendor_dfs_trigger_cal(struct mt76_phy *mphy)
+{
+	struct mt7996_phy *phy = mphy->priv;
+
+	return mt7996_set_chan_info(phy, false);
+}
+
 static const struct mt76_vendor_ops mt7996_vendor_ops = {
 	.commands = mt7996_vendor_commands,
 	.n_commands = ARRAY_SIZE(mt7996_vendor_commands),
@@ -1515,12 +1539,15 @@ static const struct mt76_vendor_ops mt7996_vendor_ops = {
 	.background_radar_ctrl = mt7996_vendor_background_radar_ctrl,
 	.dfs_tx_ctrl = mt7996_vendor_dfs_tx_ctrl,
 	.set_beacon = mt7996_set_beacon_vif,
+	.dfs_trigger_cal = mt7996_vendor_dfs_trigger_cal,
 };
 
 void mt7996_vendor_register(struct mt7996_phy *phy)
 {
-	if (phy == &phy->dev->phy)
+	if (phy == &phy->dev->phy) {
+		phy->dev->mt76.dfs_cal_ctrl = dfs_cal_ctrl;
 		mt76_vendor_register(phy->mt76, &mt7996_vendor_ops);
+	}
 
 	INIT_LIST_HEAD(&phy->csi.list);
 	spin_lock_init(&phy->csi.lock);

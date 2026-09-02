@@ -24,6 +24,21 @@ static bool mt7915_dev_running(struct mt7915_dev *dev)
 	return phy && test_bit(MT76_STATE_RUNNING, &phy->mt76->state);
 }
 
+int mt7915_set_chan_info(struct mt7915_phy *phy)
+{
+	int ret;
+
+	ret = mt7915_mcu_set_chan_info(phy, MCU_EXT_CMD(CHANNEL_SWITCH));
+	if (ret)
+		return ret;
+
+	ret = mt7915_mcu_set_chan_info(phy, MCU_EXT_CMD(SET_RX_PATH));
+	if (ret)
+		return ret;
+
+	return 0;
+}
+
 int mt7915_run(struct ieee80211_hw *hw)
 {
 	struct mt7915_dev *dev = mt7915_hw_dev(hw);
@@ -85,7 +100,7 @@ int mt7915_run(struct ieee80211_hw *hw)
 	if (ret)
 		goto out;
 
-	ret = mt7915_mcu_set_chan_info(phy, MCU_EXT_CMD(SET_RX_PATH));
+	ret = mt7915_set_chan_info(phy);
 	if (ret)
 		goto out;
 
@@ -141,6 +156,7 @@ static void mt7915_stop(struct ieee80211_hw *hw, bool suspend)
 	mt76_testmode_reset(phy->mt76, true);
 
 	clear_bit(MT76_STATE_RUNNING, &phy->mt76->state);
+	clear_bit(MT76_STATE_SKIP_CAL, &phy->mt76->state);
 
 	if (phy != &dev->phy) {
 		mt76_connac_mcu_set_pm(&dev->mt76, phy->mt76->band_idx, 1);
@@ -379,7 +395,7 @@ int mt7915_set_channel(struct mt76_phy *mphy)
 		mphy->offchan_bcn_stopped = true;
 	}
 
-	ret = mt7915_mcu_set_chan_info(phy, MCU_EXT_CMD(CHANNEL_SWITCH));
+	ret = mt7915_set_chan_info(phy);
 	if (ret)
 		goto out;
 

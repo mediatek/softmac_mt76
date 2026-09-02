@@ -1331,6 +1331,7 @@ void mt7999_init_txpower(struct mt7999_phy *phy);
 int mt7999_txbf_init(struct mt7999_dev *dev);
 void mt7999_reset(struct mt7999_dev *dev);
 void mt7999_coredump(struct mt7999_dev *dev, u8 state);
+int mt7999_set_chan_info(struct mt7999_phy *phy, bool sta);
 int mt7999_run(struct mt7999_phy *phy);
 int mt7999_mcu_init(struct mt7999_dev *dev);
 int mt7999_mcu_init_firmware(struct mt7999_dev *dev);

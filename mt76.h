@@ -600,6 +600,7 @@ enum {
 	MT76_STATE_PM,
 	MT76_STATE_WED_RESET,
 	MT76_STATE_MCU_FWDL,
+	MT76_STATE_SKIP_CAL,
 };
 
 enum mt76_sta_event {
@@ -1233,7 +1234,7 @@ struct mt76_dev {
 	struct mt76_phy phy; /* must be first */
 	struct mt76_phy *phys[__MT_MAX_BAND];
 	struct mt76_phy *band_phys[NUM_NL80211_BANDS];
-	/* This is temporarily used for testmode */
+	/* This is temporarily used for testmode & vendor */
 	struct mt76_phy *radio_phy[__MT_MAX_BAND];
 
 	struct ieee80211_hw *hw;
@@ -1375,6 +1376,10 @@ struct mt76_dev {
 	const char *bin_file_name;
 
 	u8 chainshift[__MT_MAX_BAND];
+
+#ifdef CONFIG_MTK_VENDOR
+	bool dfs_cal_ctrl;
+#endif
 
 #ifdef CONFIG_MULDF_HELPER
 	struct muldf muldf;

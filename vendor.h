@@ -32,6 +32,7 @@ enum mtk_nl80211_vendor_subcmds {
 	MTK_NL80211_VENDOR_SUBCMD_EDCCA_CBW_CTRL = 0xd7,
 	MTK_NL80211_VENDOR_SUBCMD_ABI_CONNAC3 = 0xd8,
 	MTK_NL80211_VENDOR_SUBCMD_ABI_CONNAC5 = 0xd9,
+	MTK_NL80211_VENDOR_SUBCMD_DFS_CAL_CTRL = 0xda,
 };
 
 enum mtk_nl80211_vendor_events {
@@ -456,6 +457,25 @@ struct mt76_vendor_edcca_info {
 	u8 th_offset;
 };
 
+enum mtk_vendor_attr_dfs_cal_ctrl {
+	MTK_VENDOR_ATTR_DFS_CAL_CTRL_UNSPEC,
+
+	MTK_VENDOR_ATTR_DFS_CAL_CTRL_MODE,
+	MTK_VENDOR_ATTR_DFS_CAL_CTRL_TRIGGER,
+	MTK_VENDOR_ATTR_DFS_CAL_CTRL_RADIO_IDX,
+
+	/* keep last */
+	NUM_MTK_VENDOR_ATTRS_DFS_CAL_CTRL,
+	MTK_VENDOR_ATTR_DFS_CAL_CTRL_MAX =
+		NUM_MTK_VENDOR_ATTRS_DFS_CAL_CTRL - 1
+};
+
+enum dfs_cal_ctrl_mode {
+	DFS_CAL_CTRL_UNSET,
+	DFS_CAL_CTRL_SKIP,
+	DFS_CAL_CTRL_NORMAL,
+};
+
 struct mt76_vendor_ops {
 	const struct wiphy_vendor_command *commands;
 	unsigned int n_commands;
@@ -474,6 +494,7 @@ struct mt76_vendor_ops {
 	int (*background_radar_ctrl)(struct mt76_dev *dev, bool disable_timer);
 	int (*dfs_tx_ctrl)(struct mt76_phy *phy, u8 radio_idx, u8 mode);
 	void (*set_beacon)(struct ieee80211_vif *vif, u8 mode);
+	int (*dfs_trigger_cal)(struct mt76_phy *phy);
 };
 
 void mt76_vendor_register(struct mt76_phy *phy,
@@ -522,10 +543,12 @@ extern const struct nla_policy
 mt76_vendor_dfs_tx_ctrl_policy[NUM_MTK_VENDOR_ATTRS_DFS_TX_CTRL];
 extern const struct nla_policy
 mt76_vendor_beacon_ctrl_policy[NUM_MTK_VENDOR_ATTRS_BEACON_CTRL];
+extern const struct nla_policy
+mt76_vendor_dfs_cal_ctrl_policy[NUM_MTK_VENDOR_ATTRS_DFS_CAL_CTRL];
+
 int mt76_vendor_abi_connac_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
 				struct sk_buff *skb, const void *data,
 				int data_len, unsigned long *storage);
-
 int mt76_vendor_bss_color_ctrl_dump(struct wiphy *wiphy,
 				    struct wireless_dev *wdev,
 				    struct sk_buff *skb,
@@ -563,6 +586,8 @@ int mt76_vendor_dfs_tx_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 			    const void *data, int data_len);
 int mt76_vendor_beacon_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 			    const void *data, int data_len);
+int mt76_vendor_dfs_cal_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
+			     const void *data, int data_len);
 #endif
 
 #endif /* __MT76_VENDOR_H */

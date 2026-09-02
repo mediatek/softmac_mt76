@@ -9,6 +9,11 @@
 #include "mcu.h"
 #include "../vendor.h"
 
+static bool dfs_cal_ctrl = true;
+module_param(dfs_cal_ctrl, bool, 0644);
+MODULE_PARM_DESC(dfs_cal_ctrl,
+	"Enable DFS calibration control to skip calibration during background radar CAC");
+
 static const struct nla_policy
 csi_ctrl_policy[NUM_MTK_VENDOR_ATTRS_CSI_CTRL] = {
 	[MTK_VENDOR_ATTR_CSI_CTRL_CFG] = {.type = NLA_NESTED },
@@ -1610,6 +1615,17 @@ static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 		.policy = mt76_vendor_beacon_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_BEACON_CTRL_MAX,
 	},
+	{
+		.info = {
+			.vendor_id = MTK_NL80211_VENDOR_ID,
+			.subcmd = MTK_NL80211_VENDOR_SUBCMD_DFS_CAL_CTRL,
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
+			WIPHY_VENDOR_CMD_NEED_RUNNING,
+		.doit = mt76_vendor_dfs_cal_ctrl,
+		.policy = mt76_vendor_dfs_cal_ctrl_policy,
+		.maxattr = MTK_VENDOR_ATTR_DFS_CAL_CTRL_MAX,
+	},
 };
 
 static int mt7915_vendor_ibf_ctrl(struct mt76_dev *mdev, bool enabled)
@@ -1654,15 +1670,26 @@ static int mt7915_vendor_dfs_tx_ctrl(struct mt76_phy *mphy, u8 radio_idx, u8 mod
 	return err;
 }
 
+static int mt7915_vendor_dfs_trigger_cal(struct mt76_phy *mphy)
+{
+	struct mt7915_phy *phy = mphy->priv;
+
+	return mt7915_set_chan_info(phy);
+}
+
 static const struct mt76_vendor_ops mt7915_vendor_ops = {
 	.commands = mt7915_vendor_commands,
 	.n_commands = ARRAY_SIZE(mt7915_vendor_commands),
 	.ibf_ctrl = mt7915_vendor_ibf_ctrl,
 	.ibf_ctrl_dump = mt7915_vendor_ibf_ctrl_dump,
 	.dfs_tx_ctrl = mt7915_vendor_dfs_tx_ctrl,
+	.dfs_trigger_cal = mt7915_vendor_dfs_trigger_cal,
 };
 
 void mt7915_vendor_register(struct mt7915_phy *phy)
 {
+	if (phy == &phy->dev->phy)
+		phy->dev->mt76.dfs_cal_ctrl = dfs_cal_ctrl;
+
 	mt76_vendor_register(phy->mt76, &mt7915_vendor_ops);
 }

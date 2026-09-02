@@ -14,7 +14,7 @@ static bool bkg_max80;
 module_param(bkg_max80, bool, 0644);
 MODULE_PARM_DESC(bkg_max80, "Restrict the max bandwidth of background radar to 80MHz");
 
-static int mt7999_set_chan_info(struct mt7999_phy *phy, bool sta)
+int mt7999_set_chan_info(struct mt7999_phy *phy, bool sta)
 {
 	int ret;
 
@@ -135,6 +135,7 @@ static void mt7999_stop_phy(struct mt7999_phy *phy)
 		mt7999_mcu_set_radio_ultra_save_en(phy, false);
 
 	clear_bit(MT76_STATE_RUNNING, &phy->mt76->state);
+	clear_bit(MT76_STATE_SKIP_CAL, &phy->mt76->state);
 
 	mutex_unlock(&dev->mt76.mutex);
 }

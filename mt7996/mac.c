@@ -2648,8 +2648,10 @@ mt7996_mac_restart(struct mt7996_dev *dev)
 	mt7996_init_work_reset(dev);
 
 	/* Clear running state for subsequent mt7996_run to reset it again */
-	mt7996_for_each_phy(dev, phy)
+	mt7996_for_each_phy(dev, phy) {
 		clear_bit(MT76_STATE_RUNNING, &phy->mt76->state);
+		clear_bit(MT76_STATE_SKIP_CAL, &phy->mt76->state);
+	}
 
 out:
 	/* reset done */

@@ -1378,12 +1378,14 @@ mt7915_mac_restart(struct mt7915_dev *dev)
 		  test_and_clear_bit(MT76_STATE_RUNNING, &ext_phy->state);
 
 	if (run_main) {
+		clear_bit(MT76_STATE_SKIP_CAL, &dev->mphy.state);
 		ret = mt7915_run(dev->mphy.hw);
 		if (ret)
 			goto out;
 	}
 
 	if (run_ext) {
+		clear_bit(MT76_STATE_SKIP_CAL, &ext_phy->state);
 		ret = mt7915_run(ext_phy->hw);
 		if (ret)
 			goto out;

@@ -1251,6 +1251,7 @@ void mt7996_init_txpower(struct mt7996_phy *phy);
 int mt7996_txbf_init(struct mt7996_dev *dev);
 void mt7996_reset(struct mt7996_dev *dev);
 void mt7996_coredump(struct mt7996_dev *dev, u8 state);
+int mt7996_set_chan_info(struct mt7996_phy *phy, bool sta);
 int mt7996_run(struct mt7996_phy *phy);
 int mt7996_mcu_init(struct mt7996_dev *dev);
 int mt7996_mcu_init_firmware(struct mt7996_dev *dev);

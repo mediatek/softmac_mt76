@@ -8,6 +8,7 @@
 #include "vendor.h"
 
 #ifdef CONFIG_MTK_VENDOR
+
 const struct nla_policy
 mt76_vendor_bss_color_ctrl_policy[NUM_MTK_VENDOR_ATTRS_BSS_COLOR_CTRL] = {
 	[MTK_VENDOR_ATTR_AVAL_BSS_COLOR_BMP] = { .type = NLA_U64 },
@@ -181,6 +182,14 @@ mt76_vendor_beacon_ctrl_policy[NUM_MTK_VENDOR_ATTRS_BEACON_CTRL] = {
 	[MTK_VENDOR_ATTR_BEACON_CTRL_MODE] = { .type = NLA_U8 },
 };
 EXPORT_SYMBOL_GPL(mt76_vendor_beacon_ctrl_policy);
+
+const struct nla_policy
+mt76_vendor_dfs_cal_ctrl_policy[NUM_MTK_VENDOR_ATTRS_DFS_CAL_CTRL] = {
+	[MTK_VENDOR_ATTR_DFS_CAL_CTRL_MODE] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_DFS_CAL_CTRL_TRIGGER] = { .type = NLA_FLAG },
+	[MTK_VENDOR_ATTR_DFS_CAL_CTRL_RADIO_IDX] = { .type = NLA_U8 },
+};
+EXPORT_SYMBOL_GPL(mt76_vendor_dfs_cal_ctrl_policy);
 
 const struct nl80211_vendor_cmd_info mt76_vendor_events[MT76_VENDOR_N_EVENTS] = {
 	[MTK_NL80211_VENDOR_EVENT_PP_BMP_UPDATE] = {
@@ -697,6 +706,62 @@ int mt76_vendor_beacon_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 	return 0;
 }
 EXPORT_SYMBOL_GPL(mt76_vendor_beacon_ctrl);
+
+int mt76_vendor_dfs_cal_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
+			     const void *data, int data_len)
+{
+	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
+	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_DFS_CAL_CTRL];
+	struct mt76_dev *dev = hw->priv;
+	const struct mt76_vendor_ops *ops = dev->vendor_ops;
+	struct mt76_phy *phy;
+	u8 radio_idx;
+	int err;
+
+	if (!dev->dfs_cal_ctrl)
+		return 0;
+
+	if (!ops || !ops->dfs_trigger_cal)
+		return -EOPNOTSUPP;
+
+	err = nla_parse(tb, MTK_VENDOR_ATTR_DFS_CAL_CTRL_MAX, data, data_len,
+			mt76_vendor_dfs_cal_ctrl_policy, NULL);
+	if (err)
+		return err;
+
+	if (!tb[MTK_VENDOR_ATTR_DFS_CAL_CTRL_RADIO_IDX] ||
+	    !tb[MTK_VENDOR_ATTR_DFS_CAL_CTRL_MODE])
+		return -EINVAL;
+
+	radio_idx = nla_get_u8(tb[MTK_VENDOR_ATTR_DFS_CAL_CTRL_RADIO_IDX]);
+	if (radio_idx >= wiphy->n_radio || !dev->radio_phy[radio_idx])
+		return -EINVAL;
+
+	phy = dev->radio_phy[radio_idx];
+	if (!phy->cap.has_5ghz)
+		return -EINVAL;
+
+	switch (nla_get_u8(tb[MTK_VENDOR_ATTR_DFS_CAL_CTRL_MODE])) {
+	case DFS_CAL_CTRL_SKIP:
+		set_bit(MT76_STATE_SKIP_CAL, &phy->state);
+		break;
+	case DFS_CAL_CTRL_NORMAL:
+		clear_bit(MT76_STATE_SKIP_CAL, &phy->state);
+		if (tb[MTK_VENDOR_ATTR_DFS_CAL_CTRL_TRIGGER]) {
+			err = ops->dfs_trigger_cal(phy);
+			if (err)
+				return err;
+		}
+		break;
+	case DFS_CAL_CTRL_UNSET:
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(mt76_vendor_dfs_cal_ctrl);
+
 #endif
 
 void mt76_vendor_register(struct mt76_phy *phy,
