@@ -217,15 +217,147 @@ mt7999_implicit_txbf_get(void *data, u64 *val)
 DEFINE_DEBUGFS_ATTRIBUTE(fops_implicit_txbf, mt7999_implicit_txbf_get,
 			 mt7999_implicit_txbf_set, "%lld\n");
 
+struct ser_cnt_desc {
+	const char *name;
+	u32 offset;
+};
+
+static void
+ser_status_helper(struct seq_file *s, struct tlv *tlv, u16 len)
+{
+#define SER_OFFSET(type, member)	offsetof(struct ser_query_##type, member)
+	static const struct ser_cnt_desc cmm_scalar[] = {
+		{ "L1 Recover", SER_OFFSET(cmm_tlv, l1_recovery_cnt) },
+		{ "L2 Recover", SER_OFFSET(cmm_tlv, l2_recovery_cnt) },
+	};
+	static const struct ser_cnt_desc cmm_cnt[] = {
+		{ "PSE",       SER_OFFSET(cmm_tlv, pse_err_cnt) },
+		{ "PSE_1",     SER_OFFSET(cmm_tlv, pse_1_err_cnt) },
+		{ "PLE",       SER_OFFSET(cmm_tlv, ple_err_cnt) },
+		{ "PLE_1",     SER_OFFSET(cmm_tlv, ple_1_err_cnt) },
+		{ "PLE AMSDU", SER_OFFSET(cmm_tlv, ple_amsdu_err_cnt) },
+	};
+	static const struct ser_cnt_desc band_scalar[] = {
+		{ "L3 Rx Abort",   SER_OFFSET(band_tlv, l3_rx_abort_cnt) },
+		{ "L3 Tx Abort",   SER_OFFSET(band_tlv, l3_tx_abort_cnt) },
+		{ "L3 Tx Disable", SER_OFFSET(band_tlv, l3_tx_disable_cnt) },
+		{ "L4 Recover",    SER_OFFSET(band_tlv, l4_recover_cnt) },
+	};
+	static const struct ser_cnt_desc band_cnt[] = {
+		{ "LMAC WISR6", SER_OFFSET(band_tlv, lmac6_err_cnt) },
+		{ "LMAC WISR7", SER_OFFSET(band_tlv, lmac7_err_cnt) },
+	};
+	static const struct ser_cnt_desc wfdma_cnt[] = {
+		{ "WFDMA Tx Busy", SER_OFFSET(wfdma_tlv, wfdma_txbusy_cnt) },
+		{ "WFDMA Rx Busy", SER_OFFSET(wfdma_tlv, wfdma_rxbusy_cnt) },
+	};
+#undef SER_OFFSET
+	struct ser_query_cmm_tlv *cmm;
+	struct ser_query_band_tlv *band;
+	struct ser_query_wfdma_tlv *wfdma;
+	int i, j;
+	u8 val8;
+	u16 val16;
+
+	switch (le16_to_cpu(tlv->tag)) {
+	case UNI_EVENT_SER_QUERY_CMM:
+		if (len < sizeof(*cmm))
+			return;
+
+		cmm = (void *)tlv;
+		seq_printf(s, "::E  R , EnableSER = 0x%x\n", cmm->ser_setting);
+		for (i = 0; i < ARRAY_SIZE(cmm_cnt); i++) {
+			__le16 *cnt = (void *)cmm + cmm_cnt[i].offset;
+
+			for (j = 0; j < 32; j++) {
+				val16 = le16_to_cpu(cnt[j]);
+
+				if (val16)
+					seq_printf(s, "::E  R , %s BIT[%d] = %hu\n",
+						   cmm_cnt[i].name, j, val16);
+			}
+		}
+		for (i = 0; i < ARRAY_SIZE(cmm_scalar); i++) {
+			val8 = *(u8 *)((void *)cmm + cmm_scalar[i].offset);
+
+			seq_printf(s, "::E  R , %s %u times\n", cmm_scalar[i].name, val8);
+		}
+		break;
+	case UNI_EVENT_SER_QUERY_BAND:
+		if (len < sizeof(*band))
+			return;
+
+		band = (void *)tlv;
+		for (i = 0; i < ARRAY_SIZE(band_scalar); i++) {
+			val8 = *(u8 *)((void *)band + band_scalar[i].offset);
+
+			seq_printf(s, "::E  R , %s BN%d %u times\n",
+				   band_scalar[i].name, band->band, val8);
+		}
+		for (i = 0; i < ARRAY_SIZE(band_cnt); i++) {
+			__le16 *cnt = (void *)band + band_cnt[i].offset;
+
+			for (j = 0; j < 32; j++) {
+				val16 = le16_to_cpu(cnt[j]);
+
+				if (val16)
+					seq_printf(s, "::E  R , %s BIT[%d] = %hu Band=%d\n",
+						   band_cnt[i].name, j, val16, band->band);
+			}
+		}
+		break;
+	case UNI_EVENT_SER_QUERY_WFDMA:
+		if (len < sizeof(*wfdma))
+			return;
+
+		wfdma = (void *)tlv;
+		for (i = 0; i < ARRAY_SIZE(wfdma_cnt); i++) {
+			__le16 *cnt = (void *)wfdma + wfdma_cnt[i].offset;
+
+			for (j = 0; j < 4; j++) {
+				val16 = le16_to_cpu(cnt[j]);
+
+				if (val16)
+					seq_printf(s, "::E  R , %s BIT[%d] = %hu\n",
+						   wfdma_cnt[i].name, j, val16);
+			}
+		}
+		break;
+	}
+}
+
+static void
+mt7999_ser_status_get(struct seq_file *s, struct sk_buff *skb)
+{
+	struct tlv *tlv;
+
+	if (!skb_pull(skb, sizeof(struct mt7999_mcu_ser_event)))
+		return;
+
+	seq_puts(s, "\nfirmware SER trigger statistics...\n");
+	while (skb->len >= sizeof(*tlv)) {
+		u16 tlv_len;
+
+		tlv = (struct tlv *)skb->data;
+		tlv_len = le16_to_cpu(tlv->len);
+		if (skb->len < tlv_len)
+			break;
+
+		ser_status_helper(s, tlv, tlv_len);
+		skb_pull(skb, tlv_len);
+	}
+}
+
 /* test knob of system error recovery */
 static ssize_t
 mt7999_sys_recovery_set(struct file *file, const char __user *user_buf,
 			size_t count, loff_t *ppos)
 {
 #define	SER_SET_TRACKING	BIT(0)
-	struct mt7999_phy *phy = file->private_data;
+	struct seq_file *seq = file->private_data;
+	struct mt7999_phy *phy = seq->private;
 	struct mt7999_dev *dev = phy->dev;
-	bool band = phy->mt76->band_idx;
+	u8 band = phy->mt76->band_idx;
 	char buf[16];
 	int ret = 0;
 	u16 val;
@@ -245,9 +377,6 @@ mt7999_sys_recovery_set(struct file *file, const char __user *user_buf,
 		return -EINVAL;
 
 	switch (val) {
-	case SER_USER_CMD_QUERY:
-		ret = mt7999_mcu_set_ser(dev, UNI_SER_QUERY, 0, band);
-		break;
 	case SER_USER_CMD_L1_RECOVERY:
 	case SER_USER_CMD_L2_RECOVERY:
 	case SER_USER_CMD_L3_RX_ABORT:
@@ -261,14 +390,12 @@ mt7999_sys_recovery_set(struct file *file, const char __user *user_buf,
 
 		ret = mt7999_mcu_set_ser(dev, UNI_SER_TRIGGER, val, band);
 		break;
-
 	/* enable full chip reset */
 	case SER_USER_CMD_FULL_RECOVERY:
 		mt76_set(dev, MT_WFDMA0_MCU_HOST_INT_ENA, MT_MCU_CMD_WDT_MASK);
 		dev->recovery.state |= MT_MCU_CMD_WM_WDT;
 		mt7999_reset(dev);
 		break;
-
 	/* WARNING: trigger firmware crash */
 	case SER_USER_CMD_SET_SYSTEM_ASSERT:
 		// trigger wm assert exception
@@ -280,8 +407,6 @@ mt7999_sys_recovery_set(struct file *file, const char __user *user_buf,
 		break;
 	case SER_USER_CMD_SET_HW_BIT_DETECT_ONLY:
 		ret = mt7999_mcu_set_ser(dev, UNI_SER_SET, SER_SET_TRACKING, band);
-		if (ret)
-			return ret;
 		break;
 	default:
 		break;
@@ -290,114 +415,91 @@ mt7999_sys_recovery_set(struct file *file, const char __user *user_buf,
 	return ret ? ret : count;
 }
 
-static ssize_t
-mt7999_sys_recovery_get(struct file *file, char __user *user_buf,
-			size_t count, loff_t *ppos)
+static int
+mt7999_sys_recovery_show(struct seq_file *s, void *data)
 {
-	struct mt7999_phy *phy = file->private_data;
+	struct mt7999_phy *phy = s->private;
 	struct mt7999_dev *dev = phy->dev;
-	char *buff;
-	int desc = 0;
-	ssize_t ret;
-	static const size_t bufsz = 1536;
-
-	buff = kmalloc(bufsz, GFP_KERNEL);
-	if (!buff)
-		return -ENOMEM;
+	struct sk_buff *skb = NULL;
+	int ret;
 
 	/* HELP */
-	desc += scnprintf(buff + desc, bufsz - desc,
-			  "Please echo the correct value ...\n");
-	desc += scnprintf(buff + desc, bufsz - desc,
-			  "%2d: grab firmware transient SER state\n",
-			  SER_USER_CMD_QUERY);
-	desc += scnprintf(buff + desc, bufsz - desc,
-			  "%2d: trigger system error L1 recovery\n",
-			  SER_USER_CMD_L1_RECOVERY);
-	desc += scnprintf(buff + desc, bufsz - desc,
-			  "%2d: trigger system error L2 recovery\n",
-			  SER_USER_CMD_L2_RECOVERY);
-	desc += scnprintf(buff + desc, bufsz - desc,
-			  "%2d: trigger system error L3 rx abort\n",
-			  SER_USER_CMD_L3_RX_ABORT);
-	desc += scnprintf(buff + desc, bufsz - desc,
-			  "%2d: trigger system error L3 tx abort\n",
-			  SER_USER_CMD_L3_TX_ABORT);
-	desc += scnprintf(buff + desc, bufsz - desc,
-			  "%2d: trigger system error L3 tx disable\n",
-			  SER_USER_CMD_L3_TX_DISABLE);
-	desc += scnprintf(buff + desc, bufsz - desc,
-			  "%2d: trigger system error L3 bf recovery\n",
-			  SER_USER_CMD_L3_BF_RECOVERY);
-	desc += scnprintf(buff + desc, bufsz - desc,
-			  "%2d: trigger system error L4 mdp recovery\n",
-			  SER_USER_CMD_L4_MDP_RECOVERY);
-	desc += scnprintf(buff + desc, bufsz - desc,
-			  "%2d: trigger system error full recovery\n",
-			  SER_USER_CMD_FULL_RECOVERY);
-	desc += scnprintf(buff + desc, bufsz - desc,
-			  "%2d: trigger firmware crash\n",
-			  SER_USER_CMD_SET_SYSTEM_ASSERT);
-	desc += scnprintf(buff + desc, bufsz - desc,
-			  "%2d: trigger grab wm firmware coredump\n",
-			  SER_USER_CMD_FW_COREDUMP_WM);
-	desc += scnprintf(buff + desc, bufsz - desc,
-			  "%2d: hw bit detect only\n",
-			  SER_USER_CMD_SET_HW_BIT_DETECT_ONLY);
-	/* SER statistics */
-	desc += scnprintf(buff + desc, bufsz - desc,
-			  "\nlet's dump firmware SER statistics...\n");
-	desc += scnprintf(buff + desc, bufsz - desc,
-			  "::E  R , SER_STATUS        = 0x%08x\n",
-			  mt76_rr(dev, MT_SWDEF_SER_STATS));
-	desc += scnprintf(buff + desc, bufsz - desc,
-			  "::E  R , SER_PLE_ERR       = 0x%08x\n",
-			  mt76_rr(dev, MT_SWDEF_PLE_STATS));
-	desc += scnprintf(buff + desc, bufsz - desc,
-			  "::E  R , SER_PLE_ERR_1     = 0x%08x\n",
-			  mt76_rr(dev, MT_SWDEF_PLE1_STATS));
-	desc += scnprintf(buff + desc, bufsz - desc,
-			  "::E  R , SER_PLE_ERR_AMSDU = 0x%08x\n",
-			  mt76_rr(dev, MT_SWDEF_PLE_AMSDU_STATS));
-	desc += scnprintf(buff + desc, bufsz - desc,
-			  "::E  R , SER_PSE_ERR       = 0x%08x\n",
-			  mt76_rr(dev, MT_SWDEF_PSE_STATS));
-	desc += scnprintf(buff + desc, bufsz - desc,
-			  "::E  R , SER_PSE_ERR_1     = 0x%08x\n",
-			  mt76_rr(dev, MT_SWDEF_PSE1_STATS));
-	desc += scnprintf(buff + desc, bufsz - desc,
-			  "::E  R , SER_LMAC_WISR6_B0 = 0x%08x\n",
-			  mt76_rr(dev, MT_SWDEF_LAMC_WISR6_BN0_STATS));
-	desc += scnprintf(buff + desc, bufsz - desc,
-			  "::E  R , SER_LMAC_WISR6_B1 = 0x%08x\n",
-			  mt76_rr(dev, MT_SWDEF_LAMC_WISR6_BN1_STATS));
-	desc += scnprintf(buff + desc, bufsz - desc,
-			  "::E  R , SER_LMAC_WISR6_B2 = 0x%08x\n",
-			  mt76_rr(dev, MT_SWDEF_LAMC_WISR6_BN2_STATS));
-	desc += scnprintf(buff + desc, bufsz - desc,
-			  "::E  R , SER_LMAC_WISR7_B0 = 0x%08x\n",
-			  mt76_rr(dev, MT_SWDEF_LAMC_WISR7_BN0_STATS));
-	desc += scnprintf(buff + desc, bufsz - desc,
-			  "::E  R , SER_LMAC_WISR7_B1 = 0x%08x\n",
-			  mt76_rr(dev, MT_SWDEF_LAMC_WISR7_BN1_STATS));
-	desc += scnprintf(buff + desc, bufsz - desc,
-			  "::E  R , SER_LMAC_WISR7_B2 = 0x%08x\n",
-			  mt76_rr(dev, MT_SWDEF_LAMC_WISR7_BN2_STATS));
-	desc += scnprintf(buff + desc, bufsz - desc,
-			  "\nSYS_RESET_COUNT: WM %d, WA %d\n",
-			  dev->recovery.wm_reset_count,
-			  dev->recovery.wa_reset_count);
+	seq_puts(s, "Please echo the correct value ...\n");
+	seq_printf(s, "%2d: trigger system error L1 recovery\n",
+		   SER_USER_CMD_L1_RECOVERY);
+	seq_printf(s, "%2d: trigger system error L2 recovery\n",
+		   SER_USER_CMD_L2_RECOVERY);
+	seq_printf(s, "%2d: trigger system error L3 rx abort\n",
+		   SER_USER_CMD_L3_RX_ABORT);
+	seq_printf(s, "%2d: trigger system error L3 tx abort\n",
+		   SER_USER_CMD_L3_TX_ABORT);
+	seq_printf(s, "%2d: trigger system error L3 tx disable\n",
+		   SER_USER_CMD_L3_TX_DISABLE);
+	seq_printf(s, "%2d: trigger system error L3 bf recovery\n",
+		   SER_USER_CMD_L3_BF_RECOVERY);
+	seq_printf(s, "%2d: trigger system error L4 mdp recovery\n",
+		   SER_USER_CMD_L4_MDP_RECOVERY);
+	seq_printf(s, "%2d: trigger system error full recovery\n",
+		   SER_USER_CMD_FULL_RECOVERY);
+	seq_printf(s, "%2d: trigger firmware crash\n",
+		   SER_USER_CMD_SET_SYSTEM_ASSERT);
+	seq_printf(s, "%2d: trigger grab wm firmware coredump\n",
+		   SER_USER_CMD_FW_COREDUMP_WM);
+	seq_printf(s, "%2d: hw bit detect only\n",
+		   SER_USER_CMD_SET_HW_BIT_DETECT_ONLY);
 
-	ret = simple_read_from_buffer(user_buf, count, ppos, buff, desc);
-	kfree(buff);
-	return ret;
+	/* SER statistics */
+	seq_puts(s, "\nlet's dump firmware SER statistics...\n");
+	seq_printf(s, "::E  R , SER_STATUS        = 0x%08x\n",
+		   mt76_rr(dev, MT_SWDEF_SER_STATS));
+	seq_printf(s, "::E  R , SER_PLE_ERR       = 0x%08x\n",
+		   mt76_rr(dev, MT_SWDEF_PLE_STATS));
+	seq_printf(s, "::E  R , SER_PLE_ERR_1     = 0x%08x\n",
+		   mt76_rr(dev, MT_SWDEF_PLE1_STATS));
+	seq_printf(s, "::E  R , SER_PLE_ERR_AMSDU = 0x%08x\n",
+		   mt76_rr(dev, MT_SWDEF_PLE_AMSDU_STATS));
+	seq_printf(s, "::E  R , SER_PSE_ERR       = 0x%08x\n",
+		   mt76_rr(dev, MT_SWDEF_PSE_STATS));
+	seq_printf(s, "::E  R , SER_PSE_ERR_1     = 0x%08x\n",
+		   mt76_rr(dev, MT_SWDEF_PSE1_STATS));
+	seq_printf(s, "::E  R , SER_LMAC_WISR6_B0 = 0x%08x\n",
+		   mt76_rr(dev, MT_SWDEF_LAMC_WISR6_BN0_STATS));
+	seq_printf(s, "::E  R , SER_LMAC_WISR6_B1 = 0x%08x\n",
+		   mt76_rr(dev, MT_SWDEF_LAMC_WISR6_BN1_STATS));
+	seq_printf(s, "::E  R , SER_LMAC_WISR6_B2 = 0x%08x\n",
+		   mt76_rr(dev, MT_SWDEF_LAMC_WISR6_BN2_STATS));
+	seq_printf(s, "::E  R , SER_LMAC_WISR7_B0 = 0x%08x\n",
+		   mt76_rr(dev, MT_SWDEF_LAMC_WISR7_BN0_STATS));
+	seq_printf(s, "::E  R , SER_LMAC_WISR7_B1 = 0x%08x\n",
+		   mt76_rr(dev, MT_SWDEF_LAMC_WISR7_BN1_STATS));
+	seq_printf(s, "::E  R , SER_LMAC_WISR7_B2 = 0x%08x\n",
+		   mt76_rr(dev, MT_SWDEF_LAMC_WISR7_BN2_STATS));
+	seq_printf(s, "\nSYS_RESET_COUNT: WM %d, WA %d\n",
+		   dev->recovery.wm_reset_count, dev->recovery.wa_reset_count);
+
+	ret = mt7999_mcu_get_ser_status(dev, &skb);
+	if (ret)
+		return ret;
+
+	if (skb) {
+		mt7999_ser_status_get(s, skb);
+		dev_kfree_skb(skb);
+	}
+
+	return 0;
+}
+
+static int mt7999_sys_recovery_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, mt7999_sys_recovery_show, inode->i_private);
 }
 
 static const struct file_operations mt7999_sys_recovery_ops = {
 	.write = mt7999_sys_recovery_set,
-	.read = mt7999_sys_recovery_get,
-	.open = simple_open,
-	.llseek = default_llseek,
+	.open = mt7999_sys_recovery_open,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = single_release,
 };
 
 static int

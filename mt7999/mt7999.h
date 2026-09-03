@@ -1401,7 +1401,8 @@ int mt7999_mcu_get_efuse_free_block(struct mt7999_dev *dev, void *info);
 int mt7999_mcu_write_ext_eeprom(struct mt7999_dev *dev, u32 offset,
 				u32 data_len, u8 *write_buf);
 int mt7999_mcu_get_chip_config(struct mt7999_dev *dev, u32 *cap);
-int mt7999_mcu_set_ser(struct mt7999_dev *dev, u8 action, u8 set, u8 band);
+int mt7999_mcu_set_ser(struct mt7999_dev *dev, u8 action, u8 val, u8 band);
+int mt7999_mcu_get_ser_status(struct mt7999_dev *dev, struct sk_buff **skb);
 int mt7999_mcu_set_txbf(struct mt7999_dev *dev, u8 action);
 int mt7999_mcu_set_fcc5_lpn(struct mt7999_dev *dev, int val);
 int mt7999_mcu_set_pulse_th(struct mt7999_dev *dev,

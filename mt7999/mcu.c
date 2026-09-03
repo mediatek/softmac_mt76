@@ -7168,8 +7168,6 @@ int mt7999_mcu_set_ser(struct mt7999_dev *dev, u8 action, u8 val, u8 band)
 	};
 
 	switch (action) {
-	case UNI_SER_QUERY:
-		break;
 	case UNI_SER_SET:
 		req.set.mask = cpu_to_le32(val);
 		break;
@@ -7183,6 +7181,22 @@ int mt7999_mcu_set_ser(struct mt7999_dev *dev, u8 action, u8 val, u8 band)
 
 	return mt76_mcu_send_msg(&dev->mt76, MCU_WM_UNI_CMD(SER),
 				 &req, sizeof(req), false);
+}
+
+int mt7999_mcu_get_ser_status(struct mt7999_dev *dev, struct sk_buff **skb)
+{
+	struct {
+		u8 rsv[4];
+
+		__le16 tag;
+		__le16 len;
+	} __packed req = {
+		.tag = cpu_to_le16(UNI_SER_QUERY),
+		.len = cpu_to_le16(sizeof(req) - 4),
+	};
+
+	return mt76_mcu_send_and_get_msg(&dev->mt76, MCU_WM_UNI_CMD_QUERY(SER),
+					 &req, sizeof(req), true, skb);
 }
 
 int mt7999_mcu_set_txbf(struct mt7999_dev *dev, u8 action)

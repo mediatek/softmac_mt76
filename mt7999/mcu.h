@@ -2236,6 +2236,52 @@ struct mt7999_mcu_nf_event {
 	__le32 avg_ipi[__MT_MAX_BAND][MT_NF_MAX_ANT_NUM][11];
 } __packed;
 
+struct mt7999_mcu_ser_event {
+	u8 _rsv[4];
+
+	u8 tlv_buf[0];
+} __packed;
+
+struct ser_query_cmm_tlv {
+	__le16 tag;
+	__le16 len;
+	u8 ser_setting;
+	u8 l1_recovery_cnt;
+	u8 l2_recovery_cnt;
+	u8 _rsv;
+	__le16 pse_err_cnt[32];
+	__le16 pse_1_err_cnt[32];
+	__le16 ple_err_cnt[32];
+	__le16 ple_1_err_cnt[32];
+	__le16 ple_amsdu_err_cnt[32];
+} __packed;
+
+struct ser_query_band_tlv {
+	__le16 tag;
+	__le16 len;
+	u8 band;
+	u8 l3_rx_abort_cnt;
+	u8 l3_tx_abort_cnt;
+	u8 l3_tx_disable_cnt;
+	u8 l4_recover_cnt;
+	u8 _rsv[3];
+	__le16 lmac6_err_cnt[32];
+	__le16 lmac7_err_cnt[32];
+} __packed;
+
+struct ser_query_wfdma_tlv {
+	__le16 tag;
+	__le16 len;
+	__le16 wfdma_txbusy_cnt[4];
+	__le16 wfdma_rxbusy_cnt[4];
+} __packed;
+
+enum {
+	UNI_EVENT_SER_QUERY_CMM = 0,
+	UNI_EVENT_SER_QUERY_BAND,
+	UNI_EVENT_SER_QUERY_WFDMA,
+};
+
 #ifdef CONFIG_MTK_VENDOR
 struct mt7999_mcu_csi_event {
 	struct mt7999_mcu_rxd rxd;
