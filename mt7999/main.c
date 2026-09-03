@@ -3014,7 +3014,7 @@ mt7999_net_fill_forward_path(struct ieee80211_hw *hw,
 	u8 tid = mvif->qos_map[path->mtk_wdma.tid >> 2];
 	u8 link_id = (sta->mlo && tid % 2) ? msta->seclink_id : msta->deflink_id;
 
-	link = mt7999_vif_link(dev, vif, msta->deflink_id);
+	link = mt7999_vif_link(dev, vif, link_id);
 	if (!link)
 		return -EIO;
 
