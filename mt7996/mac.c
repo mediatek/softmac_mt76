@@ -3765,6 +3765,8 @@ mt7996_beacon_mon_send_probe(struct mt7996_phy *phy, struct mt7996_vif *mvif,
 	struct ieee80211_hw *hw = phy->mt76->hw;
 	struct mt7996_sta_link *msta_link;
 	struct ieee80211_tx_info *info;
+	struct ieee80211_sta *sta;
+	struct mt76_wcid *wcid;
 	struct sk_buff *skb;
 	int ret = 0, band_idx = phy->mt76->band_idx;
 	int band;
@@ -3814,8 +3816,20 @@ mt7996_beacon_mon_send_probe(struct mt7996_phy *phy, struct mt7996_vif *mvif,
 		return -EINVAL;
 	}
 
+	/* find peer wcid */
+	wcid = &msta_link->wcid;
+	sta = ieee80211_vif_is_mld(vif) ?
+	      ieee80211_find_sta_by_link_addrs(hw, conf->bssid, conf->addr, NULL) :
+	      ieee80211_find_sta(vif, conf->bssid);
+	if (sta) {
+		struct mt7996_sta *msta = (void *)sta->drv_priv;
+		struct mt7996_sta_link *msta_link_sta = rcu_dereference(msta->link[link_id]);
+		if (msta_link_sta)
+			wcid = &msta_link_sta->wcid;
+	}
+
 	local_bh_disable();
-	mt76_tx(phy->mt76, NULL, &msta_link->wcid, skb);
+	mt76_tx(phy->mt76, NULL, wcid, skb);
 	local_bh_enable();
 
 	mvif->probe[band_idx] = (void *)skb;
