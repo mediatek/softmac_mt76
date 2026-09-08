@@ -1447,11 +1447,12 @@ static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 	{
 		.info = {
 			.vendor_id = MTK_NL80211_VENDOR_ID,
-			.subcmd = MTK_NL80211_VENDOR_SUBCMD_ABI_LEGACY,
+			.subcmd = MTK_NL80211_VENDOR_SUBCMD_ABI_CONNAC2,
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV,
-		.dumpit = mt76_vendor_abi_legacy_dump,
-		.maxattr = MTK_VENDOR_ATTR_ABI_LEGACY_MAX,
+		.dumpit = mt76_vendor_abi_connac2_dump,
+		.policy = VENDOR_CMD_RAW_DATA,
+		.maxattr = 1,
 	},
 	{
 		.info = {

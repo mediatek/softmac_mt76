@@ -27,22 +27,12 @@ enum mtk_nl80211_vendor_subcmds {
 	MTK_NL80211_VENDOR_SUBCMD_SCS_CTRL = 0xd0,
 	MTK_NL80211_VENDOR_SUBCMD_EPCS_CTRL = 0xd4,
 	MTK_NL80211_VENDOR_SUBCMD_DFS_TX_CTRL = 0xd5,
-	/* Advertised only by devices using the Connac2 vendor payload ABI. */
-	MTK_NL80211_VENDOR_SUBCMD_ABI_LEGACY = 0xd6,
+	MTK_NL80211_VENDOR_SUBCMD_ABI_CONNAC2 = 0xd6,
 };
 
 enum mtk_nl80211_vendor_events {
 	MTK_NL80211_VENDOR_EVENT_PP_BMP_UPDATE = 0x5,
 	MT76_VENDOR_N_EVENTS
-};
-
-enum mtk_vendor_attr_abi_legacy {
-	MTK_VENDOR_ATTR_ABI_LEGACY_UNSPEC,
-	MTK_VENDOR_ATTR_ABI_LEGACY_VERSION,
-
-	NUM_MTK_VENDOR_ATTRS_ABI_LEGACY,
-	MTK_VENDOR_ATTR_ABI_LEGACY_MAX =
-		NUM_MTK_VENDOR_ATTRS_ABI_LEGACY - 1,
 };
 
 enum mtk_vendor_attr_edcca_ctrl {
@@ -149,7 +139,7 @@ enum mtk_vendor_attr_wireless_ctrl {
 	MTK_VENDOR_ATTR_WIRELESS_CTRL_MIMO,
 	MTK_VENDOR_ATTR_WIRELESS_CTRL_AMSDU,
 	MTK_VENDOR_ATTR_WIRELESS_CTRL_AMPDU,
-	MTK_VENDOR_ATTR_WIRELESS_CTRL_CERT = 9,
+	MTK_VENDOR_ATTR_WIRELESS_CTRL_CERT,
 	MTK_VENDOR_ATTR_WIRELESS_CTRL_RTS_SIGTA,
 	MTK_VENDOR_ATTR_WIRELESS_CTRL_MU_EDCA, /* reserve */
 	MTK_VENDOR_ATTR_WIRELESS_CTRL_LINK_ID,
@@ -498,9 +488,9 @@ extern const struct nla_policy
 mt76_vendor_dfs_tx_ctrl_policy[NUM_MTK_VENDOR_ATTRS_DFS_TX_CTRL];
 extern const struct nla_policy
 mt76_vendor_beacon_ctrl_policy[NUM_MTK_VENDOR_ATTRS_BEACON_CTRL];
-int mt76_vendor_abi_legacy_dump(struct wiphy *wiphy,
-				struct wireless_dev *wdev, struct sk_buff *skb,
-				const void *data, int data_len, unsigned long *storage);
+int mt76_vendor_abi_connac2_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
+				 struct sk_buff *skb, const void *data,
+				 int data_len, unsigned long *storage);
 
 int mt76_vendor_bss_color_ctrl_dump(struct wiphy *wiphy,
 				    struct wireless_dev *wdev,
