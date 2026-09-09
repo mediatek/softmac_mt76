@@ -347,6 +347,36 @@ mt7999_key_iter(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	WARN_ON(mt7999_set_hw_key(hw, it->cmd, vif, NULL, it->link_id, key));
 }
 
+struct mt7999_ptk_iter_data {
+	struct ieee80211_sta *sta;
+	unsigned int link_id;
+};
+
+static void
+mt7999_ptk_iter(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
+		struct ieee80211_sta *sta, struct ieee80211_key_conf *key,
+		void *data)
+{
+	struct mt7999_ptk_iter_data *it = data;
+
+	if (sta != it->sta || !(key->flags & IEEE80211_KEY_FLAG_PAIRWISE))
+		return;
+
+	WARN_ON(mt7999_set_hw_key(hw, SET_KEY, vif, sta, it->link_id, key));
+}
+
+static void
+mt7999_sta_install_ptk_link(struct mt7999_dev *dev, struct ieee80211_vif *vif,
+			    struct ieee80211_sta *sta, unsigned int link_id)
+{
+	struct mt7999_ptk_iter_data it = {
+		.sta = sta,
+		.link_id = link_id,
+	};
+
+	ieee80211_iter_keys(dev->mt76.hw, vif, mt7999_ptk_iter, &it);
+}
+
 int mt7999_vif_link_add(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 			struct ieee80211_bss_conf *link_conf,
 			struct mt76_vif_link *mlink)
@@ -1722,6 +1752,10 @@ mt7999_mac_sta_event(struct mt7999_dev *dev, struct ieee80211_vif *vif,
 			msta_link->wcid.tx_info |= MT_WCID_TX_INFO_SET;
 			break;
 		case MT76_STA_EVENT_AUTHORIZE:
+			if (sta->valid_links && sta->epp_peer)
+				mt7999_sta_install_ptk_link(dev, vif, sta,
+							    link_id);
+
 			err = mt7999_mcu_add_sta(dev, link_conf, link_sta,
 						 link, msta_link,
 						 CONN_STATE_PORT_SECURE, false);
