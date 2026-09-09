@@ -1022,6 +1022,7 @@ struct mt7999_dev {
 	u16 pbc_lower_bound[WMM_PBC_QUEUE_NUM];
 	u16 pbc_upper_bound[WMM_PBC_QUEUE_NUM];
 	bool disable_dynamic_txop;
+	bool disable_reserve_wtbl;
 #ifdef CONFIG_MTK_DEBUG
 	u16 wlan_idx;
 	bool wtbl_query_cr;

@@ -1538,7 +1538,7 @@ mt7999_mac_reserve_wcid(struct mt7999_dev *dev, struct ieee80211_vif *vif,
 	struct mt7999_sta *msta = (struct mt7999_sta *)sta->drv_priv;
 	struct mt7999_phy *phy;
 
-	if (vif->type != NL80211_IFTYPE_AP || !sta->mlo)
+	if (vif->type != NL80211_IFTYPE_AP || !sta->mlo || dev->disable_reserve_wtbl)
 		return 0;
 
 	mt7999_for_each_phy(dev, phy) {

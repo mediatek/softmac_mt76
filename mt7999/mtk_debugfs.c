@@ -5129,6 +5129,7 @@ void mt7999_mtk_init_dev_debugfs(struct mt7999_dev *dev, struct dentry *dir)
 				    mt7999_wtbl_read);
 	debugfs_create_bool("wtbl_query_cr", 0600, dir, &dev->wtbl_query_cr);
 	debugfs_create_bool("ple_query_cr", 0600, dir, &dev->ple_query_cr);
+	debugfs_create_bool("disable_reserve_wtbl", 0600, dir, &dev->disable_reserve_wtbl);
 	debugfs_create_bool("disable_dynamic_txop", 0600, dir, &dev->disable_dynamic_txop);
 	debugfs_create_bool("disable_dynamic_1rpd", 0600, dir, &dev->disable_dynamic_1rpd);
 
