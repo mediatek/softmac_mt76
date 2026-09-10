@@ -1263,12 +1263,12 @@ struct ra_fixed_rate_set {
 	struct ra_common_hdr hdr;
 	struct ra_rate_params params;
 	u8 type;  /* txcmd:0, wtbl:1 */
-	u8 rsv[17];
+	u8 rsv[19];
 } __packed;
 
 struct ra_fixed_rate_reset {
 	struct ra_common_hdr hdr;
-	u8 rsv[18];
+	u8 rsv[20];
 } __packed;
 
 enum ra_phy_mode {
@@ -1300,7 +1300,7 @@ struct ra_fixed_rate_opt_param_set {
 	__le16 opt_param_bitmap;
 	u8 type;
 	struct ra_rate_params params;
-	u8 rsv[19];
+	u8 rsv[21];
 } __packed;
 
 struct ra_fixed_rate {

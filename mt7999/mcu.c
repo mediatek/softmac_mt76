@@ -3223,6 +3223,7 @@ int mt7999_mcu_set_ra_option_ctrl(struct mt7999_dev *dev, u8 option, u8 val)
 
 		u8 option;
 		u8 val;
+		u8 __rsv2[4];
 	} __packed req = {
 		.tag = cpu_to_le16(UNI_RA_OPTION_CTRL),
 		.len = cpu_to_le16(sizeof(req) - 4),
