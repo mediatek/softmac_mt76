@@ -1170,7 +1170,9 @@ int mt7999_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
 	if (__mt7999_phy(dev, wcid->phy_idx)->use_ap_sniffer)
 		info->flags |= IEEE80211_TX_CTL_REQ_TX_STATUS;
 
-	pid = mt76_tx_status_skb_add(mdev, wcid, tx_info->skb);
+	/* WLAN_IDX can only be primary or secondary link */
+	wcid_txd = mt7999_get_txd_wcid(wcid, tid);
+	pid = mt76_tx_status_skb_add(mdev, wcid_txd, tx_info->skb);
 	memset(txwi_ptr, 0, MT_TXD_SIZE);
 	/* Transmit non qos data by 802.11 header and need to fill txd by host*/
 	if (!is_8023 || pid >= MT_PACKET_ID_FIRST)
@@ -1213,8 +1215,6 @@ int mt7999_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
 	}
 
 	txp->fw.token = cpu_to_le16(id);
-	wcid_txd = mt7999_get_txd_wcid(wcid, tid);
-	/* wcid in txp can only be primary or secondary link */
 	txp->fw.rept_wds_wcid = cpu_to_le16(sta ? wcid_txd->idx : 0xfff);
 
 	tx_info->skb = NULL;
