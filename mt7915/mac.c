@@ -902,6 +902,12 @@ mt7915_mac_tx_free(struct mt7915_dev *dev, void *data, int len)
 			u16 idx;
 
 			idx = FIELD_GET(MT_TX_FREE_WLAN_ID, info);
+			if (idx >= mt7915_wtbl_size(dev)) {
+				dev_err(mdev->dev,
+					"invalid WLAN ID %u in tx_free\n",
+					idx);
+				return;
+			}
 			wcid = mt76_wcid_ptr(dev, idx);
 			sta = wcid_to_sta(wcid);
 			if (!sta)
