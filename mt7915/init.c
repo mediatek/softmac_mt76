@@ -1356,6 +1356,7 @@ int mt7915_register_device(struct mt7915_dev *dev)
 
 	ieee80211_queue_work(mt76_hw(dev), &dev->init_work);
 
+	dev->mt76.token_threshold = dev->mt76.token_size / (1 + !!dev->dbdc_support);
 	dev->recovery.hw_init_done = true;
 
 	ret = mt7915_init_debugfs(&dev->phy);
