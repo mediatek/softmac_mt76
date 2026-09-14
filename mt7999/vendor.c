@@ -1219,6 +1219,17 @@ static const struct wiphy_vendor_command mt7999_vendor_commands[] = {
 	{
 		.info = {
 			.vendor_id = MTK_NL80211_VENDOR_ID,
+			.subcmd = MTK_NL80211_VENDOR_SUBCMD_EDCCA_CBW_CTRL,
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
+			 WIPHY_VENDOR_CMD_NEED_RUNNING,
+		.doit = mt76_vendor_edcca_ctrl,
+		.policy = mt76_vendor_edcca_ctrl_policy,
+		.maxattr = MTK_VENDOR_ATTR_EDCCA_CTRL_MAX,
+	},
+	{
+		.info = {
+			.vendor_id = MTK_NL80211_VENDOR_ID,
 			.subcmd = MTK_NL80211_VENDOR_SUBCMD_3WIRE_CTRL,
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
@@ -1419,27 +1430,52 @@ static int mt7999_vendor_edcca_ctrl(struct mt76_dev *mdev, u8 radio_idx,
 }
 
 static int mt7999_vendor_edcca_ctrl_threshold(struct mt76_dev *mdev, u8 radio_idx,
-					      u8 value[MT76_VENDOR_EDCCA_BW_NUM])
+					      u8 th_type,
+					      const u8 value[MT76_VENDOR_EDCCA_BW_NUM])
 {
 	struct mt7999_dev *dev = container_of(mdev, struct mt7999_dev, mt76);
+	bool cbw = th_type == MT76_VENDOR_EDCCA_TH_CBW;
+	struct ieee80211_channel *chan;
+	struct mt7999_phy *phy;
+	bool use_cbw;
 
 	if (!mt7999_radio_valid(dev, radio_idx))
 		return -EINVAL;
 
-	return mt7999_mcu_edcca_threshold_ctrl(dev->radio_phy[radio_idx], value,
-					       true);
+	phy = dev->radio_phy[radio_idx];
+	chan = phy->mt76->chandef.chan;
+	switch (phy->dev->mt76.region) {
+	case NL80211_DFS_JP:
+		use_cbw = true;
+		break;
+	case NL80211_DFS_FCC:
+		use_cbw = chan && chan->band == NL80211_BAND_6GHZ;
+		break;
+	default:
+		use_cbw = false;
+		break;
+	}
+
+	if (cbw != use_cbw) {
+		dev_dbg(dev->mt76.dev,
+			"radio %u: %s threshold not applicable, phy is in %s mode\n",
+			radio_idx, cbw ? "CBW" : "SBF",
+			use_cbw ? "CBW" : "SBF");
+		return 0;
+	}
+
+	return mt7999_mcu_edcca_threshold_set(phy, value);
 }
 
 static int mt7999_vendor_edcca_ctrl_dump(struct mt76_dev *mdev, u8 radio_idx,
-					 u8 value[MT76_VENDOR_EDCCA_BW_NUM])
+					 struct mt76_vendor_edcca_info *info)
 {
 	struct mt7999_dev *dev = container_of(mdev, struct mt7999_dev, mt76);
 
 	if (!mt7999_radio_valid(dev, radio_idx))
 		return -EINVAL;
 
-	return mt7999_mcu_edcca_threshold_ctrl(dev->radio_phy[radio_idx], value,
-					       false);
+	return mt7999_mcu_edcca_threshold_get(dev->radio_phy[radio_idx], info);
 }
 
 static int mt7999_vendor_background_radar_ctrl(struct mt76_dev *mdev,

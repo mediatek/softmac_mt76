@@ -28,6 +28,7 @@ enum mtk_nl80211_vendor_subcmds {
 	MTK_NL80211_VENDOR_SUBCMD_EPCS_CTRL = 0xd4,
 	MTK_NL80211_VENDOR_SUBCMD_DFS_TX_CTRL = 0xd5,
 	MTK_NL80211_VENDOR_SUBCMD_ABI_CONNAC2 = 0xd6,
+	MTK_NL80211_VENDOR_SUBCMD_EDCCA_CBW_CTRL = 0xd7,
 };
 
 enum mtk_nl80211_vendor_events {
@@ -46,6 +47,8 @@ enum mtk_vendor_attr_edcca_ctrl {
 	MTK_VENDOR_ATTR_EDCCA_CTRL_COMPENSATE,
 	MTK_VENDOR_ATTR_EDCCA_CTRL_SEC160_VAL,
 	MTK_VENDOR_ATTR_EDCCA_CTRL_RADIO_IDX,
+	MTK_VENDOR_ATTR_EDCCA_CTRL_BW320_VAL,
+	MTK_VENDOR_ATTR_EDCCA_CTRL_TH_TYPE,
 
 	/* keep last */
 	NUM_MTK_VENDOR_ATTRS_EDCCA_CTRL,
@@ -61,6 +64,11 @@ enum mtk_vendor_attr_edcca_dump {
 	MTK_VENDOR_ATTR_EDCCA_DUMP_SEC40_VAL,
 	MTK_VENDOR_ATTR_EDCCA_DUMP_SEC80_VAL,
 	MTK_VENDOR_ATTR_EDCCA_DUMP_SEC160_VAL,
+	MTK_VENDOR_ATTR_EDCCA_DUMP_TH_TYPE,
+	MTK_VENDOR_ATTR_EDCCA_DUMP_RX_FE_LOSS,
+	MTK_VENDOR_ATTR_EDCCA_DUMP_TH_OFFSET,
+	MTK_VENDOR_ATTR_EDCCA_DUMP_BAND_IDX,
+	MTK_VENDOR_ATTR_EDCCA_DUMP_REGION_CODE,
 
 	/* keep last */
 	NUM_MTK_VENDOR_ATTRS_EDCCA_DUMP,
@@ -424,6 +432,27 @@ enum mtk_vendor_attr_csi_mac_filter {
 
 struct mt76_dev;
 
+#define MT76_VENDOR_EDCCA_THRES_KEEP	0x7f
+#define MT76_VENDOR_EDCCA_INFO_NA	MT76_VENDOR_EDCCA_THRES_KEEP
+
+/* SBF has one threshold per BW20/40/80/160, CBW adds BW320. */
+#define MT76_VENDOR_EDCCA_SBF_BW_NUM	4
+#define MT76_VENDOR_EDCCA_BW_NUM	(MT76_VENDOR_EDCCA_SBF_BW_NUM + 1)
+
+enum mt76_vendor_edcca_th_type {
+	MT76_VENDOR_EDCCA_TH_EDCCA,
+	MT76_VENDOR_EDCCA_TH_CBW,
+};
+
+struct mt76_vendor_edcca_info {
+	u8 value[MT76_VENDOR_EDCCA_BW_NUM];
+	u8 th_type;
+	u8 band_idx;
+	u8 region_code;
+	u8 rx_fe_loss;
+	u8 th_offset;
+};
+
 struct mt76_vendor_ops {
 	const struct wiphy_vendor_command *commands;
 	unsigned int n_commands;
@@ -435,8 +464,10 @@ struct mt76_vendor_ops {
 	int (*mu_ctrl_cfg)(struct mt76_dev *dev, const struct nlattr *attr);
 	int (*mu_ctrl_dump)(struct mt76_dev *dev, u8 radio_idx, u8 *enabled);
 	int (*edcca_ctrl)(struct mt76_dev *dev, u8 radio_idx, bool enabled);
-	int (*edcca_ctrl_threshold)(struct mt76_dev *dev, u8 radio_idx, u8 value[4]);
-	int (*edcca_ctrl_dump)(struct mt76_dev *dev, u8 radio_idx, u8 value[4]);
+	int (*edcca_ctrl_threshold)(struct mt76_dev *dev, u8 radio_idx, u8 th_type,
+				    const u8 value[MT76_VENDOR_EDCCA_BW_NUM]);
+	int (*edcca_ctrl_dump)(struct mt76_dev *dev, u8 radio_idx,
+			       struct mt76_vendor_edcca_info *info);
 	int (*background_radar_ctrl)(struct mt76_dev *dev, bool disable_timer);
 	int (*dfs_tx_mode_ctrl)(struct mt76_dev *dev, u8 radio_idx, u8 mode);
 	void (*set_beacon)(struct ieee80211_vif *vif, u8 mode);
@@ -446,7 +477,6 @@ void mt76_vendor_register(struct mt76_dev *dev,
 			  const struct mt76_vendor_ops *ops);
 
 #ifdef CONFIG_MTK_VENDOR
-#define MT76_VENDOR_EDCCA_BW_NUM	4
 #define MT76_VENDOR_EDCCA_SET_EN	0
 #define MT76_VENDOR_EDCCA_SET_THRES	1
 #define MT76_VENDOR_EDCCA_GET_THRES	3

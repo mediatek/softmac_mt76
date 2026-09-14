@@ -131,6 +131,7 @@ enum mt7999_throttle_temp_idx {
 #define WMM_PBC_BOUND_MGMT	32
 struct mt7999_vif;
 struct mt7999_sta;
+struct mt76_vendor_edcca_info;
 struct mt7999_dfs_pulse;
 struct mt7999_dfs_pattern;
 struct ra_rate_params;
@@ -701,13 +702,7 @@ struct csi_data {
 };
 #endif
 
-enum edcca_bw_id {
-	EDCCA_BW_20 = 0,
-	EDCCA_BW_40,
-	EDCCA_BW_80,
-	EDCCA_BW_160,
-	EDCCA_MAX_BW_NUM,
-};
+#define EDCCA_MAX_BW_NUM	5
 
 struct mt7999_rro_ba_session {
 	u32 ack_sn         :12;
@@ -1720,10 +1715,12 @@ int mt7999_mcu_set_csi(struct mt7999_phy *phy, u8 mode,
 		       u8 cfg, u8 v1, u32 v2, u8 *mac_addr);
 int mt7999_mcu_set_lpi_psd(struct mt7999_phy *phy, u8 enable);
 int mt7999_vendor_tsf_offset_event(struct mt7999_phy *phy, s64 *tsf_offset, int tsf_len);
+int mt7999_mcu_edcca_threshold_set(struct mt7999_phy *phy, const u8 *threshold);
+int mt7999_mcu_edcca_threshold_get(struct mt7999_phy *phy,
+				   struct mt76_vendor_edcca_info *info);
 #endif
 
 int mt7999_mcu_edcca_enable(struct mt7999_phy *phy, bool enable);
-int mt7999_mcu_edcca_threshold_ctrl(struct mt7999_phy *phy, u8 *value, bool set);
 int mt7999_mcu_set_tpo(struct mt7999_dev *dev, u8 type, u8 val);
 int mt7999_mcu_set_lp_option(struct mt7999_dev *dev, u8 *arg);
 void mt7999_mcu_enable_1rpd(struct mt7999_dev *dev, bool enable, bool init);

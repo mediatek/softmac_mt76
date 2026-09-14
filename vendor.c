@@ -154,6 +154,9 @@ mt76_vendor_edcca_ctrl_policy[NUM_MTK_VENDOR_ATTRS_EDCCA_CTRL] = {
 	[MTK_VENDOR_ATTR_EDCCA_CTRL_COMPENSATE] = { .type = NLA_S8 },
 	[MTK_VENDOR_ATTR_EDCCA_CTRL_SEC160_VAL] = { .type = NLA_U8 },
 	[MTK_VENDOR_ATTR_EDCCA_CTRL_RADIO_IDX] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_EDCCA_CTRL_BW320_VAL] = { .type = NLA_U8 },
+	[MTK_VENDOR_ATTR_EDCCA_CTRL_TH_TYPE] =
+		NLA_POLICY_MAX(NLA_U8, MT76_VENDOR_EDCCA_TH_CBW),
 };
 EXPORT_SYMBOL_GPL(mt76_vendor_edcca_ctrl_policy);
 
@@ -459,6 +462,7 @@ int mt76_vendor_edcca_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 	struct mt76_dev *dev = hw->priv;
 	const struct mt76_vendor_ops *ops = dev->vendor_ops;
 	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_EDCCA_CTRL];
+	u8 th_type = MT76_VENDOR_EDCCA_TH_EDCCA;
 	u8 value[MT76_VENDOR_EDCCA_BW_NUM];
 	u8 mode, radio_idx;
 	int err;
@@ -477,6 +481,14 @@ int mt76_vendor_edcca_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 
 	mode = nla_get_u8(tb[MTK_VENDOR_ATTR_EDCCA_CTRL_MODE]);
 	radio_idx = nla_get_u8(tb[MTK_VENDOR_ATTR_EDCCA_CTRL_RADIO_IDX]);
+	if (tb[MTK_VENDOR_ATTR_EDCCA_CTRL_TH_TYPE])
+		th_type = nla_get_u8(tb[MTK_VENDOR_ATTR_EDCCA_CTRL_TH_TYPE]);
+
+	if (th_type == MT76_VENDOR_EDCCA_TH_CBW &&
+	    mode != MT76_VENDOR_EDCCA_SET_THRES)
+		return -EINVAL;
+
+	memset(value, MT76_VENDOR_EDCCA_THRES_KEEP, sizeof(value));
 
 	switch (mode) {
 	case MT76_VENDOR_EDCCA_SET_EN:
@@ -497,7 +509,14 @@ int mt76_vendor_edcca_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 		value[2] = nla_get_u8(tb[MTK_VENDOR_ATTR_EDCCA_CTRL_SEC80_VAL]);
 		value[3] = nla_get_u8(tb[MTK_VENDOR_ATTR_EDCCA_CTRL_SEC160_VAL]);
 
-		return ops->edcca_ctrl_threshold(dev, radio_idx, value);
+		if (th_type == MT76_VENDOR_EDCCA_TH_CBW) {
+			if (!tb[MTK_VENDOR_ATTR_EDCCA_CTRL_BW320_VAL])
+				return -EINVAL;
+
+			value[4] = nla_get_u8(tb[MTK_VENDOR_ATTR_EDCCA_CTRL_BW320_VAL]);
+		}
+
+		return ops->edcca_ctrl_threshold(dev, radio_idx, th_type, value);
 	default:
 		return -EINVAL;
 	}
@@ -513,9 +532,13 @@ int mt76_vendor_edcca_ctrl_dump(struct wiphy *wiphy,
 	struct mt76_dev *dev = hw->priv;
 	const struct mt76_vendor_ops *ops = dev->vendor_ops;
 	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_EDCCA_CTRL];
-	u8 value[MT76_VENDOR_EDCCA_BW_NUM];
+	struct mt76_vendor_edcca_info info = {
+		.region_code = MT76_VENDOR_EDCCA_INFO_NA,
+		.rx_fe_loss = MT76_VENDOR_EDCCA_INFO_NA,
+		.th_offset = MT76_VENDOR_EDCCA_INFO_NA,
+	};
+	int err, i, num_attr;
 	u8 radio_idx;
-	int err, i;
 
 	if (!ops || !ops->edcca_ctrl_dump)
 		return -EOPNOTSUPP;
@@ -538,16 +561,50 @@ int mt76_vendor_edcca_ctrl_dump(struct wiphy *wiphy,
 		return -EINVAL;
 
 	radio_idx = nla_get_u8(tb[MTK_VENDOR_ATTR_EDCCA_CTRL_RADIO_IDX]);
-	err = ops->edcca_ctrl_dump(dev, radio_idx, value);
+	memset(info.value, MT76_VENDOR_EDCCA_THRES_KEEP, sizeof(info.value));
+
+	err = ops->edcca_ctrl_dump(dev, radio_idx, &info);
 	if (err)
 		return err;
 
-	for (i = 0; i < MT76_VENDOR_EDCCA_BW_NUM; i++)
+	/* Only a single threshold applies to the operating CBW, while SBF has
+	 * one per bandwidth.
+	 */
+	num_attr = info.th_type == MT76_VENDOR_EDCCA_TH_CBW ?
+		   1 : MT76_VENDOR_EDCCA_SBF_BW_NUM;
+
+	for (i = 0; i < num_attr; i++)
 		if (nla_put_u8(skb, MTK_VENDOR_ATTR_EDCCA_DUMP_PRI20_VAL + i,
-			       value[i]))
+			       info.value[i]))
 			return -ENOMEM;
 
-	return MT76_VENDOR_EDCCA_BW_NUM;
+	if (nla_put_u8(skb, MTK_VENDOR_ATTR_EDCCA_DUMP_TH_TYPE, info.th_type) ||
+	    nla_put_u8(skb, MTK_VENDOR_ATTR_EDCCA_DUMP_BAND_IDX, info.band_idx))
+		return -ENOMEM;
+	num_attr += 2;
+
+	if (info.region_code != MT76_VENDOR_EDCCA_INFO_NA) {
+		if (nla_put_u8(skb, MTK_VENDOR_ATTR_EDCCA_DUMP_REGION_CODE,
+			       info.region_code))
+			return -ENOMEM;
+		num_attr++;
+	}
+
+	if (info.rx_fe_loss != MT76_VENDOR_EDCCA_INFO_NA) {
+		if (nla_put_u8(skb, MTK_VENDOR_ATTR_EDCCA_DUMP_RX_FE_LOSS,
+			       info.rx_fe_loss))
+			return -ENOMEM;
+		num_attr++;
+	}
+
+	if (info.th_offset != MT76_VENDOR_EDCCA_INFO_NA) {
+		if (nla_put_u8(skb, MTK_VENDOR_ATTR_EDCCA_DUMP_TH_OFFSET,
+			       info.th_offset))
+			return -ENOMEM;
+		num_attr++;
+	}
+
+	return num_attr;
 }
 EXPORT_SYMBOL_GPL(mt76_vendor_edcca_ctrl_dump);
 

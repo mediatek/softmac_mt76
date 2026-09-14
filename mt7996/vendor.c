@@ -1413,10 +1413,14 @@ static int mt7996_vendor_edcca_ctrl(struct mt76_dev *mdev, u8 radio_idx,
 }
 
 static int mt7996_vendor_edcca_ctrl_threshold(struct mt76_dev *mdev, u8 radio_idx,
-					      u8 value[MT76_VENDOR_EDCCA_BW_NUM])
+					      u8 th_type,
+					      const u8 value[MT76_VENDOR_EDCCA_BW_NUM])
 {
 	struct mt7996_dev *dev = container_of(mdev, struct mt7996_dev, mt76);
 	struct mt7996_phy *phy;
+
+	if (th_type != MT76_VENDOR_EDCCA_TH_EDCCA)
+		return -EOPNOTSUPP;
 
 	if (!mt7996_radio_valid(dev, radio_idx))
 		return -EINVAL;
@@ -1430,15 +1434,28 @@ static int mt7996_vendor_edcca_ctrl_threshold(struct mt76_dev *mdev, u8 radio_id
 }
 
 static int mt7996_vendor_edcca_ctrl_dump(struct mt76_dev *mdev, u8 radio_idx,
-					 u8 value[MT76_VENDOR_EDCCA_BW_NUM])
+					 struct mt76_vendor_edcca_info *info)
 {
 	struct mt7996_dev *dev = container_of(mdev, struct mt7996_dev, mt76);
+	struct mt7996_phy *phy;
+	int ret;
 
 	if (!mt7996_radio_valid(dev, radio_idx))
 		return -EINVAL;
 
-	return mt7996_mcu_edcca_threshold_ctrl(dev->radio_phy[radio_idx], value,
-					       false);
+	phy = dev->radio_phy[radio_idx];
+	ret = mt7996_mcu_edcca_threshold_ctrl(phy, info->value, false);
+	if (ret)
+		return ret;
+
+	/* This generation only supports SBF thresholds, and its firmware
+	 * reports neither the region code nor the RX FE loss / threshold
+	 * offset, so those are left as MT76_VENDOR_EDCCA_INFO_NA.
+	 */
+	info->th_type = MT76_VENDOR_EDCCA_TH_EDCCA;
+	info->band_idx = phy->mt76->band_idx;
+
+	return 0;
 }
 
 static int mt7996_vendor_background_radar_ctrl(struct mt76_dev *mdev,

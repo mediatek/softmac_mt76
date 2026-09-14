@@ -100,10 +100,14 @@ enum {
 
 enum {
 	EDCCA_DEFAULT = 0,
-	EDCCA_FCC = 1,
-	EDCCA_ETSI = 2,
-	EDCCA_JAPAN = 3,
-	EDCCA_ETSI_2023 = 4,
+	EDCCA_FCC,
+	EDCCA_ETSI, /* deprecated */
+	EDCCA_JAPAN,
+	EDCCA_ETSI_2023,
+};
+
+enum {
+	UNI_EVENT_BAND_CONFIG_EDCCA_THRESHOLD = 0x01,
 };
 
 enum {

@@ -7,6 +7,7 @@
 #include <linux/fs.h>
 #include "mt7999.h"
 #include "mcu.h"
+#include "../vendor.h"
 #include "mac.h"
 #include "eeprom.h"
 #include "mtk_mcu.h"
@@ -114,46 +115,90 @@ int mt7999_mcu_edcca_enable(struct mt7999_phy *phy, bool enable)
 				 &req, sizeof(req), true);
 }
 
-int mt7999_mcu_edcca_threshold_ctrl(struct mt7999_phy *phy, u8 *value, bool set)
+#ifdef CONFIG_MTK_VENDOR
+struct mt7999_edcca_threshold_req {
+	u8 band_idx;
+	u8 _rsv[3];
+
+	__le16 tag;
+	__le16 len;
+	u8 threshold[EDCCA_MAX_BW_NUM];
+	u8 _rsv2[3];
+} __packed;
+
+static_assert(EDCCA_MAX_BW_NUM == MT76_VENDOR_EDCCA_BW_NUM);
+
+int mt7999_mcu_edcca_threshold_set(struct mt7999_phy *phy, const u8 *threshold)
 {
+	struct mt7999_edcca_threshold_req req = {
+		.band_idx = phy->mt76->band_idx,
+		.tag = cpu_to_le16(UNI_BAND_CONFIG_EDCCA_THRESHOLD),
+		.len = cpu_to_le16(sizeof(req) - 4),
+	};
+
+	memcpy(req.threshold, threshold, EDCCA_MAX_BW_NUM);
+
+	return mt76_mcu_send_msg(&phy->dev->mt76, MCU_WM_UNI_CMD(BAND_CONFIG),
+				 &req, sizeof(req), true);
+}
+
+int mt7999_mcu_edcca_threshold_get(struct mt7999_phy *phy,
+				   struct mt76_vendor_edcca_info *info)
+{
+	struct mt7999_edcca_threshold_req req = {
+		.band_idx = phy->mt76->band_idx,
+		.tag = cpu_to_le16(UNI_BAND_CONFIG_EDCCA_THRESHOLD),
+		.len = cpu_to_le16(sizeof(req) - 4),
+	};
 	struct {
-		u8 band_idx;
-		u8 _rsv[3];
+		u8 _rsv[4];
 
 		__le16 tag;
 		__le16 len;
 		u8 threshold[EDCCA_MAX_BW_NUM];
-		bool init;
-		u8 _rsv2[3];
-	} __packed *res, req = {
-		.band_idx = phy->mt76->band_idx,
-		.tag = cpu_to_le16(UNI_BAND_CONFIG_EDCCA_THRESHOLD),
-		.len = cpu_to_le16(sizeof(req) - 4),
-		.init = false,
-	};
+		u8 band_idx;
+		u8 region_code;
+		u8 th_type;
+		u8 rx_fe_loss;
+		u8 th_offset;
+		u8 _rsv2[2];
+	} __packed *res;
 	struct sk_buff *skb;
 	int ret;
 
-	memcpy(req.threshold, value, EDCCA_MAX_BW_NUM);
-
-	if (set)
-		return mt76_mcu_send_msg(&phy->dev->mt76, MCU_WM_UNI_CMD(BAND_CONFIG),
-					 &req, sizeof(req), true);
+	memset(req.threshold, MT76_VENDOR_EDCCA_THRES_KEEP,
+	       EDCCA_MAX_BW_NUM);
 
 	ret = mt76_mcu_send_and_get_msg(&phy->dev->mt76,
 					MCU_WM_UNI_CMD_QUERY(BAND_CONFIG),
 					&req, sizeof(req), true, &skb);
-
 	if (ret)
 		return ret;
 
 	res = (void *)skb->data;
-	memcpy(value, res->threshold, EDCCA_MAX_BW_NUM);
+	if (skb->len < sizeof(*res) ||
+	    le16_to_cpu(res->tag) != UNI_EVENT_BAND_CONFIG_EDCCA_THRESHOLD ||
+	    res->th_type > MT76_VENDOR_EDCCA_TH_CBW) {
+		dev_kfree_skb(skb);
+		return -EINVAL;
+	}
+
+	/* FW only reports a single threshold for the operating CBW. */
+	if (res->th_type == MT76_VENDOR_EDCCA_TH_CBW)
+		info->value[0] = res->threshold[0];
+	else
+		memcpy(info->value, res->threshold, MT76_VENDOR_EDCCA_SBF_BW_NUM);
+	info->th_type = res->th_type;
+	info->band_idx = res->band_idx;
+	info->region_code = res->region_code;
+	info->rx_fe_loss = res->rx_fe_loss;
+	info->th_offset = res->th_offset;
 
 	dev_kfree_skb(skb);
 
 	return 0;
 }
+#endif
 
 int mt7999_mcu_set_sr_enable(struct mt7999_phy *phy, u8 action, u64 val, bool set)
 {
