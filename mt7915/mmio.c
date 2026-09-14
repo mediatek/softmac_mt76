@@ -588,6 +588,9 @@ static void mt7915_mmio_wed_update_rx_stats(struct mtk_wed_device *wed,
 
 	dev = container_of(wed, struct mt7915_dev, mt76.mmio.wed);
 
+	if (idx <= 0 || idx >= mt7915_wtbl_size(dev))
+		return;
+
 	rcu_read_lock();
 
 	wcid = mt76_wcid_ptr(dev, idx);
