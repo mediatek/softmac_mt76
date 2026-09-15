@@ -52,11 +52,6 @@ mu_ctrl_policy[NUM_MTK_VENDOR_ATTRS_MU_CTRL] = {
 };
 
 static const struct nla_policy
-three_wire_ctrl_policy[NUM_MTK_VENDOR_ATTRS_3WIRE_CTRL] = {
-	[MTK_VENDOR_ATTR_3WIRE_EXT_SEL] = {.type = NLA_U8 },
-};
-
-static const struct nla_policy
 phy_capa_ctrl_policy[NUM_MTK_VENDOR_ATTRS_PHY_CAPA_CTRL] = {
 	[MTK_VENDOR_ATTR_PHY_CAPA_CTRL_SET] = { .type = NLA_NESTED },
 	[MTK_VENDOR_ATTR_PHY_CAPA_CTRL_DUMP] = { .type = NLA_NESTED },
@@ -74,13 +69,6 @@ edcca_dump_policy[NUM_MTK_VENDOR_ATTRS_EDCCA_DUMP] = {
        [MTK_VENDOR_ATTR_EDCCA_DUMP_PRI20_VAL] = { .type = NLA_U8 },
        [MTK_VENDOR_ATTR_EDCCA_DUMP_SEC40_VAL] = { .type = NLA_U8 },
        [MTK_VENDOR_ATTR_EDCCA_DUMP_SEC80_VAL] = { .type = NLA_U8 },
-};
-
-static struct nla_policy
-txpower_ctrl_policy[NUM_MTK_VENDOR_ATTRS_TXPOWER_CTRL] = {
-	[MTK_VENDOR_ATTR_TXPOWER_CTRL_LPI_ENABLE] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_IDX] = { .type = NLA_U8 },
-	[MTK_VENDOR_ATTR_TXPOWER_CTRL_BCN_DUP] = { .type = NLA_U8 },
 };
 
 struct csi_null_tone {
@@ -1348,7 +1336,7 @@ static int mt7915_vendor_3wire_ctrl(struct wiphy *wiphy,
 	u8 ext_sel;
 
 	err = nla_parse(tb, MTK_VENDOR_ATTR_3WIRE_CTRL_MAX, data, data_len,
-			three_wire_ctrl_policy, NULL);
+			mt76_vendor_3wire_ctrl_policy, NULL);
 	if (err)
 		return err;
 
@@ -1374,7 +1362,7 @@ static int mt7915_vendor_txpower_ctrl(struct wiphy *wiphy,
 	u8 val;
 
 	err = nla_parse(tb, MTK_VENDOR_ATTR_TXPOWER_CTRL_MAX, data, data_len,
-			txpower_ctrl_policy, NULL);
+			mt76_vendor_txpower_ctrl_policy, NULL);
 	if (err)
 		return err;
 
@@ -1544,7 +1532,7 @@ static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
 			 WIPHY_VENDOR_CMD_NEED_RUNNING,
 		.doit = mt7915_vendor_3wire_ctrl,
-		.policy = three_wire_ctrl_policy,
+		.policy = mt76_vendor_3wire_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_3WIRE_CTRL_MAX,
 	},
 	{
@@ -1578,7 +1566,7 @@ static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
 			 WIPHY_VENDOR_CMD_NEED_RUNNING,
 		.doit = mt7915_vendor_txpower_ctrl,
-		.policy = txpower_ctrl_policy,
+		.policy = mt76_vendor_txpower_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_TXPOWER_CTRL_MAX,
 	},
 	{
