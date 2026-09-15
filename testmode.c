@@ -259,6 +259,39 @@ mt76_testmode_tx_pp_bitmap_valid(struct mt76_phy *phy)
 	return true;
 }
 
+static bool
+mt76_testmode_ueqm_pattern_valid(struct mt76_phy *phy)
+{
+#define MCS_BITMAP_16_QAM	(BIT(3) | BIT(19) | BIT(4))
+#define MCS_BITMAP_64_QAM_Q_2	(BIT(5) | BIT(6))
+#define MCS_BITMAP_64_QAM_Q_1	(MCS_BITMAP_64_QAM_Q_2 | BIT(7))
+#define MCS_BITMAP_256_QAM	(BIT(23) | BIT(8) | BIT(9))
+#define MCS_BITMAP_1024_QAM	(BIT(10) | BIT(11))
+#define MCS_BITMAP_4096_QAM	(BIT(12) | BIT(13))
+	struct mt76_testmode_data *td = &phy->test;
+	static const u32 ueqm_valid_mcs[] = {
+		/* has valid Q-1 MCS for ueqm pattern 0 */
+		[0] = MCS_BITMAP_16_QAM | MCS_BITMAP_64_QAM_Q_1 |
+		      MCS_BITMAP_256_QAM | MCS_BITMAP_1024_QAM |
+		      MCS_BITMAP_4096_QAM,
+		/* has valid Q-2 MCS for ueqm pattern 1, 2, 3 */
+		[1] = MCS_BITMAP_64_QAM_Q_2 | MCS_BITMAP_256_QAM |
+		      MCS_BITMAP_1024_QAM | MCS_BITMAP_4096_QAM,
+	};
+	u8 pattern;
+
+	if (td->ueqm_pattern == MT76_TM_UEQM_PATTERN_INVALID)
+		return true;
+
+	pattern = !!td->ueqm_pattern;
+	if (td->tx_rate_nss < 2 || td->tx_rate_mode < MT76_TM_TX_MODE_UHR_SU ||
+	    td->ueqm_pattern > td->tx_rate_nss - 1 ||
+	    !(ueqm_valid_mcs[pattern] & BIT(td->tx_rate_idx)))
+		return false;
+
+	return true;
+}
+
 static int
 mt76_testmode_tx_config_check(struct mt76_phy *phy)
 {
@@ -274,6 +307,7 @@ mt76_testmode_tx_config_check(struct mt76_phy *phy)
 		INVALID_TYPE_LDPC,
 		INVALID_TYPE_RU_STA_NUM,
 		INVALID_TYPE_TX_PP_BITMAP,
+		INVALID_TYPE_UEQM_PATTERN,
 	} type;
 	static const char * const invalid_msg[] = {
 		[INVALID_TYPE_TX_LEN] = "tx length",
@@ -283,6 +317,7 @@ mt76_testmode_tx_config_check(struct mt76_phy *phy)
 		[INVALID_TYPE_LDPC] = "tx rate ldpc",
 		[INVALID_TYPE_RU_STA_NUM] = "ru sta number",
 		[INVALID_TYPE_TX_PP_BITMAP] = "tx pp bitmap",
+		[INVALID_TYPE_UEQM_PATTERN] = "ueqm pattern"
 	};
 	u32 max_tx_len;
 	int i, max_mcs;
@@ -436,6 +471,11 @@ mt76_testmode_tx_config_check(struct mt76_phy *phy)
 		break;
 	default:
 		type = INVALID_TYPE_RATE_MODE;
+		goto fail;
+	}
+
+	if (!mt76_testmode_ueqm_pattern_valid(phy)) {
+		type = INVALID_TYPE_UEQM_PATTERN;
 		goto fail;
 	}
 
@@ -1235,9 +1275,7 @@ int mt76_testmode_cmd(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	    mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_TONE_TYPE], &td->tone.type,
 			   0, MT76_TM_TX_TONE_TYPE_MAX) ||
 	    mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_TONE_FREQ_OFFSET], &td->tone.freq_offset,
-			   0, MT76_TM_TX_TONE_FREQ_OFFS_MAX) ||
-	    mt76_tm_get_u8(tb[MT76_TM_ATTR_UEQM_PATTERN], &td->ueqm_pattern,
-			   0, MT76_TM_UEQM_PATTERN_MAX))
+			   0, MT76_TM_TX_TONE_FREQ_OFFS_MAX))
 		goto out;
 
 	if (mt76_tm_get_u16(tb[MT76_TM_ATTR_TX_LENGTH], &td->tx_mpdu_len,
@@ -1261,6 +1299,17 @@ int mt76_testmode_cmd(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	    mt76_tm_get_u32(tb[MT76_TM_ATTR_TX_SYMBOL_NUM], &td->tx_symbol_num,
 			    0, MT76_TM_MAX_PPDU_TX_SYMBOL_NUM))
 		goto out;
+
+	if (tb[MT76_TM_ATTR_UEQM_PATTERN]) {
+		u8 ueqm_pattern;
+
+		ueqm_pattern = nla_get_u8(tb[MT76_TM_ATTR_UEQM_PATTERN]);
+		if (ueqm_pattern > MT76_TM_UEQM_PATTERN_MAX &&
+		    ueqm_pattern != MT76_TM_UEQM_PATTERN_INVALID)
+			goto out;
+
+		td->ueqm_pattern = ueqm_pattern;
+	}
 
 	/* allow setting offchan channel to 0 to disable RDD */
 	if (tb[MT76_TM_ATTR_OFF_CH_SCAN_CH]) {
