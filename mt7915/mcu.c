@@ -2586,6 +2586,9 @@ mt7915_mcu_init_rx_airtime(struct mt7915_dev *dev)
 static int mt7915_red_set_watermark(struct mt7915_dev *dev)
 {
 #define RED_GLOBAL_TOKEN_WATERMARK 2
+	u16 token_size = is_mt7915(&dev->mt76) ?
+			 MT7915_WED_TOKEN_SIZE_V0 :
+			 MT7915_WED_TOKEN_SIZE;
 	struct {
 		__le32 args[3];
 		u8 cmd;
@@ -2599,8 +2602,8 @@ static int mt7915_red_set_watermark(struct mt7915_dev *dev)
 		.args[0] = cpu_to_le32(MCU_WA_PARAM_RED_SETTING),
 		.cmd = RED_GLOBAL_TOKEN_WATERMARK,
 		.len = cpu_to_le16(sizeof(req) - sizeof(req.args)),
-		.high_mark = cpu_to_le16(MT7915_HW_TOKEN_SIZE - 256),
-		.low_mark = cpu_to_le16(MT7915_HW_TOKEN_SIZE - 256 - 1536),
+		.high_mark = cpu_to_le16(token_size - 256),
+		.low_mark = cpu_to_le16(token_size - 256 - 1536),
 	};
 
 	return mt76_mcu_send_msg(&dev->mt76, MCU_WA_PARAM_CMD(SET), &req,

@@ -878,6 +878,13 @@ mt7915_mac_tx_free(struct mt7915_dev *dev, void *data, int len)
 	u16 total, count = 0;
 	u32 txd = le32_to_cpu(free->txd);
 	__le32 *cur_info;
+	u32 max_token_size = MT7915_TOKEN_SIZE;
+
+	if (mtk_wed_device_active(&mdev->mmio.wed))
+		max_token_size = MT7915_WED_SW_TOKEN_SIZE +
+				 (is_mt7915(&dev->mt76) ?
+				  MT7915_WED_TOKEN_SIZE_V0 :
+				  MT7915_WED_TOKEN_SIZE);
 
 	mt7915_mac_tx_free_prepare(dev);
 
@@ -955,7 +962,7 @@ mt7915_mac_tx_free(struct mt7915_dev *dev, void *data, int len)
 			}
 
 			/* Todo: check if msdu is sw token */
-			if (msdu > MT7915_TOKEN_SIZE)
+			if (msdu > max_token_size)
 				dev_err(mdev->dev, "Receive invalid token id(%d)\n",
 					msdu);
 

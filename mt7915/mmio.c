@@ -721,11 +721,13 @@ int mt7915_mmio_wed_init(struct mt7915_dev *dev, void *pdev_ptr,
 		wed->wlan.wpdma_rx_glo = res->start + MT_WPDMA_GLO_CFG;
 		wed->wlan.wpdma_rx[0] = res->start + MT_RXQ_WED_DATA_RING_BASE;
 	}
-	wed->wlan.nbuf = MT7915_HW_TOKEN_SIZE;
+	wed->wlan.nbuf = is_mt7915(&dev->mt76) ?
+			 MT7915_WED_TOKEN_SIZE_V0 :
+			 MT7915_WED_TOKEN_SIZE;
 	wed->wlan.tx_tbit[0] = is_mt7915(&dev->mt76) ? 4 : 30;
 	wed->wlan.tx_tbit[1] = is_mt7915(&dev->mt76) ? 5 : 31;
 	wed->wlan.txfree_tbit = is_mt798x(&dev->mt76) ? 2 : 1;
-	wed->wlan.token_start = MT7915_TOKEN_SIZE - wed->wlan.nbuf;
+	wed->wlan.token_start = 0;
 	wed->wlan.wcid_512 = !is_mt7915(&dev->mt76);
 
 	wed->wlan.rx_nbuf = 65536;
@@ -755,6 +757,9 @@ int mt7915_mmio_wed_init(struct mt7915_dev *dev, void *pdev_ptr,
 
 	if (mtk_wed_device_attach(wed))
 		return 0;
+
+	dev->mt76.token_start = wed->wlan.nbuf;
+	dev->mt76.token_size = MT7915_WED_SW_TOKEN_SIZE;
 
 	*irq = wed->irq;
 	dev->mt76.dma_dev = wed->dev;
