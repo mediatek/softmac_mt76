@@ -6691,11 +6691,10 @@ int mt7996_mcu_set_eeprom(struct mt7996_dev *dev)
 int mt7996_mcu_get_eeprom(struct mt7996_dev *dev, u32 offset, u8 *buf, u32 buf_len,
 			  enum mt7996_eeprom_mode mode)
 {
-	struct mt7996_mcu_eeprom_access req = {
-		.info.len = cpu_to_le16(sizeof(req) - 4),
-	};
+	struct mt7996_mcu_eeprom_access req = {};
 	struct mt7996_mcu_eeprom_access_event *event;
-	struct sk_buff *skb;
+	struct sk_buff *skb, *rskb;
+	int req_len;
 	int ret, cmd;
 	u32 addr;
 
@@ -6704,24 +6703,34 @@ int mt7996_mcu_get_eeprom(struct mt7996_dev *dev, u32 offset, u8 *buf, u32 buf_l
 		addr = round_down(offset, MT7996_EEPROM_BLOCK_SIZE);
 		cmd = MCU_WM_UNI_CMD_QUERY(EFUSE_CTRL);
 		req.info.tag = cpu_to_le16(UNI_EFUSE_ACCESS);
+		req_len = sizeof(req.info) + MT7996_EEPROM_BLOCK_SIZE;
 		break;
 	case EEPROM_MODE_EXT:
 		addr = round_down(offset, MT7996_EXT_EEPROM_BLOCK_SIZE);
 		cmd = MCU_WM_UNI_CMD_QUERY(EXT_EEPROM_CTRL);
 		req.info.tag = cpu_to_le16(UNI_EXT_EEPROM_ACCESS);
 		req.eeprom.ext_eeprom.data_len = cpu_to_le32(buf_len);
+		req_len = sizeof(req);
 		break;
 	default:
 		return -EINVAL;
 	}
 
+	req.info.len = cpu_to_le16(req_len - 4);
 	req.info.addr = cpu_to_le32(addr);
-	ret = mt76_mcu_send_and_get_msg(&dev->mt76, cmd, &req, sizeof(req),
-					true, &skb);
+	skb = mt76_mcu_msg_alloc(&dev->mt76, NULL, req_len);
+	if (!skb)
+		return -ENOMEM;
+
+	skb_put_data(skb, &req, sizeof(req));
+	if (req_len > sizeof(req))
+		skb_put_zero(skb, req_len - sizeof(req));
+
+	ret = mt76_mcu_skb_send_and_get_msg(&dev->mt76, skb, cmd, true, &rskb);
 	if (ret)
 		return ret;
 
-	event = (struct mt7996_mcu_eeprom_access_event *)skb->data;
+	event = (struct mt7996_mcu_eeprom_access_event *)rskb->data;
 	if (event->valid) {
 		u32 ret_len = le32_to_cpu(event->eeprom.ext_eeprom.data_len);
 		u32 block = mode == EEPROM_MODE_EXT ? MT7996_EXT_EEPROM_BLOCK_SIZE :
@@ -6731,7 +6740,7 @@ int mt7996_mcu_get_eeprom(struct mt7996_dev *dev, u32 offset, u8 *buf, u32 buf_l
 
 		if (!buf) {
 			if (addr > dev->mt76.eeprom.size - block) {
-				dev_kfree_skb(skb);
+				dev_kfree_skb(rskb);
 				return -EINVAL;
 			}
 			buf = (u8 *)dev->mt76.eeprom.data + addr;
@@ -6759,7 +6768,7 @@ int mt7996_mcu_get_eeprom(struct mt7996_dev *dev, u32 offset, u8 *buf, u32 buf_l
 		ret = -EINVAL;
 	}
 
-	dev_kfree_skb(skb);
+	dev_kfree_skb(rskb);
 
 	return ret;
 }
