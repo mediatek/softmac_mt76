@@ -40,6 +40,7 @@ const struct nla_policy
 mt76_vendor_amnt_set_policy[NUM_MTK_VENDOR_ATTRS_AMNT_SET] = {
 	[MTK_VENDOR_ATTR_AMNT_SET_INDEX] = { .type = NLA_U8 },
 	[MTK_VENDOR_ATTR_AMNT_SET_MACADDR] = NLA_POLICY_ETH_ADDR,
+	[MTK_VENDOR_ATTR_AMNT_SET_FRAME_TYPE] = { .type = NLA_U8 },
 };
 EXPORT_SYMBOL_GPL(mt76_vendor_amnt_set_policy);
 

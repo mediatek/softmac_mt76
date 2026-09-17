@@ -75,9 +75,14 @@ void mt7999_vendor_amnt_fill_rx(struct mt7999_phy *phy, struct sk_buff *skb)
 	spin_unlock_bh(&phy->amnt_lock);
 }
 
+/* frm_type bitmask for mt7999_vendor_smesh_ctrl */
+#define AMNT_FRM_TYPE_DATA	BIT(0)
+#define AMNT_FRM_TYPE_MGNT	BIT(1)
+#define AMNT_FRM_TYPE_CTRL 	BIT(2)
+
 static int
 mt7999_vendor_smesh_ctrl(struct mt7999_phy *phy, u8 write,
-			 u8 enable, u8 *value)
+			 u8 enable, u8 frm_type, u8 *value)
 {
 #define UNI_SMESH_PARAM  0
 	struct mt7999_dev *dev = phy->dev;
@@ -104,9 +109,9 @@ mt7999_vendor_smesh_ctrl(struct mt7999_phy *phy, u8 write,
 		.enable = enable,
 		.a2 = true,
 		.a1 = true,
-		.data = true,
-		.mgnt = false,
-		.ctrl = false,
+		.data = !!(frm_type & AMNT_FRM_TYPE_DATA),
+		.mgnt = !!(frm_type & AMNT_FRM_TYPE_MGNT),
+		.ctrl = !!(frm_type & AMNT_FRM_TYPE_CTRL),
 	};
 	struct smesh_param *res;
 	struct sk_buff *skb;
@@ -167,19 +172,19 @@ mt7999_vendor_amnt_muar(struct mt7999_phy *phy, u8 muar_idx, u8 *addr)
 }
 
 static int
-mt7999_vendor_amnt_set_en(struct mt7999_phy *phy, u8 enable)
+mt7999_vendor_amnt_set_en(struct mt7999_phy *phy, u8 enable, u8 frm_type)
 {
 	u8 status;
 	int ret;
 
-	ret = mt7999_vendor_smesh_ctrl(phy, 0, enable, &status);
+	ret = mt7999_vendor_smesh_ctrl(phy, 0, enable, frm_type, &status);
 	if (ret)
 		return ret;
 
 	if (status == enable)
 		return 0;
 
-	ret = mt7999_vendor_smesh_ctrl(phy, 1, enable, &status);
+	ret = mt7999_vendor_smesh_ctrl(phy, 1, enable, frm_type, &status);
 	if (ret)
 		return ret;
 
@@ -187,7 +192,8 @@ mt7999_vendor_amnt_set_en(struct mt7999_phy *phy, u8 enable)
 }
 
 static int
-mt7999_vendor_amnt_set_addr(struct mt7999_phy *phy, u8 index, u8 *addr)
+mt7999_vendor_amnt_set_addr(struct mt7999_phy *phy, u8 index, u8 *addr,
+			    u8 frm_type)
 {
 	struct mt7999_air_monitor_ctrl *amnt_ctrl = &phy->amnt_ctrl;
 	struct mt7999_air_monitor_group *group;
@@ -231,7 +237,7 @@ mt7999_vendor_amnt_set_addr(struct mt7999_phy *phy, u8 index, u8 *addr)
 	if (ret)
 		return ret;
 
-	return mt7999_vendor_amnt_set_en(phy, amnt_ctrl->enable);
+	return mt7999_vendor_amnt_set_en(phy, amnt_ctrl->enable, frm_type);
 }
 
 static int
@@ -245,7 +251,7 @@ mt7999_vendor_amnt_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 	struct nlattr *tb1[NUM_MTK_VENDOR_ATTRS_AMNT_CTRL];
 	struct nlattr *tb2[NUM_MTK_VENDOR_ATTRS_AMNT_SET];
 	u8 index = 0, link_id = 0;
-	u8 mac_addr[ETH_ALEN];
+	u8 mac_addr[ETH_ALEN], frm_type;
 	int err;
 
 	err = nla_parse(tb1, MTK_VENDOR_ATTR_AMNT_CTRL_MAX, data, data_len,
@@ -274,13 +280,15 @@ mt7999_vendor_amnt_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 		return err;
 
 	if (!tb2[MTK_VENDOR_ATTR_AMNT_SET_INDEX] ||
-	    !tb2[MTK_VENDOR_ATTR_AMNT_SET_MACADDR])
+	    !tb2[MTK_VENDOR_ATTR_AMNT_SET_MACADDR] ||
+	    !tb2[MTK_VENDOR_ATTR_AMNT_SET_FRAME_TYPE])
 		return -EINVAL;
 
 	index = nla_get_u8(tb2[MTK_VENDOR_ATTR_AMNT_SET_INDEX]);
 	nla_memcpy(mac_addr, tb2[MTK_VENDOR_ATTR_AMNT_SET_MACADDR], ETH_ALEN);
+	frm_type = nla_get_u8(tb2[MTK_VENDOR_ATTR_AMNT_SET_FRAME_TYPE]);
 
-	return mt7999_vendor_amnt_set_addr(phy, index, mac_addr);
+	return mt7999_vendor_amnt_set_addr(phy, index, mac_addr, frm_type);
 }
 
 int mt7999_vendor_amnt_sta_remove(struct mt7999_phy *phy,
@@ -294,7 +302,7 @@ int mt7999_vendor_amnt_sta_remove(struct mt7999_phy *phy,
 
 	for (i = 0; i < MT7999_AIR_MONITOR_MAX_ENTRY; i++)
 		if (ether_addr_equal(link_sta->addr, phy->amnt_ctrl.entry[i].addr))
-			return mt7999_vendor_amnt_set_addr(phy, i, zero);
+			return mt7999_vendor_amnt_set_addr(phy, i, zero, 0);
 	return 0;
 }
 
