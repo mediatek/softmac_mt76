@@ -6484,11 +6484,10 @@ int mt7999_mcu_set_eeprom(struct mt7999_dev *dev)
 int mt7999_mcu_get_eeprom(struct mt7999_dev *dev, u32 offset, u8 *buf, u32 buf_len,
 			  enum mt7999_eeprom_mode mode)
 {
-	struct mt7999_mcu_eeprom_access req = {
-		.info.len = cpu_to_le16(sizeof(req) - 4),
-	};
+	struct mt7999_mcu_eeprom_access req = {};
 	struct mt7999_mcu_eeprom_access_event *event;
-	struct sk_buff *skb;
+	struct sk_buff *skb, *rskb;
+	int req_len;
 	int ret, cmd;
 	u32 addr;
 	u32 ret_len;
@@ -6498,24 +6497,34 @@ int mt7999_mcu_get_eeprom(struct mt7999_dev *dev, u32 offset, u8 *buf, u32 buf_l
 		addr = round_down(offset, MT7999_EEPROM_BLOCK_SIZE);
 		cmd = MCU_WM_UNI_CMD_QUERY(EFUSE_CTRL);
 		req.info.tag = cpu_to_le16(UNI_EFUSE_ACCESS);
+		req_len = sizeof(req.info) + MT7999_EEPROM_BLOCK_SIZE;
 		break;
 	case EEPROM_MODE_EXT:
 		addr = round_down(offset, MT7999_EXT_EEPROM_BLOCK_SIZE);
 		cmd = MCU_WM_UNI_CMD_QUERY(EXT_EEPROM_CTRL);
 		req.info.tag = cpu_to_le16(UNI_EXT_EEPROM_ACCESS);
 		req.eeprom.ext_eeprom.data_len = cpu_to_le32(buf_len);
+		req_len = sizeof(req);
 		break;
 	default:
 		return -EINVAL;
 	}
 
+	req.info.len = cpu_to_le16(req_len - 4);
 	req.info.addr = cpu_to_le32(addr);
-	ret = mt76_mcu_send_and_get_msg(&dev->mt76, cmd, &req, sizeof(req),
-					true, &skb);
+	skb = mt76_mcu_msg_alloc(&dev->mt76, NULL, req_len);
+	if (!skb)
+		return -ENOMEM;
+
+	skb_put_data(skb, &req, sizeof(req));
+	if (req_len > sizeof(req))
+		skb_put_zero(skb, req_len - sizeof(req));
+
+	ret = mt76_mcu_skb_send_and_get_msg(&dev->mt76, skb, cmd, true, &rskb);
 	if (ret)
 		return ret;
 
-	event = (struct mt7999_mcu_eeprom_access_event *)skb->data;
+	event = (struct mt7999_mcu_eeprom_access_event *)rskb->data;
 	if (!event->valid) {
 		ret = -EINVAL;
 		goto out;
@@ -6542,7 +6551,7 @@ int mt7999_mcu_get_eeprom(struct mt7999_dev *dev, u32 offset, u8 *buf, u32 buf_l
 	}
 
 out:
-	dev_kfree_skb(skb);
+	dev_kfree_skb(rskb);
 
 	return ret;
 }
@@ -6552,33 +6561,42 @@ int mt7999_mcu_get_fw_buf(struct mt7999_dev *dev, u32 offset, u8 *buf, u32 read_
 #define MAX_FW_BUF_READ_LEN	1024
 	struct mt7999_mcu_eeprom_access req = {
 		.info.tag = cpu_to_le16(UNI_EFUSE_GET_FW_BUF),
-		.info.len = cpu_to_le16(sizeof(req) - 4),
 	};
 	struct mt7999_mcu_eeprom_access_event *event;
+	int req_len = sizeof(req.info) + MT7999_EEPROM_BLOCK_SIZE;
 	int ret = 0, rem = read_len;
-	struct sk_buff *skb;
+	struct sk_buff *skb, *rskb;
 	u8 *read_buf = buf;
 	u32 addr = offset;
+
+	req.info.len = cpu_to_le16(req_len - 4);
 
 	while (rem > 0) {
 		u32 len = min(rem, MAX_FW_BUF_READ_LEN);
 
 		req.info.addr = cpu_to_le32(addr);
 		req.info.read_len = cpu_to_le32(len);
-		ret = mt76_mcu_send_and_get_msg(&dev->mt76, MCU_WM_UNI_CMD_QUERY(EFUSE_CTRL),
-						&req, sizeof(req), true, &skb);
+		skb = mt76_mcu_msg_alloc(&dev->mt76, NULL, req_len);
+		if (!skb)
+			return -ENOMEM;
+
+		skb_put_data(skb, &req, sizeof(req));
+		skb_put_zero(skb, req_len - sizeof(req));
+		ret = mt76_mcu_skb_send_and_get_msg(&dev->mt76, skb,
+						    MCU_WM_UNI_CMD_QUERY(EFUSE_CTRL),
+						    true, &rskb);
 		if (ret)
 			break;
 
-		event = (struct mt7999_mcu_eeprom_access_event *)skb->data;
+		event = (struct mt7999_mcu_eeprom_access_event *)rskb->data;
 		if (!event->valid) {
-			dev_kfree_skb(skb);
+			dev_kfree_skb(rskb);
 			ret = -EINVAL;
 			break;
 		}
 
 		memcpy(read_buf, event->eeprom.fw_buf, len);
-		dev_kfree_skb(skb);
+		dev_kfree_skb(rskb);
 
 		read_buf += len;
 		addr += len;
