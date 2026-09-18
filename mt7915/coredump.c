@@ -379,7 +379,7 @@ static struct mt7915_coredump *mt7915_coredump_build(struct mt7915_dev *dev, u8 
 	strscpy(dump->fw_type, ((type == MT7915_RAM_TYPE_WA) ? "WA" : "WM"),
 		sizeof(dump->fw_type));
 	strscpy(dump->fw_patch_date, mdev->patch_hdr->build_date,
-		sizeof(dump->fw_patch_date));
+		sizeof(mdev->patch_hdr->build_date));
 	strscpy(dump->fw_ram_date[MT7915_RAM_TYPE_WM],
 		mdev->wm_hdr->build_date,
 		sizeof(mdev->wm_hdr->build_date));
