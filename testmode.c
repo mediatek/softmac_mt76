@@ -622,6 +622,7 @@ mt76_testmode_init_defaults(struct mt76_phy *phy)
 
 	/* rx stat user config */
 	td->aid = 1;
+	td->mu_aid = 1;
 
 	/* Qos Data */
 	td->fc = 0x88;
