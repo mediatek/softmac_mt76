@@ -370,7 +370,17 @@ int mt7999_vif_link_add(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 		if (ieee80211_vif_is_mld(vif) && vif->type == NL80211_IFTYPE_AP)
 			return mt7999_mcu_mld_link_oper(dev, link_conf, link,
 							true);
-		return 0;
+
+		if (dev->testmode_enable)
+			return 0;
+
+		/* update the link address */
+		ret = mt7999_mcu_add_dev_info(phy, vif, link_conf, mlink, true);
+		if (ret)
+			return ret;
+
+		return mt7999_mcu_add_bss_info(phy, vif, link_conf, mlink,
+					       msta_link, true);
 	}
 
 	if (!dev->testmode_enable) {
