@@ -513,6 +513,7 @@ struct mt7915_dev {
 	u8 eeprom_mode;
 	bool muru_debug;
 	bool ibf;
+	bool full_reset_disable;
 
 	u8 monitor_mask;
 

@@ -4153,6 +4153,32 @@ mt7915_rx_drop_show(struct seq_file *s, void *data)
 
 DEFINE_SHOW_ATTRIBUTE(mt7915_rx_drop);
 
+static int
+mt7915_full_reset_disable_get(void *data, u64 *enable)
+{
+	struct mt7915_dev *dev = data;
+
+	*enable = dev->full_reset_disable;
+
+	return 0;
+}
+
+static int
+mt7915_full_reset_disable_set(void *data, u64 val)
+{
+	struct mt7915_dev *dev = data;
+
+	if (!!val == dev->full_reset_disable)
+		return 0;
+
+	dev->full_reset_disable = !!val;
+
+	return 0;
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(fops_full_reset_disable, mt7915_full_reset_disable_get,
+			 mt7915_full_reset_disable_set, "%llu\n");
+
 int mt7915_mtk_init_debugfs(struct mt7915_phy *phy, struct dentry *dir)
 {
 	struct mt7915_dev *dev = phy->dev;
@@ -4250,6 +4276,7 @@ int mt7915_mtk_init_debugfs(struct mt7915_phy *phy, struct dentry *dir)
 	debugfs_create_file("tx_drop_stats", 0400, dir, phy, &mt7915_tx_drop_fops);
 	debugfs_create_file("rx_drop_stats", 0400, dir, phy, &mt7915_rx_drop_fops);
 	debugfs_create_file("ps_ctrl", 0200, dir, dev, &fops_ps_ctrl);
+	debugfs_create_file("full_reset_disable", 0600, dir, dev, &fops_full_reset_disable);
 
 	return 0;
 }
