@@ -41,7 +41,7 @@ int mt76_add_chanctx(struct ieee80211_hw *hw,
 	if (WARN_ON_ONCE(!phy))
 		return ret;
 
-	mt76_phy_dbg(phy, "add %u", conf->def.chan->hw_value);
+	mt76_phy_dbg(phy, "add ch %u width %u", conf->def.chan->hw_value, conf->def.width);
 
 	if (dev->scan.phy == phy)
 		mt76_abort_scan(dev);
