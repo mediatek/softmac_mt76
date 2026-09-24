@@ -3179,6 +3179,9 @@ void mt7999_mac_sta_rc_work(struct work_struct *work)
 		vif = container_of((void *)mvif, struct ieee80211_vif,
 				   drv_priv);
 
+		if (changed & IEEE80211_RC_CSA_BW_CHANGED)
+			continue;
+
 		spin_unlock_bh(&dev->mt76.sta_poll_lock);
 
 		if (changed & IEEE80211_RC_VHT_OMN_CHANGED)
