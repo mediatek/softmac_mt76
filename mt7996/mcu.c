@@ -277,14 +277,13 @@ mt7996_mcu_set_timeout(struct mt76_dev *mdev, int cmd)
 }
 
 static int
-mt7996_mcu_send_message(struct mt76_dev *mdev, struct sk_buff *skb,
+mt7996_mcu_fill_message(struct mt76_dev *mdev, struct sk_buff *skb,
 			int cmd, int *wait_seq)
 {
 	struct mt7996_dev *dev = container_of(mdev, struct mt7996_dev, mt76);
 	int txd_len, mcu_cmd = FIELD_GET(__MCU_CMD_FIELD_ID, cmd);
 	struct mt76_connac2_mcu_uni_txd *uni_txd;
 	struct mt76_connac2_mcu_txd *mcu_txd;
-	enum mt76_mcuq_id qid;
 	__le32 *txd;
 	u32 val;
 	u8 seq;
@@ -293,27 +292,18 @@ mt7996_mcu_send_message(struct mt76_dev *mdev, struct sk_buff *skb,
 		dev_info(dev->mt76.dev,"\n%s L1 SER recovery overlap, drop message %08x.",
 			 wiphy_name(dev->mt76.hw->wiphy), cmd);
 
-		dev_kfree_skb(skb);
 		return -EPERM;
 	}
-
-	mt7996_mcu_set_timeout(mdev, cmd);
 
 	seq = ++dev->mt76.mcu.msg_seq & 0xf;
 	if (!seq)
 		seq = ++dev->mt76.mcu.msg_seq & 0xf;
 
-	if (cmd == MCU_CMD(FW_SCATTER)) {
-		qid = MT_MCUQ_FWDL;
+	if (cmd == MCU_CMD(FW_SCATTER))
 		goto exit;
-	}
 
 	txd_len = cmd & __MCU_CMD_FIELD_UNI ? sizeof(*uni_txd) : sizeof(*mcu_txd);
 	txd = (__le32 *)skb_push(skb, txd_len);
-	if (test_bit(MT76_STATE_MCU_RUNNING, &dev->mphy.state) && mt7996_has_wa(dev))
-		qid = MT_MCUQ_WA;
-	else
-		qid = MT_MCUQ_WM;
 
 	val = FIELD_PREP(MT_TXD0_TX_BYTES, skb->len) |
 	      FIELD_PREP(MT_TXD0_PKT_FMT, MT_TX_TYPE_CMD) |
@@ -378,9 +368,25 @@ mt7996_mcu_send_message(struct mt76_dev *mdev, struct sk_buff *skb,
 	trace_mt7996_mcu_cmd(dev, 0, mcu_txd->cid, mcu_txd->ext_cid,
 			    skb->data, skb->len);
 exit:
-	mt7996_packet_log_to_host(dev, skb->data, skb->len, PKT_BIN_DEBUG_MCU, 0);
 	if (wait_seq)
 		*wait_seq = seq;
+	return 0;
+}
+
+static int
+mt7996_mcu_send_message(struct mt76_dev *mdev, struct sk_buff *skb,
+			int cmd, int *wait_seq)
+{
+	struct mt7996_dev *dev = container_of(mdev, struct mt7996_dev, mt76);
+	enum mt76_mcuq_id qid = MT_MCUQ_WM;
+
+	if (cmd == MCU_CMD(FW_SCATTER))
+		qid = MT_MCUQ_FWDL;
+	else if (test_bit(MT76_STATE_MCU_RUNNING, &dev->mphy.state) && mt7996_has_wa(dev))
+		qid = MT_MCUQ_WA;
+
+	mt7996_mcu_set_timeout(mdev, cmd);
+	mt7996_packet_log_to_host(dev, skb->data, skb->len, PKT_BIN_DEBUG_MCU, 0);
 
 	return mt76_tx_queue_skb_raw(dev, mdev->q_mcu[qid], skb, 0);
 }
@@ -5665,6 +5671,7 @@ int mt7996_mcu_init(struct mt7996_dev *dev)
 	static const struct mt76_mcu_ops mt7996_mcu_ops = {
 		.max_retry = 3,
 		.headroom = sizeof(struct mt76_connac2_mcu_txd), /* reuse */
+		.mcu_skb_prepare_msg = mt7996_mcu_fill_message,
 		.mcu_skb_send_msg = mt7996_mcu_send_message,
 		.mcu_parse_response = mt7996_mcu_parse_response,
 	};
