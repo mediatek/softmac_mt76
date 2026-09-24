@@ -115,8 +115,9 @@ retry:
 
 	do {
 		skb = mt76_mcu_get_response(dev, expires);
-		if (!skb && !test_bit(MT76_MCU_RESET, &dev->phy.state) &&
-		    orig_skb && retry++ < dev->mcu_ops->max_retry) {
+		if (!skb && orig_skb && retry++ < dev->mcu_ops->max_retry) {
+			if (test_bit(MT76_MCU_RESET, &dev->phy.state))
+				usleep_range(200000, 500000);
 			dev_err(dev->dev, "Retry message %08x (seq %d)\n",
 				cmd, seq);
 			skb = orig_skb;
