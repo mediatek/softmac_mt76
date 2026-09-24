@@ -1588,11 +1588,39 @@ static int mt7915_vendor_ibf_ctrl_dump(struct mt76_dev *mdev, bool *enabled)
 	return 0;
 }
 
+static int mt7915_vendor_dfs_tx_mode_ctrl(struct mt76_dev *mdev, u8 radio_idx,
+					  u8 mode)
+{
+	struct mt7915_dev *dev = container_of(mdev, struct mt7915_dev, mt76);
+	struct mt7915_phy *phy = &dev->phy;
+	int rdd_idx, err;
+
+	if (!phy->mt76->cap.has_5ghz)
+		phy = mt7915_ext_phy(dev);
+	if (!phy || !phy->mt76->cap.has_5ghz) {
+		dev_err(dev->mt76.dev, "Cannot find 5G phy\n");
+		return -EINVAL;
+	}
+
+	rdd_idx = mt7915_get_rdd_idx(phy, false);
+	if (rdd_idx < 0) {
+		dev_err(dev->mt76.dev, "Invalid rdd idx %d\n", rdd_idx);
+		return -EINVAL;
+	}
+
+	err = mt76_connac_mcu_rdd_cmd(&dev->mt76, RDD_DET_MODE, rdd_idx, 0, 1);
+	if (!err)
+		phy->dfs_tx_mode = mode;
+
+	return err;
+}
+
 static const struct mt76_vendor_ops mt7915_vendor_ops = {
 	.commands = mt7915_vendor_commands,
 	.n_commands = ARRAY_SIZE(mt7915_vendor_commands),
 	.ibf_ctrl = mt7915_vendor_ibf_ctrl,
 	.ibf_ctrl_dump = mt7915_vendor_ibf_ctrl_dump,
+	.dfs_tx_mode_ctrl = mt7915_vendor_dfs_tx_mode_ctrl,
 };
 
 void mt7915_vendor_register(struct mt7915_phy *phy)

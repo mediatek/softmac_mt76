@@ -344,13 +344,41 @@ mt7915_mcu_rx_radar_detected(struct mt7915_dev *dev, struct sk_buff *skb)
 	if (!mphy)
 		return;
 
-	if (r->rdd_idx == MT_RDD_IDX_BACKGROUND)
+	if (r->rdd_idx == MT_RDD_IDX_BACKGROUND) {
 		cfg80211_background_radar_event(mphy->hw->wiphy,
 						&dev->rdd2_chandef,
 						GFP_ATOMIC);
-	else
+	} else {
+		struct mt7915_phy *phy = mphy->priv;
+
+		phy->rdd_tx_paused = true;
 		ieee80211_radar_detected(mphy->hw, NULL);
+	}
 	dev->hw_pattern++;
+}
+
+int mt7915_mcu_rdd_resume_tx(struct mt7915_phy *phy)
+{
+#define MAC_DFS_RESUME_TX	2
+	struct {
+		u8 mac_enable;
+		u8 band_idx;
+		u8 rsv[2];
+	} __packed req = {
+		.mac_enable = MAC_DFS_RESUME_TX,
+		.band_idx = phy->mt76->band_idx,
+	};
+	int ret;
+
+	if (!phy->rdd_tx_paused)
+		return 0;
+
+	ret = mt76_mcu_send_msg(&phy->dev->mt76, MCU_EXT_CMD(MAC_INIT_CTRL),
+				&req, sizeof(req), true);
+	if (!ret)
+		phy->rdd_tx_paused = false;
+
+	return ret;
 }
 
 static void

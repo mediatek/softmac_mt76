@@ -2202,7 +2202,7 @@ static int mt7915_dfs_start_rdd(struct mt7915_dev *dev, int rdd_idx)
 			return err;
 	}
 
-	return mt76_connac_mcu_rdd_cmd(&dev->mt76, RDD_DET_MODE, rdd_idx, 0, 1);
+	return 0;
 }
 
 static int mt7915_dfs_start_radar_detector(struct mt7915_phy *phy)

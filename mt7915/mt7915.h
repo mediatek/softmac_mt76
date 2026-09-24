@@ -401,6 +401,8 @@ struct mt7915_phy {
 	struct list_head stats_list;
 	spinlock_t stats_lock;
 
+	bool rdd_tx_paused;
+
 #ifdef CONFIG_NL80211_TESTMODE
 	struct {
 		u32 *reg_backup;
@@ -434,6 +436,8 @@ struct mt7915_phy {
 	} csi;
 
 	struct mt7915_air_monitor_ctrl amnt_ctrl;
+
+	u8 dfs_tx_mode;
 #endif
 	struct mt7915_scs_ctrl scs_ctrl;
 #ifdef MTK_DEBUG
@@ -804,6 +808,7 @@ void mt7915_mcu_rx_event(struct mt7915_dev *dev, struct sk_buff *skb);
 void mt7915_mcu_exit(struct mt7915_dev *dev);
 void mt7915_mcu_wmm_pbc_work(struct work_struct *work);
 int mt7915_mcu_enable_obss_spr(struct mt7915_phy *phy, u8 action, u8 val);
+int mt7915_mcu_rdd_resume_tx(struct mt7915_phy *phy);
 
 static inline u16 mt7915_wtbl_size(struct mt7915_dev *dev)
 {

@@ -137,6 +137,7 @@ static void mt7915_stop(struct ieee80211_hw *hw, bool suspend)
 
 	mutex_lock(&dev->mt76.mutex);
 
+	mt7915_mcu_rdd_resume_tx(phy);
 	mt76_testmode_reset(phy->mt76, true);
 
 	clear_bit(MT76_STATE_RUNNING, &phy->mt76->state);
@@ -780,6 +781,10 @@ mt7915_post_channel_switch(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	struct mt7915_phy *phy = mt7915_hw_phy(hw);
 	struct cfg80211_chan_def *chandef = &phy->mt76->chandef;
 	int ret;
+
+	ret = mt7915_mcu_rdd_resume_tx(phy);
+	if (ret)
+		goto out;
 
 	ret = cfg80211_chandef_dfs_required(hw->wiphy, chandef, NL80211_IFTYPE_AP);
 	if (ret <= 0)
@@ -1934,6 +1939,12 @@ mt7915_set_radar_background(struct ieee80211_hw *hw,
 	bool running;
 
 	mutex_lock(&dev->mt76.mutex);
+
+	/* ignore disable background radar when cert mode is on */
+	if (phy->dfs_tx_mode && !chandef) {
+		ret = 0;
+		goto out;
+	}
 
 	if (dev->mt76.region == NL80211_DFS_UNSET)
 		goto out;
