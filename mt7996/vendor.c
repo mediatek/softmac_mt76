@@ -1009,7 +1009,7 @@ static int mt7996_vendor_txpower_ctrl(struct wiphy *wiphy,
 	struct mt7996_vif *mvif = (struct mt7996_vif *)vif->drv_priv;
 	struct mt7996_vif_link *mconf;
 	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_TXPOWER_CTRL], *table;
-	int err, current_txpower, delta;
+	int err, delta;
 	u8 val, link_id = 0, idx;
 	s8 new_power_limit = 127;
 
@@ -1061,12 +1061,17 @@ static int mt7996_vendor_txpower_ctrl(struct wiphy *wiphy,
 				  tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_FILENAME],
 				  SKU_FILENAME_MAX);
 
+		mphy->sku_idx = 0;
 		if (err > 0 && mphy->sku_filename[0]) {
+			struct ieee80211_channel *chan = mphy->main_chandef.chan;
+
 			mt7996_init_txpower(phy);
 			phy->sku_limit_en = true;
 			phy->sku_path_en = true;
+			new_power_limit = chan->max_power;
 		} else {
 			mphy->sku_filename[0] = '\0';
+			mt7996_init_txpower(phy);
 			phy->sku_limit_en = false;
 			phy->sku_path_en = false;
 		}
@@ -1079,19 +1084,17 @@ static int mt7996_vendor_txpower_ctrl(struct wiphy *wiphy,
 		if (mt76_find_power_limits_node(mphy) == NULL)
 			mphy->sku_idx = 0;
 
+		mphy->sku_filename[0] = '\0';
 		if (orig_sku_idx != mphy->sku_idx)
 			mt7996_init_txpower(phy);
 		new_power_limit = chan->max_power;
 
 		phy->sku_limit_en = true;
 		phy->sku_path_en = true;
-
-#ifdef CONFIG_MTK_DEBUG
-		/* To make sure the sku is still enabled when we restart AP. */
-		dev->dbg.sku_disable = false;
-#endif
 	} else {
+		mphy->sku_idx = 0;
 		mphy->sku_filename[0] = '\0';
+		mt7996_init_txpower(phy);
 		phy->sku_limit_en = false;
 		phy->sku_path_en = false;
 	}
@@ -1127,9 +1130,7 @@ static int mt7996_vendor_txpower_ctrl(struct wiphy *wiphy,
 			mt7996_free_afc_table(dev);
 	}
 
-	current_txpower = DIV_ROUND_UP(mphy->txpower_cur + delta, 2);
-	new_power_limit = min_t(s8, current_txpower, new_power_limit);
-
+	new_power_limit = min_t(s8, phy->txpower, new_power_limit);
 	err = mt7996_mcu_set_txpower_sku(phy, new_power_limit);
 
 	return err;

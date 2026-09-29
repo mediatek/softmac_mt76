@@ -2656,11 +2656,13 @@ static ssize_t
 mt7996_get_txpower_info(struct file *file, char __user *user_buf,
 			size_t count, loff_t *ppos)
 {
+	enum mt76_single_sku_mode sku_mode = MT76_SINGLE_SKU_NONE;
 	struct mt7996_phy *phy = file->private_data;
 	struct mt7996_mcu_txpower_event *event;
 	struct txpower_basic_info *basic_info;
-	struct device_node *np;
+	struct mt76_phy *mphy = phy->mt76;
 	static const size_t size = 2048;
+	s8 target_power = 127;
 	int len = 0;
 	ssize_t ret;
 	char *buf;
@@ -2716,10 +2718,13 @@ mt7996_get_txpower_info(struct file *file, char __user *user_buf,
 	len += scnprintf(buf + len, size - len,
 			 "    Theraml Compensation Value: %d\n",
 			 basic_info->thermal_compensate_value);
-	np = mt76_find_power_limits_node(phy->mt76);
+
+	if (phy->sku_limit_en)
+		sku_mode = mt76_get_rate_power_limits(mphy,
+						      mphy->main_chandef.chan,
+						      NULL, &target_power);
 	len += scnprintf(buf + len, size - len,
-			 "    RegDB:  %s\n",
-			 !np ? "enable" : "disable");
+			 "    single sku mode:  %s\n", single_sku_mode[sku_mode]);
 	len += scnprintf(buf + len, size - len,
 			 "    sku_index:  %d\n", phy->mt76->sku_idx);
 	len += scnprintf(buf + len, size - len,
@@ -6032,8 +6037,6 @@ void mt7996_mtk_init_dev_debugfs(struct mt7996_dev *dev, struct dentry *dir)
 	debugfs_create_file("red", 0600, dir, dev, &fops_red_config);
 	debugfs_create_file("vow_drr_dbg", 0200, dir, dev, &fops_vow_drr_dbg);
 
-	dev->dbg.sku_disable = true; /* For SQC */
-	debugfs_create_u8("sku_disable", 0600, dir, &dev->dbg.sku_disable);
 	debugfs_create_bool("beacon_loss_keep_conn", 0600, dir,
 			    &dev->dbg.beacon_loss_keep_conn);
 	debugfs_create_bool("ignore_radar_event", 0600, dir,

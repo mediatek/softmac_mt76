@@ -1347,9 +1347,9 @@ static int mt7915_vendor_txpower_ctrl(struct wiphy *wiphy,
 	struct mt7915_phy *phy = mt7915_hw_phy(hw);
 	struct mt76_phy *mphy = phy->mt76;
 	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_TXPOWER_CTRL];
-	struct mt76_power_limits limits;
 	int err;
 	u8 val;
+	s8 new_power_limit = 127;
 
 	err = nla_parse(tb, MTK_VENDOR_ATTR_TXPOWER_CTRL_MAX, data, data_len,
 			mt76_vendor_txpower_ctrl_policy, NULL);
@@ -1366,21 +1366,52 @@ static int mt7915_vendor_txpower_ctrl(struct wiphy *wiphy,
 		}
 	}
 
-	if (tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_IDX]) {
+	if (tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_FILENAME]) {
+		err = nla_strscpy(mphy->sku_filename,
+				  tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_FILENAME],
+				  SKU_FILENAME_MAX);
+
+		mphy->sku_idx = 0;
+		if (err > 0 && mphy->sku_filename[0]) {
+			struct ieee80211_channel *chan = mphy->main_chandef.chan;
+
+			mt7915_init_txpower(phy);
+			phy->sku_limit_en = true;
+			phy->sku_path_en = true;
+			new_power_limit = chan->max_power;
+		} else {
+			mphy->sku_filename[0] = '\0';
+			mt7915_init_txpower(phy);
+			phy->sku_limit_en = false;
+			phy->sku_path_en = false;
+		}
+	} else if (tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_IDX]) {
+		u8 orig_sku_idx = mphy->sku_idx;
+		struct ieee80211_channel *chan = mphy->main_chandef.chan;
+
 		mphy->sku_idx = nla_get_u8(tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_IDX]);
 
 		if (mt76_find_power_limits_node(mphy) == NULL)
 			mphy->sku_idx = 0;
 
-		phy->sku_path_en = true;
-		mt76_get_rate_power_limits(mphy, mphy->chandef.chan, &limits, 127);
-		if (!limits.path.ofdm[0])
-			phy->sku_path_en = false;
+		mphy->sku_filename[0] = '\0';
+		if (orig_sku_idx != mphy->sku_idx)
+			mt7915_init_txpower(phy);
 
-		err = mt7915_mcu_set_sku_en(phy);
-		if (err)
-			return err;
+		new_power_limit = chan->max_power;
+		phy->sku_limit_en = true;
+		phy->sku_path_en = true;
+	} else {
+		mphy->sku_idx = 0;
+		mphy->sku_filename[0] = '\0';
+		mt7915_init_txpower(phy);
+		phy->sku_limit_en = false;
+		phy->sku_path_en = false;
 	}
+
+	err = mt7915_mcu_set_sku_en(phy);
+	if (err)
+		return err;
 
 	if (tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_BCN_DUP]) {
 		val = nla_get_u8(tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_BCN_DUP]);
@@ -1388,6 +1419,7 @@ static int mt7915_vendor_txpower_ctrl(struct wiphy *wiphy,
 			mphy->beacon_dup = val;
 	}
 
+	hw->conf.power_level = min_t(s8, hw->conf.power_level, new_power_limit);
 	err = mt7915_mcu_set_txpower_sku(phy);
 	if (err)
 		return err;

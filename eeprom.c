@@ -527,10 +527,11 @@ mt76_apply_multi_array_limit(struct mt76_dev *dev, s8 *pwr, size_t pwr_len,
 	}
 }
 
-s8 mt76_get_rate_power_limits(struct mt76_phy *phy,
-			      struct ieee80211_channel *chan,
-			      struct mt76_power_limits *dest,
-			      s8 target_power)
+static
+s8 mt76_get_rate_power_limits_dts(struct mt76_phy *phy,
+				  struct ieee80211_channel *chan,
+				  struct mt76_power_limits *dest,
+				  s8 target_power)
 {
 	struct mt76_dev *dev = phy->dev;
 	struct device_node *np;
@@ -541,6 +542,9 @@ s8 mt76_get_rate_power_limits(struct mt76_phy *phy,
 	s8 max_power = -127;
 	s8 txs_delta;
 	int n_chains = hweight16(phy->chainmask);
+
+	if (!dest)
+		return target_power;
 
 	memset(dest, target_power, sizeof(*dest) - sizeof(dest->path));
 	memset(&dest->path, 0, sizeof(dest->path));
@@ -626,7 +630,6 @@ s8 mt76_get_rate_power_limits(struct mt76_phy *phy,
 
 	return max_power;
 }
-EXPORT_SYMBOL_GPL(mt76_get_rate_power_limits);
 
 int
 mt76_eeprom_init(struct mt76_dev *dev, int len)
@@ -927,6 +930,7 @@ mt76_parse_file_chan_power(const char *section, size_t section_len,
 	return r;
 }
 
+static
 char *mt76_find_power_limits_section_file(struct mt76_phy *phy)
 {
 	const char *header = "[power-limits]\n";
@@ -954,8 +958,8 @@ err:
 	kfree(buf);
 	return NULL;
 }
-EXPORT_SYMBOL_GPL(mt76_find_power_limits_section_file);
 
+static
 s8 mt76_get_rate_power_limits_file(struct mt76_phy *phy,
 				   struct ieee80211_channel *chan,
 				   struct mt76_power_limits *dest,
@@ -971,6 +975,9 @@ s8 mt76_get_rate_power_limits_file(struct mt76_phy *phy,
 		[NL80211_DFS_JP] = "jp",
 	};
 	int section, n_chains = hweight16(phy->chainmask);
+
+	if (!dest)
+		return target_power;
 
 	memset(dest, target_power, sizeof(*dest));
 	memset(&dest->path, 0, sizeof(dest->path));
@@ -1057,4 +1064,37 @@ out:
 	kfree(buf);
 	return target_power;
 }
-EXPORT_SYMBOL_GPL(mt76_get_rate_power_limits_file);
+
+enum mt76_single_sku_mode
+mt76_get_rate_power_limits(struct mt76_phy *phy,
+			   struct ieee80211_channel *chan,
+			   struct mt76_power_limits *dest,
+			   s8 *target_power)
+{
+	struct device_node *np = NULL;
+	char *file = NULL;
+	u8 sku_mode;
+
+	if (phy->sku_filename[0])
+		file = mt76_find_power_limits_section_file(phy);
+	else
+		np = mt76_find_power_limits_node(phy);
+
+	if (file) {
+		sku_mode = MT76_SINGLE_SKU_FILE;
+		*target_power = mt76_get_rate_power_limits_file(phy, chan, dest,
+								*target_power);
+	} else if (np) {
+		sku_mode = MT76_SINGLE_SKU_DTS;
+		*target_power = mt76_get_rate_power_limits_dts(phy, chan, dest,
+							       *target_power);
+	} else {
+		sku_mode = MT76_SINGLE_SKU_REGDB;
+		if (dest)
+			memset(dest, *target_power, sizeof(*dest));
+	}
+
+	kfree(file);
+	return sku_mode;
+}
+EXPORT_SYMBOL_GPL(mt76_get_rate_power_limits);

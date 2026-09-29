@@ -300,20 +300,20 @@ static void __mt7915_init_txpower(struct mt7915_phy *phy,
 	np = mt76_find_power_limits_node(phy->mt76);
 	for (i = 0; i < sband->n_channels; i++) {
 		struct ieee80211_channel *chan = &sband->channels[i];
-		u32 target_power = 0;
+		s8 target_power = 0;
 		int j;
 
 		for (j = 0; j < n_chains; j++) {
-			u32 val;
+			s8 val;
 
 			val = mt7915_eeprom_get_target_power(dev, chan, j);
 			target_power = max(target_power, val);
 		}
 
 		target_power += pwr_delta;
-		target_power = mt76_get_rate_power_limits(phy->mt76, chan,
-							  limits,
-							  target_power);
+		mt76_get_rate_power_limits(phy->mt76, chan,
+					   limits,
+					   &target_power);
 
 		/* MT7915N can not enable Backoff table without setting value in dts */
 		if (!limits->path.ofdm[0])

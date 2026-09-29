@@ -2274,16 +2274,25 @@ mt76_find_power_limits_node(struct mt76_phy *phy);
 struct device_node *
 mt76_find_channel_node(struct device_node *np, struct ieee80211_channel *chan);
 
-s8 mt76_get_rate_power_limits(struct mt76_phy *phy,
-			      struct ieee80211_channel *chan,
-			      struct mt76_power_limits *dest,
-			      s8 target_power);
+enum mt76_single_sku_mode {
+	MT76_SINGLE_SKU_NONE,
+	MT76_SINGLE_SKU_FILE,
+	MT76_SINGLE_SKU_DTS,
+	MT76_SINGLE_SKU_REGDB,
+};
 
-s8 mt76_get_rate_power_limits_file(struct mt76_phy *phy,
-				   struct ieee80211_channel *chan,
-				   struct mt76_power_limits *dest,
-				   s8 target_power);
-char *mt76_find_power_limits_section_file(struct mt76_phy *phy);
+static const char * const single_sku_mode[] = {
+	[MT76_SINGLE_SKU_NONE] = "none",
+	[MT76_SINGLE_SKU_FILE] = "file",
+	[MT76_SINGLE_SKU_DTS] = "dts",
+	[MT76_SINGLE_SKU_REGDB] = "regdb",
+};
+
+enum mt76_single_sku_mode
+mt76_get_rate_power_limits(struct mt76_phy *phy,
+			   struct ieee80211_channel *chan,
+			   struct mt76_power_limits *dest,
+			   s8 *target_power);
 
 static inline bool mt76_queue_is_rx(struct mt76_dev *dev, struct mt76_queue *q)
 {

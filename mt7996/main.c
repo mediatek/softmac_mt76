@@ -54,17 +54,13 @@ int mt7996_run(struct mt7996_phy *phy)
 	phy->sr_enable = true;
 	phy->enhanced_sr_enable = true;
 	phy->thermal_protection_enable = true;
-	ret = mt7996_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_SKU_POWER_LIMIT_CTRL,
-					   dev->dbg.sku_disable ? 0 : phy->sku_limit_en);
-
-	ret = mt7996_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_BACKOFF_POWER_LIMIT_CTRL,
-					   dev->dbg.sku_disable ? 0 : phy->sku_path_en);
-#else
+#endif
 	ret = mt7996_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_SKU_POWER_LIMIT_CTRL,
 					   phy->sku_limit_en);
+	if (ret)
+		return ret;
 	ret = mt7996_mcu_set_tx_power_ctrl(phy, UNI_TXPOWER_BACKOFF_POWER_LIMIT_CTRL,
 					   phy->sku_path_en);
-#endif
 	if (ret)
 		return ret;
 
@@ -798,9 +794,6 @@ int mt7996_set_channel(struct mt76_phy *mphy)
 		if (ret)
 			goto out;
 	} else if (mphy->chanctx && mphy->chanctx->state == MT76_CHANCTX_STATE_SWITCH) {
-		u8 delta;
-		int current_txpower;
-
 		if (mphy->chanctx->has_ap && phy->pp_mode == PP_USR_MODE) {
 			ret = mt7996_mcu_set_pp_en(phy, PP_USR_MODE,
 						   mphy->main_chandef.punctured);
@@ -813,9 +806,7 @@ int mt7996_set_channel(struct mt76_phy *mphy)
 		if (ret)
 			goto out;
 
-		delta = mt76_tx_power_path_delta(hweight16(mphy->chainmask));
-		current_txpower = DIV_ROUND_UP(mphy->txpower_cur + delta, 2);
-		ret = mt7996_mcu_set_txpower_sku(phy, current_txpower);
+		ret = mt7996_mcu_set_txpower_sku(phy, phy->txpower);
 		if (ret)
 			goto out;
 	}

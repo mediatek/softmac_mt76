@@ -4262,7 +4262,6 @@ int mt7915_mtk_init_debugfs(struct mt7915_phy *phy, struct dentry *dir)
 	debugfs_create_file("txpower_level", 0400, dir, phy,
 			    &fops_txpower_level);
 
-	debugfs_create_u8("sku_disable", 0600, dir, &dev->dbg.sku_disable);
 	debugfs_create_u8("mgmt_pwr_enhance", 0600, dir, &phy->mt76->mgmt_pwr_enhance);
 
 	debugfs_create_devm_seqfile(dev->mt76.dev, "eeprom_mode", dir,

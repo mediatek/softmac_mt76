@@ -3710,10 +3710,11 @@ int mt7915_mcu_set_txpower_sku(struct mt7915_phy *phy)
 		.limit_type = TX_POWER_LIMIT_TABLE_RATE,
 		.band_idx = phy->mt76->band_idx,
 	};
-	int i, ret, tx_power;
+	int i, ret;
 	const u8 *len = mt7915_sku_group_len;
 	struct mt76_power_limits *la;
 	struct sk_buff *skb;
+	s8 tx_power;
 
 	tx_power = mt76_get_power_bound(mphy, hw->conf.power_level);
 	if (phy->sku_limit_en) {
@@ -3721,13 +3722,17 @@ int mt7915_mcu_set_txpower_sku(struct mt7915_phy *phy)
 		if (!la)
 			return -ENOMEM;
 
-		tx_power = mt76_get_rate_power_limits(mphy, mphy->chandef.chan,
-						      la, tx_power);
+		mt76_get_rate_power_limits(mphy, mphy->chandef.chan,
+					   la, &tx_power);
 		mt7915_update_txpower(phy, tx_power);
 	} else {
 		mt7915_update_txpower(phy, tx_power);
 		return 0;
 	}
+
+	if (!la->path.ofdm[0])
+		phy->sku_path_en = false;
+
 	skb = mt76_mcu_msg_alloc(&dev->mt76, NULL,
 				 sizeof(hdr) + MT7915_SKU_RATE_NUM);
 	if (!skb) {

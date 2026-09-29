@@ -558,7 +558,6 @@ struct mt7915_dev {
 		bool dump_rx_pkt;
 		bool dump_rx_raw;
 		u32 token_idx;
-		u8 sku_disable;
 	} dbg;
 	const struct mt7915_dbg_reg_desc *dbg_reg;
 

@@ -44,9 +44,8 @@ mt7996_sku_filename_set(struct file *file, const char __user *user_buf,
 
 	en = !!buf[0];
 
-	if (en)
-		mt7996_init_txpower(phy);
-	else // "TODO: disable sku_filename, turn to sku_idx?"
+	mt7996_init_txpower(phy);
+	if (!en)
 		mt76_phy_dbg(mphy, "Clear sku_filename to disable the sku!");
 
 	phy->sku_path_en = en;

@@ -978,7 +978,6 @@ struct mt7996_dev {
 	u16 wlan_idx;
 	bool wtbl_query_cr;
 	struct {
-		u8 sku_disable;
 		u32 fw_dbg_module;
 		u8 fw_dbg_lv;
 		u32 bcn_total_cnt[__MT_MAX_BAND];
