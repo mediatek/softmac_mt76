@@ -3757,6 +3757,10 @@ int mt7915_mcu_set_txpower_sku(struct mt7915_phy *phy)
 		mt7915_update_txpower(phy, tx_power);
 		return 0;
 	}
+
+	if (!la->path.ofdm[0])
+		phy->sku_path_en = false;
+
 	skb = mt76_mcu_msg_alloc(&dev->mt76, NULL,
 				 sizeof(hdr) + MT7915_SKU_RATE_NUM);
 	if (!skb) {

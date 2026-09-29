@@ -11,6 +11,83 @@
 #ifdef MTK_DEBUG
 #define FW_BIN_LOG_MAGIC_V2	0x44d9c99a
 #endif
+static ssize_t
+mt7915_sku_filename_set(struct file *file, const char __user *user_buf,
+			size_t count, loff_t *ppos)
+{
+	struct mt7915_phy *phy = file->private_data;
+	struct mt76_phy *mphy = phy->mt76;
+	char buf[SKU_FILENAME_MAX];
+	ssize_t ret;
+	bool en;
+
+	/* It’s possible that the user sets power without setting AP channel */
+	if (!cfg80211_chandef_valid(&mphy->chandef) ||
+	    !cfg80211_chandef_valid(&mphy->main_chandef))
+		return -EFAULT;
+
+	if (count >= sizeof(buf))
+		return -EINVAL;
+
+	if (copy_from_user(buf, user_buf, count))
+		return -EFAULT;
+
+	if (count && buf[count - 1] == '\n')
+		buf[count - 1] = '\0';
+	else
+		buf[count] = '\0';
+
+	if (buf[0])
+		snprintf(mphy->sku_filename, SKU_FILENAME_MAX, "%s", buf);
+	else
+		mphy->sku_filename[0] = '\0';
+
+	en = !!buf[0];
+
+	if (!en)
+		mt76_phy_dbg(mphy, "Clear sku_filename to disable the sku!");
+
+	phy->sku_path_en = en;
+	phy->sku_limit_en = en;
+
+	ret = mt7915_mcu_set_sku_en(phy);
+	if (ret)
+		goto error;
+
+	ret = mt7915_mcu_set_txpower_sku(phy);
+	if (ret)
+		goto error;
+
+	return count;
+
+error:
+	mphy->sku_filename[0] = '\0';
+	phy->sku_path_en = false;
+	phy->sku_limit_en = false;
+	return ret;
+}
+
+static ssize_t
+mt7915_sku_filename_get(struct file *file, char __user *user_buf,
+			size_t count, loff_t *ppos)
+{
+	struct mt7915_phy *phy = file->private_data;
+	struct mt76_phy *mphy = phy->mt76;
+	char buf[SKU_FILENAME_MAX + 8];
+	int len;
+
+	len = snprintf(buf, sizeof(buf), "%s\n",
+		       mphy->sku_filename[0] ? mphy->sku_filename : "");
+
+	return simple_read_from_buffer(user_buf, count, ppos, buf, len);
+}
+
+static const struct file_operations fops_mt7915_sku_filename = {
+	.write = mt7915_sku_filename_set,
+	.read = mt7915_sku_filename_get,
+	.open = simple_open,
+	.llseek = default_llseek,
+};
 
 /** global debugfs **/
 
@@ -1609,6 +1686,8 @@ int mt7915_init_debugfs(struct mt7915_phy *phy)
 					    mt7915_rdd_monitor);
 	}
 	debugfs_create_file("otp", 0400, dir, dev, &mt7915_efuse_ops);
+	debugfs_create_file("power_table_filename", 0600, dir, phy,
+			    &fops_mt7915_sku_filename);
 #ifdef CONFIG_MTK_VENDOR
 	debugfs_create_file("csi_stats", 0400, dir, phy, &mt7915_csi_ops);
 #endif
