@@ -384,6 +384,11 @@ int mt7915_set_channel(struct mt76_phy *mphy)
 		goto out;
 
 	mt7915_mac_set_timing(phy);
+
+	ret = mt7915_mcu_rdd_resume_tx(phy);
+	if (ret)
+		goto out;
+
 	ret = mt7915_dfs_init_radar_detector(phy);
 	mt7915_mac_cca_stats_reset(phy);
 
@@ -807,10 +812,6 @@ mt7915_post_channel_switch(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 	struct mt7915_phy *phy = mt7915_hw_phy(hw);
 	struct cfg80211_chan_def *chandef = &phy->mt76->chandef;
 	int ret;
-
-	ret = mt7915_mcu_rdd_resume_tx(phy);
-	if (ret)
-		goto out;
 
 	ret = cfg80211_chandef_dfs_required(hw->wiphy, chandef, NL80211_IFTYPE_AP);
 	if (ret <= 0)

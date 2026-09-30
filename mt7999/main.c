@@ -860,6 +860,10 @@ int mt7999_set_channel(struct mt76_phy *mphy)
 			goto out;
 	}
 
+	ret = mt7999_mcu_rdd_resume_tx(phy);
+	if (ret)
+		goto out;
+
 	ret = mt7999_dfs_init_radar_detector(phy);
 
 	mt7999_mac_reset_counters(phy);
@@ -1279,10 +1283,6 @@ mt7999_post_channel_switch(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 		goto out;
 
 	ieee80211_iterate_stations_mtx(hw, mt7999_mcu_update_sta_rec_bw, link);
-
-	ret = mt7999_mcu_rdd_resume_tx(phy);
-	if (ret)
-		goto out;
 
 out:
 	memset(mvif->cs_links, IEEE80211_LINK_UNSPECIFIED,
