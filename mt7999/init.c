@@ -417,7 +417,7 @@ static void __mt7999_init_txpower(struct mt7999_phy *phy,
 
 		target_power += path_delta;
 		target_power = DIV_ROUND_UP(target_power, 2);
-		if (sku_mode == MT76_SINGLE_SKU_NONE)
+		if (sku_mode == MT76_SINGLE_SKU_REGDB)
 			chan->max_power = min_t(int, chan->max_reg_power,
 						target_power);
 		else

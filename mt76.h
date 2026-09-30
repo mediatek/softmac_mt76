@@ -2369,6 +2369,14 @@ enum mt76_single_sku_mode {
 	MT76_SINGLE_SKU_NONE,
 	MT76_SINGLE_SKU_FILE,
 	MT76_SINGLE_SKU_DTS,
+	MT76_SINGLE_SKU_REGDB,
+};
+
+static const char * const single_sku_mode[] = {
+	[MT76_SINGLE_SKU_NONE] = "none",
+	[MT76_SINGLE_SKU_FILE] = "file",
+	[MT76_SINGLE_SKU_DTS] = "dts",
+	[MT76_SINGLE_SKU_REGDB] = "regdb",
 };
 
 enum mt76_single_sku_mode

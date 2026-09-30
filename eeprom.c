@@ -1135,7 +1135,7 @@ mt76_get_rate_power_limits(struct mt76_phy *phy,
 {
 	struct device_node *np = NULL;
 	char *file = NULL;
-	u8 sku_mode = MT76_SINGLE_SKU_NONE;
+	u8 sku_mode;
 
 	if (phy->sku_filename[0])
 		file = mt76_find_power_limits_section_file(phy);
@@ -1151,6 +1151,7 @@ mt76_get_rate_power_limits(struct mt76_phy *phy,
 		*target_power = mt76_get_rate_power_limits_dts(phy, chan, dest,
 							       *target_power);
 	} else {
+		sku_mode = MT76_SINGLE_SKU_REGDB;
 		if (dest)
 			memset(dest, *target_power, sizeof(*dest));
 	}

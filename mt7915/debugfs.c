@@ -1410,6 +1410,7 @@ DEFINE_SHOW_ATTRIBUTE(mt7915_txpower_path);
 static int
 mt7915_txpower_info_show(struct seq_file *file, void *data)
 {
+	enum mt76_single_sku_mode sku_mode = MT76_SINGLE_SKU_NONE;
 	struct mt7915_phy *phy = file->private;
 	struct mt76_phy *mphy = phy->mt76;
 	struct {
@@ -1453,7 +1454,7 @@ mt7915_txpower_info_show(struct seq_file *file, void *data)
 		s8 mu_tx_power_manual;
 		u8 rsv3;
 	} __packed basic_info = {};
-	struct device_node *np;
+	s8 target_power = 127;
 	int ret;
 
 	ret = mt7915_mcu_get_txpower_sku(phy, (s8 *)&basic_info, sizeof(basic_info),
@@ -1487,9 +1488,12 @@ mt7915_txpower_info_show(struct seq_file *file, void *data)
 		   basic_info.thermal_compensate_enable ? "enable" : "disable");
 	seq_printf(file, "    Theraml Compensation Value: %d\n",
 		   basic_info.thermal_compensate_value);
-
-	np = mt76_find_power_limits_node(mphy);
-	seq_printf(file, "    RegDB:  %s\n", !np ? "enable" : "disable");
+	if (phy->sku_limit_en)
+		sku_mode = mt76_get_rate_power_limits(mphy,
+						      mphy->main_chandef.chan,
+						      NULL, &target_power);
+	seq_printf(file, "    single sku mode:  %s\n", single_sku_mode[sku_mode]);
+	seq_printf(file, "    sku_index:  %d\n", phy->mt76->sku_idx);
 
 out:
 	return ret;

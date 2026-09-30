@@ -1628,11 +1628,7 @@ mt7999_get_txpower_info(struct file *file, char __user *user_buf,
 						      mphy->main_chandef.chan,
 						      NULL, &target_power);
 	len += scnprintf(buf + len, size - len,
-			 "    RegDB:  %s\n",
-			 phy->sku_limit_en && sku_mode == MT76_SINGLE_SKU_NONE ?
-			 "enable" : "disable");
-	len += scnprintf(buf + len, size - len,
-			 "    single sku mode:  %d\n", sku_mode);
+			 "    single sku mode:  %s\n", single_sku_mode[sku_mode]);
 	len += scnprintf(buf + len, size - len,
 			 "    sku_index:  %d\n", phy->mt76->sku_idx);
 	len += scnprintf(buf + len, size - len,
