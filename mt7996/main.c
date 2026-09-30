@@ -833,6 +833,10 @@ int mt7996_set_channel(struct mt76_phy *mphy)
 	if (ret)
 		goto out;
 
+	ret = mt7996_mcu_rdd_resume_tx(phy);
+	if (ret)
+		goto out;
+
 	ret = mt7996_dfs_init_radar_detector(phy);
 	mt7996_mac_cca_stats_reset(phy);
 
@@ -1316,10 +1320,6 @@ mt7996_post_channel_switch(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 		goto out;
 
 	ieee80211_iterate_stations_mtx(hw, mt7996_mcu_update_sta_rec_bw, link);
-
-	ret = mt7996_mcu_rdd_resume_tx(phy);
-	if (ret)
-		goto out;
 
 out:
 	memset(mvif->cs_links, IEEE80211_LINK_UNSPECIFIED,
