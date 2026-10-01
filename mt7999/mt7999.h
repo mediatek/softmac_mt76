@@ -50,10 +50,11 @@
 #define MT7999_FIRMWARE			"mediatek/mt7999/mt7999_fw.bin"
 #define MT7999_FIRMWARE_TM		"mediatek/mt7999/mt7999_fw_tm.bin"
 
-#define MT7999_EEPROM_DEFAULT		"mediatek/mt7999/mt7999_eeprom_e1.bin"
-#define MT7999_EEPROM_DEFAULT_INT	"mediatek/mt7999/mt7999_eeprom_2i5i6i_e1.bin"
-#define MT7999_EEPROM_DEFAULT_233	"mediatek/mt7999/mt7999_eeprom_233_e1.bin"
-#define MT7999_EEPROM_DEFAULT_233_INT	"mediatek/mt7999/mt7999_eeprom_233_2i5i6i_e1.bin"
+#define MT7999_EEPROM_DEFAULT		"mediatek/mt7999/mt7999_eeprom.bin"
+#define MT7999_EEPROM_DEFAULT_INT	"mediatek/mt7999/mt7999_eeprom_2i5i6i.bin"
+#define MT7999_EEPROM_DEFAULT_233	"mediatek/mt7999/mt7999_eeprom_233.bin"
+#define MT7999_EEPROM_DEFAULT_233_INT	"mediatek/mt7999/mt7999_eeprom_233_2i5i6i.bin"
+
 #define MT7999_EEPROM_SIZE		0x6400
 #define MT7999_EEPROM_CAL_DATA_SIZE	0x1000
 #define MT7999_EEPROM_BLOCK_SIZE	16

@@ -1347,20 +1347,20 @@ static int mt7999_variant_type_init(struct mt7999_dev *dev)
 	u32 val = mt76_rr(dev, MT_PAD_GPIO);
 	u8 var_type, adie_comb[__MT_MAX_BAND];
 
-	adie_comb[MT_BAND0] = u32_get_bits(val, MT_PAD_GPIO_ADIE_COMB_BAND0);
-	adie_comb[MT_BAND1] = u32_get_bits(val, MT_PAD_GPIO_ADIE_COMB_BAND1);
-	adie_comb[MT_BAND2] = u32_get_bits(val, MT_PAD_GPIO_ADIE_COMB_BAND2);
-
 	switch (mt76_chip(&dev->mt76)) {
 	case MT7999_DEVICE_ID:
-		if (adie_comb[MT_BAND0] == MT_PAD_GPIO_ADIE_7770)
-			var_type = MT7999_VAR_TYPE_233;
-		else
-			var_type = MT7999_VAR_TYPE_444;
+		adie_comb[MT_BAND0] = u32_get_bits(val, MT_PAD_GPIO_ADIE_COMB_BAND0);
+		adie_comb[MT_BAND1] = u32_get_bits(val, MT_PAD_GPIO_ADIE_COMB_BAND1);
+		adie_comb[MT_BAND2] = u32_get_bits(val, MT_PAD_GPIO_ADIE_COMB_BAND2);
 		break;
 	default:
 		return -EINVAL;
 	}
+
+	if (adie_comb[MT_BAND0] == MT_PAD_GPIO_ADIE_7770)
+		var_type = MT7999_VAR_TYPE_233;
+	else
+		var_type = MT7999_VAR_TYPE_444;
 
 	dev->var.type = var_type;
 
