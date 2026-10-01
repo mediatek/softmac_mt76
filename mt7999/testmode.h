@@ -627,15 +627,25 @@ union ru_data {
 		__le16 ldpc_mode:2;
 		__le16 nss:3;
 		__le16 mu_nss:3;
-		union {
-			__le16 ss_idx:3;
-			__le16 dru_bw:3;
-		};
+		__le16 ss_idx:3;
 		__le16 pri_seg_80:1;
 		__le16 pri_seg_160:1;
 		__le16 is_ldpc:1;
 		__le16 valid:1;
 	} __packed dw0;
+	struct {
+		u8 aid;
+		u8 rate_idx;
+		__le16 dru_enable:1;
+		__le16 ldpc_mode:2;
+		__le16 nss:3;
+		__le16 mu_nss:3;
+		__le16 dru_bw:3;
+		__le16 pri_seg_80:1;
+		__le16 pri_seg_160:1;
+		__le16 is_ldpc:1;
+		__le16 valid:1;
+	} __packed dw0_dru;
 	struct {
 		__le16 ru_alloc:9;
 		__le16 ru_idx:7;

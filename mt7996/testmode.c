@@ -2869,7 +2869,7 @@ mt7996_tm_set_sta_ru_info(struct mt76_phy *mphy, bool init)
 	ru.dw0.pri_seg_80 = sta->seg_idx & BIT(0);
 	ru.dw0.pri_seg_160 = sta->seg_idx & BIT(1);
 	ru.dw0.ldpc = sta->tx_rate_ldpc;
-	ru.dw0.valid = true;
+	ru.dw0.valid = 1;
 	mt7996_tm_set(dev, SET_ID(RU_INFO_DW0), ru.data);
 
 	ru.data = 0;

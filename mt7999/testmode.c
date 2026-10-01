@@ -2983,13 +2983,14 @@ mt7999_tm_set_sta_ru_info(struct mt76_phy *mphy, bool init)
 	ru.dw0.nss = sta->tx_rate_nss;
 	ru.dw0.mu_nss = sta->mu_nss;
 	if (sta->dru_enable)
-		ru.dw0.dru_bw = sta->dru_bw;
+		ru.dw0_dru.dru_bw = sta->dru_bw;
 	else
 		ru.dw0.ss_idx = sta->ss_idx;
 	ru.dw0.pri_seg_80 = sta->seg_idx & BIT(0);
 	ru.dw0.pri_seg_160 = sta->seg_idx & BIT(1);
 	ru.dw0.is_ldpc = !!sta->tx_rate_ldpc;
-	ru.dw0.valid = true;
+	ru.dw0.valid = 1;
+
 	mt7999_tm_set(dev, SET_ID(RU_INFO_DW0), ru.data);
 
 	ru.data = 0;
