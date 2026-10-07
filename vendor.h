@@ -473,7 +473,7 @@ struct mt76_vendor_ops {
 	void (*set_beacon)(struct ieee80211_vif *vif, u8 mode);
 };
 
-void mt76_vendor_register(struct mt76_dev *dev,
+void mt76_vendor_register(struct mt76_phy *phy,
 			  const struct mt76_vendor_ops *ops);
 
 #ifdef CONFIG_MTK_VENDOR

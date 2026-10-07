@@ -1637,5 +1637,5 @@ static const struct mt76_vendor_ops mt7915_vendor_ops = {
 
 void mt7915_vendor_register(struct mt7915_phy *phy)
 {
-	mt76_vendor_register(phy->mt76->dev, &mt7915_vendor_ops);
+	mt76_vendor_register(phy->mt76, &mt7915_vendor_ops);
 }

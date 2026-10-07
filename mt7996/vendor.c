@@ -1512,7 +1512,8 @@ static const struct mt76_vendor_ops mt7996_vendor_ops = {
 
 void mt7996_vendor_register(struct mt7996_phy *phy)
 {
-	mt76_vendor_register(phy->mt76->dev, &mt7996_vendor_ops);
+	if (phy == &phy->dev->phy)
+		mt76_vendor_register(phy->mt76, &mt7996_vendor_ops);
 
 	INIT_LIST_HEAD(&phy->csi.list);
 	spin_lock_init(&phy->csi.lock);
