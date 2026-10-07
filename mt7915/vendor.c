@@ -1588,17 +1588,14 @@ static int mt7915_vendor_ibf_ctrl_dump(struct mt76_dev *mdev, bool *enabled)
 	return 0;
 }
 
-static int mt7915_vendor_dfs_tx_mode_ctrl(struct mt76_dev *mdev, u8 radio_idx,
-					  u8 mode)
+static int mt7915_vendor_dfs_tx_ctrl(struct mt76_phy *mphy, u8 radio_idx, u8 mode)
 {
-	struct mt7915_dev *dev = container_of(mdev, struct mt7915_dev, mt76);
-	struct mt7915_phy *phy = &dev->phy;
+	struct mt7915_phy *phy = mphy->priv;
+	struct mt7915_dev *dev = phy->dev;
 	int rdd_idx, err;
 
-	if (!phy->mt76->cap.has_5ghz)
-		phy = mt7915_ext_phy(dev);
-	if (!phy || !phy->mt76->cap.has_5ghz) {
-		dev_err(dev->mt76.dev, "Cannot find 5G phy\n");
+	if (!phy->mt76->cap.has_5ghz) {
+		dev_err(dev->mt76.dev, "Invalid phy: 5G band unsupported\n");
 		return -EINVAL;
 	}
 
@@ -1620,10 +1617,10 @@ static const struct mt76_vendor_ops mt7915_vendor_ops = {
 	.n_commands = ARRAY_SIZE(mt7915_vendor_commands),
 	.ibf_ctrl = mt7915_vendor_ibf_ctrl,
 	.ibf_ctrl_dump = mt7915_vendor_ibf_ctrl_dump,
-	.dfs_tx_mode_ctrl = mt7915_vendor_dfs_tx_mode_ctrl,
+	.dfs_tx_ctrl = mt7915_vendor_dfs_tx_ctrl,
 };
 
 void mt7915_vendor_register(struct mt7915_phy *phy)
 {
-	mt76_vendor_register(phy->mt76->dev, &mt7915_vendor_ops);
+	mt76_vendor_register(phy->mt76, &mt7915_vendor_ops);
 }

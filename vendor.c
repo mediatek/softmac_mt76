@@ -277,7 +277,8 @@ int mt76_vendor_ibf_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 			 const void *data, int data_len)
 {
 	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
-	struct mt76_dev *dev = hw->priv;
+	struct mt76_phy *mphy = hw->priv;
+	struct mt76_dev *dev = mphy->dev;
 	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_IBF_CTRL];
 	const struct mt76_vendor_ops *ops = dev->vendor_ops;
 	int err;
@@ -303,7 +304,8 @@ int mt76_vendor_ibf_ctrl_dump(struct wiphy *wiphy,
 			      int data_len, unsigned long *storage)
 {
 	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
-	struct mt76_dev *dev = hw->priv;
+	struct mt76_phy *mphy = hw->priv;
+	struct mt76_dev *dev = mphy->dev;
 	const struct mt76_vendor_ops *ops = dev->vendor_ops;
 	bool enabled;
 	int err;
@@ -333,7 +335,8 @@ int mt76_vendor_3wire_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 #define EXT_SEL_MASK			GENMASK(2, 0)
 #define CEB_BAND_SEL_MASK		GENMASK(4, 3)
 	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
-	struct mt76_dev *dev = hw->priv;
+	struct mt76_phy *mphy = hw->priv;
+	struct mt76_dev *dev = mphy->dev;
 	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_3WIRE_CTRL];
 	struct {
 		u8 __rsv1[4];
@@ -390,7 +393,8 @@ int mt76_vendor_mu_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 			const void *data, int data_len)
 {
 	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
-	struct mt76_dev *dev = hw->priv;
+	struct mt76_phy *mphy = hw->priv;
+	struct mt76_dev *dev = mphy->dev;
 	const struct mt76_vendor_ops *ops = dev->vendor_ops;
 	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_MU_CTRL];
 	int err;
@@ -421,7 +425,8 @@ int mt76_vendor_mu_ctrl_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
 			     int data_len, unsigned long *storage)
 {
 	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
-	struct mt76_dev *dev = hw->priv;
+	struct mt76_phy *mphy = hw->priv;
+	struct mt76_dev *dev = mphy->dev;
 	const struct mt76_vendor_ops *ops = dev->vendor_ops;
 	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_MU_CTRL];
 	u8 enabled, radio_idx;
@@ -458,7 +463,8 @@ int mt76_vendor_edcca_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 			   const void *data, int data_len)
 {
 	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
-	struct mt76_dev *dev = hw->priv;
+	struct mt76_phy *mphy = hw->priv;
+	struct mt76_dev *dev = mphy->dev;
 	const struct mt76_vendor_ops *ops = dev->vendor_ops;
 	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_EDCCA_CTRL];
 	u8 value[MT76_VENDOR_EDCCA_BW_NUM];
@@ -512,7 +518,8 @@ int mt76_vendor_edcca_ctrl_dump(struct wiphy *wiphy,
 				int data_len, unsigned long *storage)
 {
 	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
-	struct mt76_dev *dev = hw->priv;
+	struct mt76_phy *mphy = hw->priv;
+	struct mt76_dev *dev = mphy->dev;
 	const struct mt76_vendor_ops *ops = dev->vendor_ops;
 	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_EDCCA_CTRL];
 	u8 value[MT76_VENDOR_EDCCA_BW_NUM];
@@ -558,7 +565,8 @@ int mt76_vendor_background_radar_ctrl(struct wiphy *wiphy,
 				      const void *data, int data_len)
 {
 	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
-	struct mt76_dev *dev = hw->priv;
+	struct mt76_phy *mphy = hw->priv;
+	struct mt76_dev *dev = mphy->dev;
 	const struct mt76_vendor_ops *ops = dev->vendor_ops;
 	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_BACKGROUND_RADAR_CTRL];
 	int err;
@@ -582,12 +590,13 @@ int mt76_vendor_dfs_tx_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 			    const void *data, int data_len)
 {
 	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
-	struct mt76_dev *dev = hw->priv;
+	struct mt76_phy *mphy = hw->priv;
+	struct mt76_dev *dev = mphy->dev;
 	const struct mt76_vendor_ops *ops = dev->vendor_ops;
 	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_DFS_TX_CTRL];
 	int err;
 
-	if (!ops || !ops->dfs_tx_mode_ctrl)
+	if (!ops || !ops->dfs_tx_ctrl)
 		return -EOPNOTSUPP;
 
 	err = nla_parse(tb, MTK_VENDOR_ATTR_DFS_TX_CTRL_MAX, data, data_len,
@@ -598,7 +607,7 @@ int mt76_vendor_dfs_tx_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 	    !tb[MTK_VENDOR_ATTR_DFS_TX_CTRL_RADIO_IDX])
 		return -EINVAL;
 
-	return ops->dfs_tx_mode_ctrl(dev,
+	return ops->dfs_tx_ctrl(mphy,
 		nla_get_u8(tb[MTK_VENDOR_ATTR_DFS_TX_CTRL_RADIO_IDX]),
 		nla_get_u8(tb[MTK_VENDOR_ATTR_DFS_TX_CTRL_MODE]));
 }
@@ -608,7 +617,8 @@ int mt76_vendor_beacon_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 			    const void *data, int data_len)
 {
 	struct ieee80211_hw *hw = wiphy_to_ieee80211_hw(wiphy);
-	struct mt76_dev *dev = hw->priv;
+	struct mt76_phy *mphy = hw->priv;
+	struct mt76_dev *dev = mphy->dev;
 	const struct mt76_vendor_ops *ops = dev->vendor_ops;
 	struct ieee80211_vif *vif = wdev_to_ieee80211_vif(wdev);
 	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_BEACON_CTRL];
@@ -631,12 +641,12 @@ int mt76_vendor_beacon_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 EXPORT_SYMBOL_GPL(mt76_vendor_beacon_ctrl);
 #endif
 
-void mt76_vendor_register(struct mt76_dev *dev,
+void mt76_vendor_register(struct mt76_phy *phy,
 			  const struct mt76_vendor_ops *ops)
 {
-	struct wiphy *wiphy = dev->hw->wiphy;
+	struct wiphy *wiphy = phy->hw->wiphy;
 
-	dev->vendor_ops = ops;
+	phy->dev->vendor_ops = ops;
 
 	wiphy->vendor_commands = ops->commands;
 	wiphy->n_vendor_commands = ops->n_commands;

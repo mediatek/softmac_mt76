@@ -1434,11 +1434,10 @@ static int mt7996_vendor_background_radar_ctrl(struct mt76_dev *mdev,
 	return mt7996_mcu_rdd_background_disable_timer(dev, disable_timer);
 }
 
-static int mt7996_vendor_dfs_tx_mode_ctrl(struct mt76_dev *mdev, u8 radio_idx,
-					  u8 mode)
+static int mt7996_vendor_dfs_tx_ctrl(struct mt76_phy *mphy, u8 radio_idx, u8 mode)
 {
-	struct mt7996_dev *dev = container_of(mdev, struct mt7996_dev, mt76);
-	struct mt7996_phy *phy;
+	struct mt7996_phy *phy = mphy->priv;
+	struct mt7996_dev *dev = phy->dev;
 	int rdd_idx, err;
 
 	if (!mt7996_radio_valid(dev, radio_idx)) {
@@ -1474,13 +1473,14 @@ static const struct mt76_vendor_ops mt7996_vendor_ops = {
 	.edcca_ctrl_threshold = mt7996_vendor_edcca_ctrl_threshold,
 	.edcca_ctrl_dump = mt7996_vendor_edcca_ctrl_dump,
 	.background_radar_ctrl = mt7996_vendor_background_radar_ctrl,
-	.dfs_tx_mode_ctrl = mt7996_vendor_dfs_tx_mode_ctrl,
+	.dfs_tx_ctrl = mt7996_vendor_dfs_tx_ctrl,
 	.set_beacon = mt7996_set_beacon_vif,
 };
 
 void mt7996_vendor_register(struct mt7996_phy *phy)
 {
-	mt76_vendor_register(phy->mt76->dev, &mt7996_vendor_ops);
+	if (phy == &phy->dev->phy)
+		mt76_vendor_register(phy->mt76, &mt7996_vendor_ops);
 
 	INIT_LIST_HEAD(&phy->csi.list);
 	spin_lock_init(&phy->csi.lock);
