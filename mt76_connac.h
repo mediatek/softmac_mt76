@@ -27,8 +27,6 @@ enum rx_pkt_type {
 #define MT76_CONNAC_MAX_SCHED_SCAN_SSID		10
 #define MT76_CONNAC_MAX_SCAN_MATCH		16
 
-#define MT76_CONNAC_MAX_WMM_SETS		4
-
 #define MT76_CONNAC_COREDUMP_TIMEOUT		(HZ / 20)
 #define MT76_CONNAC_COREDUMP_SZ			(1300 * 1024)
 
@@ -53,6 +51,9 @@ enum rx_pkt_type {
 #define PCIE_AER_UNC_STATUS_OFFSET  0x204
 #define PCIE_AER_UNC_MASK_OFFSET    0x208
 #define PCIE_AER_CO_STATUS_OFFSET   0x210
+
+#define TXOP_STATS_TRX_PACKETS	0
+#define TXOP_STATS_TRX_BYTES	1
 
 enum {
 	CMD_CBW_20MHZ = IEEE80211_STA_RX_BW_20,
@@ -575,6 +576,8 @@ void mt76_connac2_txwi_free(struct mt76_dev *dev, struct mt76_txwi_cache *t,
 			    struct ieee80211_sta *sta,
 			    struct list_head *free_list);
 void mt76_connac2_tx_token_put(struct mt76_dev *dev);
+void mt76_connac2_update_txop_stats(struct mt76_dev *dev, u8 type,
+				    struct mt76_wcid *wcid, u32 tx, u32 rx);
 
 /* connac3 */
 void mt76_connac3_mac_decode_he_radiotap(struct sk_buff *skb, __le32 *rxv,
