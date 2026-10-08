@@ -470,7 +470,7 @@ struct mt76_vendor_ops {
 	int (*edcca_ctrl_dump)(struct mt76_dev *dev, u8 radio_idx,
 			       struct mt76_vendor_edcca_info *info);
 	int (*background_radar_ctrl)(struct mt76_dev *dev, bool disable_timer);
-	int (*dfs_tx_mode_ctrl)(struct mt76_dev *dev, u8 radio_idx, u8 mode);
+	int (*dfs_tx_ctrl)(struct mt76_phy *phy, u8 radio_idx, u8 mode);
 	void (*set_beacon)(struct ieee80211_vif *vif, u8 mode);
 };
 

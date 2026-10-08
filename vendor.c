@@ -654,7 +654,7 @@ int mt76_vendor_dfs_tx_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 	struct nlattr *tb[NUM_MTK_VENDOR_ATTRS_DFS_TX_CTRL];
 	int err;
 
-	if (!ops || !ops->dfs_tx_mode_ctrl)
+	if (!ops || !ops->dfs_tx_ctrl)
 		return -EOPNOTSUPP;
 
 	err = nla_parse(tb, MTK_VENDOR_ATTR_DFS_TX_CTRL_MAX, data, data_len,
@@ -665,7 +665,7 @@ int mt76_vendor_dfs_tx_ctrl(struct wiphy *wiphy, struct wireless_dev *wdev,
 	    !tb[MTK_VENDOR_ATTR_DFS_TX_CTRL_RADIO_IDX])
 		return -EINVAL;
 
-	return ops->dfs_tx_mode_ctrl(dev,
+	return ops->dfs_tx_ctrl(mphy,
 		nla_get_u8(tb[MTK_VENDOR_ATTR_DFS_TX_CTRL_RADIO_IDX]),
 		nla_get_u8(tb[MTK_VENDOR_ATTR_DFS_TX_CTRL_MODE]));
 }
