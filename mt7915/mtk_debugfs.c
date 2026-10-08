@@ -4323,6 +4323,8 @@ int mt7915_mtk_init_debugfs(struct mt7915_phy *phy, struct dentry *dir)
 	debugfs_create_file("ps_ctrl", 0200, dir, dev, &fops_ps_ctrl);
 	debugfs_create_file("full_reset_disable", 0600, dir, dev, &fops_full_reset_disable);
 
+	debugfs_create_bool("disable_dynamic_txop", 0600, dir, &dev->disable_dynamic_txop);
+
 	if (is_mt7981(&dev->mt76)) {
 		debugfs_create_file("tpt_option", 0200, dir, dev,
 				    &fops_tpt_option);

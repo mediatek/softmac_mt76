@@ -9,6 +9,7 @@
 #include "mac.h"
 #include "mcu.h"
 #include "../vendor.h"
+#include "../trace.h"
 
 #define to_rssi(field, rcpi)	((FIELD_GET(field, rcpi) - 220) / 2)
 
@@ -2123,6 +2124,96 @@ void mt7915_mac_sta_rc_work(struct work_struct *work)
 	spin_unlock_bh(&dev->mt76.sta_poll_lock);
 }
 
+static bool mt7915_mac_prefer_rx(struct mt76_phy *phy, u8 wmm_idx)
+{
+	/* Warning: TX packet counter currently is not updated & used. If it's
+	 * to be used in the future, refactor is needed to obtain its AC info
+	 * during accumulation.
+	 */
+	u64 rx_packets = phy->be_rx_packets[wmm_idx],
+	    tx_bytes = phy->be_tx_bytes[wmm_idx],
+	    rx_bytes = phy->be_rx_bytes[wmm_idx];
+	bool ret;
+
+	/* Under the condition of RX BE T-put >= 200 Mbps, if one of
+	 *   1. At 5GHz, BE TX is less than 5 times of BE RX
+	 *   2. BE RX packet size is larger than 1000 bytes
+	 * is true, we would adjust TXOP to favor RX BE traffic.
+	 */
+	if ((rx_bytes << 3 >> 20) < 200)
+		ret = false;
+	else if (tx_bytes / rx_bytes < 5 && phy->band_idx == MT_BAND1)
+		ret = true;
+	else if (rx_packets && rx_bytes / rx_packets >= 1000)
+		ret = true;
+	else
+		ret = false;
+
+	trace_mt76_mac_prefer_rx(phy, wmm_idx, ret);
+
+	return ret;
+}
+
+static void
+mt7915_update_vif_txop(void *priv, u8 *mac, struct ieee80211_vif *vif)
+{
+	struct mt7915_vif *mvif = (struct mt7915_vif *)vif->drv_priv;
+	u8 lmac_ac = mt76_connac_lmac_mapping(IEEE80211_AC_BE),
+	   wmm_idx = mvif->mt76.wmm_idx;
+	struct mt7915_dev *dev = priv;
+
+	if (mvif->queue_params[lmac_ac].txop != mvif->phy->mt76->be_txop[wmm_idx]) {
+		mvif->queue_params[lmac_ac].txop = mvif->phy->mt76->be_txop[wmm_idx];
+		mt7915_mcu_set_tx(dev, vif);
+	}
+}
+
+static void mt7915_mac_dynamic_txop(struct mt7915_dev *dev)
+{
+#define MT7915_TXOP_PREFER_TX	0xbb
+#define MT7915_TXOP_PREFER_RX	0x0
+	u8 band, i;
+
+#ifdef MTK_DEBUG
+	if (dev->disable_dynamic_txop)
+		return;
+#endif
+
+	for (band = MT_BAND0; band < __MT_MAX_BAND; band++) {
+		struct mt76_phy *phy = dev->mt76.phys[band];
+		bool update_txop = false;
+
+		if (!phy)
+			continue;
+
+		for (i = 0; i < MT76_CONNAC_MAX_WMM_SETS; i++) {
+			if (mt7915_mac_prefer_rx(phy, i)) {
+				if (phy->be_txop[i] != MT7915_TXOP_PREFER_RX) {
+					update_txop = true;
+					phy->be_txop[i] = MT7915_TXOP_PREFER_RX;
+				}
+			} else {
+				if (phy->be_txop[i] != MT7915_TXOP_PREFER_TX) {
+					update_txop = true;
+					phy->be_txop[i] = MT7915_TXOP_PREFER_TX;
+				}
+			}
+
+			phy->be_tx_bytes[i] = 0;
+			phy->be_tx_packets[i] = 0;
+			phy->be_rx_bytes[i] = 0;
+			phy->be_rx_packets[i] = 0;
+		}
+
+		if (update_txop) {
+			trace_mt76_mac_dynamic_txop(phy);
+			ieee80211_iterate_active_interfaces(phy->hw,
+							    IEEE80211_IFACE_ITER_RESUME_ALL,
+							    mt7915_update_vif_txop, dev);
+		}
+	}
+}
+
 void mt7915_mac_work(struct work_struct *work)
 {
 	struct mt7915_phy *phy;
@@ -2135,10 +2226,8 @@ void mt7915_mac_work(struct work_struct *work)
 	mutex_lock(&mphy->dev->mutex);
 
 	mt76_update_survey(mphy);
-	if (++mphy->mac_work_count == 5) {
+	if (++mphy->mac_work_count % 5 == 0) {
 		int i;
-
-		mphy->mac_work_count = 0;
 
 		mt7915_mac_update_stats(phy);
 		mt7915_mac_severe_check(phy);
@@ -2154,9 +2243,15 @@ void mt7915_mac_work(struct work_struct *work)
 				if (mt7915_mcu_wa_cmd(phy->dev, MCU_WA_PARAM_CMD(QUERY), MCU_WA_PARAM_BSS_ACQ_PKT_CNT,
 				                      BSS_ACQ_PKT_CNT_BSS_BITMAP_ALL | BSS_ACQ_PKT_CNT_READ_CLR, 0))
 					dev_err(mphy->dev->dev, "Failed to query per-AC-queue packet counts.\n");
+
+				if (mphy->mac_work_count % 10 == 0)
+					mt7915_mac_dynamic_txop(phy->dev);
 			} else if (test_bit(MT76_STATE_RUNNING, &mphy->dev->phys[i]->state))
 				break;
 		}
+
+		if (mphy->mac_work_count == 10)
+			mphy->mac_work_count = 0;
 	}
 
 	if (++phy->stats_work_count == 10) {

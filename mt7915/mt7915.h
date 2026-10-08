@@ -578,6 +578,7 @@ struct mt7915_dev {
 		u16 id;
 		u16 version;
 	} adie[ADIE_MAX_CNT];
+	bool disable_dynamic_txop;
 #endif
 
 	struct delayed_work scs_work;

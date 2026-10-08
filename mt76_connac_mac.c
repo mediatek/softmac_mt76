@@ -659,21 +659,25 @@ bool mt76_connac2_mac_fill_txs(struct mt76_dev *dev, struct mt76_wcid *wcid,
 
 	/* PPDU based reporting */
 	if (FIELD_GET(MT_TXS0_TXS_FORMAT, txs) > 1) {
-		ieee80211_tpt_led_trig_tx(mphy->hw,
-			le32_get_bits(txs_data[5], MT_TXS5_MPDU_TX_BYTE) -
-			le32_get_bits(txs_data[7], MT_TXS7_MPDU_RETRY_BYTE));
+		u32 tx_bytes = le32_get_bits(txs_data[5], MT_TXS5_MPDU_TX_BYTE) -
+			       le32_get_bits(txs_data[7], MT_TXS7_MPDU_RETRY_BYTE);
+		u8 tid = FIELD_GET(MT_TXS0_TID, txs);
 
-		stats->tx_bytes +=
-			le32_get_bits(txs_data[5], MT_TXS5_MPDU_TX_BYTE) -
-			le32_get_bits(txs_data[7], MT_TXS7_MPDU_RETRY_BYTE);
+		ieee80211_tpt_led_trig_tx(mphy->hw, tx_bytes);
+
+		stats->tx_bytes += tx_bytes;
 		stats->tx_failed +=
 			le32_get_bits(txs_data[6], MT_TXS6_MPDU_FAIL_CNT);
 		stats->tx_retries +=
 			le32_get_bits(txs_data[7], MT_TXS7_MPDU_RETRY_CNT);
 
+		if (tid_to_ac(tid) == IEEE80211_AC_BE)
+			mt76_connac2_update_txop_stats(dev, TXOP_STATS_TRX_BYTES,
+						       wcid, tx_bytes, 0);
+
 		if (wcid->sta) {
 			if (!le32_get_bits(txs_data[0], MT_TXS0_FIXED_RATE))
-				mt76_check_tx_ba_status(wcid, FIELD_GET(MT_TXS0_TID, txs));
+				mt76_check_tx_ba_status(wcid, tid);
 		}
 	}
 
@@ -1235,3 +1239,42 @@ void mt76_connac2_tx_token_put(struct mt76_dev *dev)
 	idr_destroy(&dev->token);
 }
 EXPORT_SYMBOL_GPL(mt76_connac2_tx_token_put);
+
+void mt76_connac2_update_txop_stats(struct mt76_dev *dev, u8 type,
+				    struct mt76_wcid *wcid, u32 tx, u32 rx)
+{
+	struct ieee80211_sta *sta = wcid_to_sta(wcid);
+	struct mt76_vif_link *mvif;
+	struct ieee80211_vif *vif;
+	struct mt76_phy *phy;
+	u8 wmm_idx;
+
+	if (!sta || !sta->txq[0] || !sta->txq[0]->vif)
+		return;
+
+	vif = sta->txq[0]->vif;
+	mvif = (struct mt76_vif_link *)vif->drv_priv;
+	wmm_idx = mvif->wmm_idx;
+	if (wmm_idx >= MT76_CONNAC_MAX_WMM_SETS) {
+		dev_err(dev->dev, "Invalid WMM index %u for WCID %u\n",
+			wmm_idx, wcid->idx);
+		return;
+	}
+
+	phy = mt76_dev_phy(dev, wcid->phy_idx);
+
+	switch (type) {
+	case TXOP_STATS_TRX_BYTES:
+		phy->be_tx_bytes[wmm_idx] += tx;
+		phy->be_rx_bytes[wmm_idx] += rx;
+		break;
+	case TXOP_STATS_TRX_PACKETS:
+		phy->be_tx_packets[wmm_idx] += tx;
+		phy->be_rx_packets[wmm_idx] += rx;
+		break;
+	default:
+		dev_err(dev->dev, "Invalid type: %u\n", type);
+		break;
+	}
+}
+EXPORT_SYMBOL_GPL(mt76_connac2_update_txop_stats);

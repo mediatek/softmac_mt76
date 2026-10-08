@@ -558,6 +558,9 @@ mt7915_conf_tx(struct ieee80211_hw *hw, struct ieee80211_vif *vif,
 {
 	struct mt7915_vif *mvif = (struct mt7915_vif *)vif->drv_priv;
 
+	if (queue == IEEE80211_AC_BE)
+		mvif->phy->mt76->be_txop[mvif->mt76.wmm_idx] = params->txop;
+
 	/* no need to update right away, we'll get BSS_CHANGED_QOS */
 	queue = mt76_connac_lmac_mapping(queue);
 	mvif->queue_params[queue] = *params;

@@ -94,6 +94,8 @@
 				 FIELD_PREP(MT_QFLAG_WED_RING, _n))
 #define SKU_FILENAME_MAX	64
 
+#define MT76_CONNAC_MAX_WMM_SETS	4
+
 struct mt76_dev;
 struct mt76_phy;
 struct mt76_wcid;
@@ -1179,6 +1181,12 @@ struct mt76_phy {
 	struct mt76_tx_debug tx_dbg_stats;
 	struct mt76_rx_debug rx_dbg_stats;
 #endif
+
+	u32 be_tx_bytes[MT76_CONNAC_MAX_WMM_SETS];
+	u32 be_tx_packets[MT76_CONNAC_MAX_WMM_SETS];
+	u32 be_rx_bytes[MT76_CONNAC_MAX_WMM_SETS];
+	u32 be_rx_packets[MT76_CONNAC_MAX_WMM_SETS];
+	u16 be_txop[MT76_CONNAC_MAX_WMM_SETS];
 };
 
 struct mt76_dev {
@@ -2493,6 +2501,22 @@ mt76_vif_link_phy(struct mt76_dev *dev, struct mt76_vif_link *mlink)
 		return NULL;
 
 	return dev->phys[mlink->band_idx];
+}
+
+static inline int tid_to_ac(u8 tid)
+{
+	static const int ieee802_1d_to_ac[8] = {
+		IEEE80211_AC_BE,
+		IEEE80211_AC_BK,
+		IEEE80211_AC_BK,
+		IEEE80211_AC_BE,
+		IEEE80211_AC_VI,
+		IEEE80211_AC_VI,
+		IEEE80211_AC_VO,
+		IEEE80211_AC_VO
+	};
+
+	return ieee802_1d_to_ac[tid & 7];
 }
 
 #endif

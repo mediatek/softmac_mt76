@@ -595,14 +595,25 @@ static void mt7915_mmio_wed_update_rx_stats(struct mtk_wed_device *wed,
 
 	wcid = mt76_wcid_ptr(dev, idx);
 	if (wcid) {
-		mphy = mt76_dev_phy(&dev->mt76, wcid->phy_idx);
-		ieee80211_tpt_led_trig_rx(mphy->hw,
-					  le32_to_cpu(stats->rx_byte_cnt));
+		u32 rx_bytes = le32_to_cpu(stats->rx_byte_cnt),
+		    rx_packets = le32_to_cpu(stats->rx_pkt_cnt);
 
-		wcid->stats.rx_bytes += le32_to_cpu(stats->rx_byte_cnt);
-		wcid->stats.rx_packets += le32_to_cpu(stats->rx_pkt_cnt);
+		mphy = mt76_dev_phy(&dev->mt76, wcid->phy_idx);
+		ieee80211_tpt_led_trig_rx(mphy->hw, rx_bytes);
+
+		wcid->stats.rx_bytes += rx_bytes;
+		wcid->stats.rx_packets += rx_packets;
 		wcid->stats.rx_errors += le32_to_cpu(stats->rx_err_cnt);
 		wcid->stats.rx_drops += le32_to_cpu(stats->rx_drop_cnt);
+
+		if (tid_to_ac(le16_to_cpu(stats->tid)) == IEEE80211_AC_BE) {
+			mt76_connac2_update_txop_stats(&dev->mt76,
+						       TXOP_STATS_TRX_BYTES,
+						       wcid, 0, rx_bytes);
+			mt76_connac2_update_txop_stats(&dev->mt76,
+						       TXOP_STATS_TRX_PACKETS,
+						       wcid, 0, rx_packets);
+		}
 
 		if (wiphy_ext_feature_isset(dev->mphy.hw->wiphy,
 					    NL80211_EXT_FEATURE_STAS_COUNT)) {
@@ -623,8 +634,7 @@ static void mt7915_mmio_wed_update_rx_stats(struct mtk_wed_device *wed,
 			if (vif->type == NL80211_IFTYPE_MONITOR)
 				goto unlock;
 
-			__dev_sw_netstats_rx_add(wdev->netdev, le32_to_cpu(stats->rx_pkt_cnt),
-						 le32_to_cpu(stats->rx_byte_cnt));
+			__dev_sw_netstats_rx_add(wdev->netdev, rx_packets, rx_bytes);
 		}
 	}
 
