@@ -1,6 +1,6 @@
-/* SPDX-License-Identifier: ISC */
+/* SPDX-License-Identifier: BSD-3-Clause-Clear */
 /*
- * Copyright (C) 2024 MediaTek Inc.
+ * Copyright (C) 2024-2026 MediaTek Inc.
  */
 #ifndef __MT76_DEBUG_H_
 #define __MT76_DEBUG_H_

@@ -1,3 +1,6 @@
+/* SPDX-License-Identifier: BSD-3-Clause-Clear */
+/* Copyright (C) 2020-2026 MediaTek Inc. */
+
 #include <linux/firmware.h>
 #include <linux/fs.h>
 #include<linux/inet.h>

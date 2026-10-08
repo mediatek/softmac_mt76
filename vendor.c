@@ -1,4 +1,7 @@
-// SPDX-License-Identifier: ISC
+/* SPDX-License-Identifier: BSD-3-Clause-Clear */
+/*
+ * Copyright (C) 2026 MediaTek Inc.
+ */
 
 #include "mt76.h"
 #include "mt76_connac_mcu.h"

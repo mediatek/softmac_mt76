@@ -1,3 +1,6 @@
+/* SPDX-License-Identifier: BSD-3-Clause-Clear */
+/* Copyright (C) 2020-2026 MediaTek Inc. */
+
 #ifndef __MT7915_DEBUG_H
 #define __MT7915_DEBUG_H
 
