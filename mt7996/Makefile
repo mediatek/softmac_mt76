@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: ISC
+# SPDX-License-Identifier: BSD-3-Clause-Clear
 EXTRA_CFLAGS += -Werror -std=gnu11
 EXTRA_CFLAGS += -DCONFIG_MT76_LEDS
 EXTRA_CFLAGS += -DCONFIG_MTK_DEBUG

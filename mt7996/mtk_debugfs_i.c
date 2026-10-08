@@ -1,3 +1,8 @@
+/* SPDX-License-Identifier: BSD-3-Clause-Clear */
+/*
+ * Copyright (C) 2023 MediaTek Inc.
+ */
+
 #include <linux/inet.h>
 #include "mt7996.h"
 #include "../mt76.h"
