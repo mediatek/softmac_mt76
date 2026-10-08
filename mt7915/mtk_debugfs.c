@@ -1,3 +1,6 @@
+/* SPDX-License-Identifier: BSD-3-Clause-Clear */
+/* Copyright (C) 2020-2026 MediaTek Inc. */
+
 #include<linux/inet.h>
 #include "mt7915.h"
 #include "mt7915_debug.h"

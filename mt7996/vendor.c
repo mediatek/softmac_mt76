@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: ISC
+// SPDX-License-Identifier: BSD-3-Clause-Clear
 /*
- * Copyright (C) 2020, MediaTek Inc. All rights reserved.
+ * Copyright (C) 2022, MediaTek Inc. All rights reserved.
  */
 
 #include <net/netlink.h>

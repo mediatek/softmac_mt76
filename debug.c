@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: ISC
+// SPDX-License-Identifier: BSD-3-Clause-Clear
 /*
- * Copyright (C) 2024 MediaTek Inc.
+ * Copyright (C) 2024-2026 MediaTek Inc.
  */
 
 #include <linux/vmalloc.h>

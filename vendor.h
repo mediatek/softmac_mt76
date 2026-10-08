@@ -2,6 +2,7 @@
 /*
  * Copyright (C) 2026 MediaTek Inc.
  */
+
 #ifndef __MT76_VENDOR_H
 #define __MT76_VENDOR_H
 
