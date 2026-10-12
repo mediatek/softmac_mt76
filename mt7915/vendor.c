@@ -1381,6 +1381,7 @@ static int mt7915_vendor_txpower_ctrl(struct wiphy *wiphy,
 				  tb[MTK_VENDOR_ATTR_TXPOWER_CTRL_SKU_FILENAME],
 				  SKU_FILENAME_MAX);
 
+		mphy->sku_idx = 0;
 		if (err > 0 && mphy->sku_filename[0]) {
 			struct ieee80211_channel *chan = mphy->main_chandef.chan;
 
@@ -1403,6 +1404,7 @@ static int mt7915_vendor_txpower_ctrl(struct wiphy *wiphy,
 		if (mt76_find_power_limits_node(mphy) == NULL)
 			mphy->sku_idx = 0;
 
+		mphy->sku_filename[0] = '\0';
 		if (orig_sku_idx != mphy->sku_idx)
 			mt7915_init_txpower(phy);
 
