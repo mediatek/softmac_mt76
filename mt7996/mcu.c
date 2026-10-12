@@ -590,7 +590,6 @@ mt7996_mcu_rx_radar_detected(struct mt7996_dev *dev, struct sk_buff *skb)
 	if (!r->long_detected && !r->constant_prf_detected &&
 	    !r->staggered_prf_detected && !phy->rdd_emulate) {
 		dev_err(dev->mt76.dev, "Unknown pulse\n");
-		phy->rdd_emulate = false;
 		return;
 	}
 
@@ -6229,7 +6228,7 @@ int mt7996_mcu_set_fcc5_lpn(struct mt7996_dev *dev, int val)
 		.tag = cpu_to_le16(UNI_RDD_CTRL_SET_TH),
 		.len = cpu_to_le16(sizeof(req) - 4),
 
-		.ctrl = cpu_to_le32(0x1),
+		.ctrl = cpu_to_le32(RDD_FCC5_LPN_UPDATE),
 		.min_lpn = cpu_to_le16(val),
 	};
 
@@ -6259,7 +6258,7 @@ int mt7996_mcu_set_pulse_th(struct mt7996_dev *dev,
 		.tag = cpu_to_le16(UNI_RDD_CTRL_SET_TH),
 		.len = cpu_to_le16(sizeof(req) - 4),
 
-		.ctrl = cpu_to_le32(0x3),
+		.ctrl = cpu_to_le32(RDD_PULSE_THRESHOLD_UPDATE),
 
 #define __req_field(field) .field = cpu_to_le32(pulse->field)
 		__req_field(max_width),
@@ -6308,7 +6307,7 @@ int mt7996_mcu_set_radar_th(struct mt7996_dev *dev, int index,
 		.tag = cpu_to_le16(UNI_RDD_CTRL_SET_TH),
 		.len = cpu_to_le16(sizeof(req) - 4),
 
-		.ctrl = cpu_to_le32(0x2),
+		.ctrl = cpu_to_le32(RDD_RADAR_THRESHOLD_UPDATE),
 		.radar_type = cpu_to_le16(index),
 
 #define __req_field_u8(field) .field = pattern->field

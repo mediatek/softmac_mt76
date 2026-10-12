@@ -498,7 +498,6 @@ mt7999_mcu_rx_radar_detected(struct mt7999_dev *dev, struct sk_buff *skb)
 	if (!r->long_detected && !r->constant_prf_detected &&
 	    !r->staggered_prf_detected && !phy->rdd_emulate) {
 		dev_err(dev->mt76.dev, "Unknown pulse\n");
-		phy->rdd_emulate = false;
 		return;
 	}
 

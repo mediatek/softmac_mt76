@@ -337,16 +337,25 @@ mt7915_mcu_rx_radar_detected(struct mt7915_dev *dev, struct sk_buff *skb)
 		break;
 	case MT_RDD_IDX_BACKGROUND:
 		if (!dev->rdd2_phy)
-			return;
+			goto err;
 		mphy = dev->rdd2_phy->mt76;
 		break;
 	default:
-		dev_err(dev->mt76.dev, "Unknown RDD idx %d\n", r->rdd_idx);
-		return;
+		goto err;
 	}
 
 	if (!mphy)
+		goto err;
+
+#ifdef CONFIG_MTK_DEBUG
+	mt7915_mcu_dump_radar_pulse(dev, r);
+#endif
+
+	if (!r->long_detected && !r->constant_prf_detected &&
+	    !r->staggered_prf_detected && !dev->rdd_emulate) {
+		dev_err(dev->mt76.dev, "Unknown pulse\n");
 		return;
+	}
 
 	if (r->rdd_idx == MT_RDD_IDX_BACKGROUND) {
 		cfg80211_background_radar_event(mphy->hw->wiphy,
@@ -359,6 +368,14 @@ mt7915_mcu_rx_radar_detected(struct mt7915_dev *dev, struct sk_buff *skb)
 		ieee80211_radar_detected(mphy->hw, NULL);
 	}
 	dev->hw_pattern++;
+	dev->rdd_emulate = false;
+
+	dev_info(dev->mt76.dev, "radar detected on %s\n",
+		 r->rdd_idx == MT_RDD_IDX_BACKGROUND ? "background radar" : "main radio");
+	return;
+
+err:
+	dev_err(dev->mt76.dev, "Unknown RDD idx %d\n", r->rdd_idx);
 }
 
 int mt7915_mcu_rdd_resume_tx(struct mt7915_phy *phy)
@@ -2776,7 +2793,7 @@ int mt7915_mcu_set_fcc5_lpn(struct mt7915_dev *dev, int val)
 		__le16 min_lpn;
 		u8 rsv[2];
 	} __packed req = {
-		.tag = cpu_to_le32(0x1),
+		.tag = cpu_to_le32(RDD_FCC5_LPN_UPDATE),
 		.min_lpn = cpu_to_le16(val),
 	};
 
@@ -2798,7 +2815,7 @@ int mt7915_mcu_set_pulse_th(struct mt7915_dev *dev,
 		__le32 min_cr_pri;		/* us */
 		__le32 max_cr_pri;		/* us */
 	} __packed req = {
-		.tag = cpu_to_le32(0x3),
+		.tag = cpu_to_le32(RDD_PULSE_THRESHOLD_UPDATE),
 
 #define __req_field(field) .field = cpu_to_le32(pulse->field)
 		__req_field(max_width),
@@ -2839,7 +2856,7 @@ int mt7915_mcu_set_radar_th(struct mt7915_dev *dev, int index,
 		u8 rsv[2];
 		__le32 min_stgpr_diff;
 	} __packed req = {
-		.tag = cpu_to_le32(0x2),
+		.tag = cpu_to_le32(RDD_RADAR_THRESHOLD_UPDATE),
 		.radar_type = cpu_to_le16(index),
 
 #define __req_field_u8(field) .field = pattern->field

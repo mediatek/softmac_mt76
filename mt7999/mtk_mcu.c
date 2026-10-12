@@ -1872,12 +1872,14 @@ mt7999_mcu_dump_radar_pulse_buffer(struct mt7999_dev *dev, u8 pulse_num,
 		u32 diff, pri_value = 0;
 		char str[160];
 
-		if (pidx) {
-			diff = le_to_cpu(buff[pidx].start) - le_to_cpu(buff[pidx - 1].start);
-			pri_value = TIME_TRANS((diff + MAX_TIME) % MAX_TIME);
-		}
-
-		if (pulse_type == HW_PULSE)
+		if (pulse_type != HW_PULSE) {
+			if (pidx) {
+				diff = le_to_cpu(buff[pidx].start) -
+				       le_to_cpu(buff[pidx - 1].start);
+				pri_value = TIME_TRANS((diff + MAX_TIME) % MAX_TIME);
+			}
+			snprintf(str, sizeof(str), "%30d", pri_value);
+		} else {
 			snprintf(str, sizeof(str),
 				 "%20s | %12s | %22u | %9u | %6u | %18u | %16u | %14u",
 				 buff[pidx].hw.sc_pass ? "true" : "false",
@@ -1888,8 +1890,7 @@ mt7999_mcu_dump_radar_pulse_buffer(struct mt7999_dev *dev, u8 pulse_num,
 				 le_to_cpu(ext_buff[pidx].fc_est_end),
 				 le_to_cpu(ext_buff[pidx].fc_est_start),
 				 ext_buff[pidx].rssi_max_idx);
-		else
-			snprintf(str, sizeof(str), "%30d", pri_value);
+		}
 
 		dev_info(dev->mt76.dev, "%5u | %15u | %16u | %11d | %s\n",
 			 pidx, TIME_TRANS(buff[pidx].start),

@@ -3764,6 +3764,29 @@ static int mt7915_show_eeprom_mode(struct seq_file *s, void *data)
 }
 
 static int
+mt7915_radar_log(void *data, u64 val)
+{
+	struct mt7915_dev *dev = data;
+	enum {
+		RDD_DETMODE_OFF,
+		RDD_DETMODE_ON,		/* send rdd report only when radar is detected */
+		RDD_DETMODE_DEBUG,	/* send rdd report every interrupt for debugging */
+		RDD_DETMODE_NUM,
+	};
+
+	if (val >= RDD_DETMODE_NUM)
+		return -EINVAL;
+
+	dev->rdd_log_en = !!val;
+	mt76_connac_mcu_rdd_cmd(&dev->mt76, RDD_DET_MODE, 0, 0, val);
+
+	return mt7915_mcu_set_rdd_log_config(dev, !!(val <= RDD_DETMODE_ON));
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(fops_radar_log, NULL,
+			 mt7915_radar_log, "%lld\n");
+
+static int
 mt7915_sw_aci_set(void *data, u64 val)
 {
 	struct mt7915_dev *dev = data;
@@ -4135,6 +4158,8 @@ int mt7915_mtk_init_debugfs(struct mt7915_phy *phy, struct dentry *dir)
 
 	debugfs_create_devm_seqfile(dev->mt76.dev, "eeprom_mode", dir,
 				    mt7915_show_eeprom_mode);
+	if (!dev->dbdc_support || phy->mt76->band_idx)
+		debugfs_create_file("radar_log", 0200, dir, dev, &fops_radar_log);
 	debugfs_create_file("sw_aci", 0600, dir, dev,
 			    &fops_sw_aci);
 	debugfs_create_file("sr_enable", 0600, dir, phy, &fops_sr_enable);

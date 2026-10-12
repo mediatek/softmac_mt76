@@ -180,12 +180,6 @@ struct mt7999_rdd_ctrl {
 	u8 rsv[3];
 } __packed;
 
-enum {
-	RDD_FCC5_LPN_UPDATE = 1,
-	RDD_RADAR_THRESHOLD_UPDATE,
-	RDD_PULSE_THRESHOLD_UPDATE,
-};
-
 struct mt7999_mcu_background_chain_ctrl {
 	u8 _rsv[4];
 

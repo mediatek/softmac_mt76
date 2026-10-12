@@ -475,6 +475,9 @@ struct mt7915_dev {
 
 	u8 monitor_mask;
 
+	bool rdd_emulate;
+	bool rdd_log_en;
+
 	struct dentry *debugfs_dir;
 	struct rchan *relay_fwlog;
 
@@ -919,6 +922,8 @@ void mt7915_packet_log_to_host(struct mt7915_dev *dev, const void *data, int len
 int mt7915_mcu_set_amsdu_algo(struct mt7915_dev *dev, u16 wcid, u8 enable);
 int mt7915_mcu_sw_aci_set(struct mt7915_dev *dev, bool val);
 const char *mt7915_eeprom_name(struct mt7915_dev *dev);
+int mt7915_mcu_set_rdd_log_config(struct mt7915_dev *dev, u8 val);
+void mt7915_mcu_dump_radar_pulse(struct mt7915_dev *dev, void *rdd_report);
 
 #define PKT_BIN_DEBUG_MAGIC	0xc8763123
 enum {

@@ -1724,19 +1724,20 @@ mt7996_mcu_dump_radar_pulse_buffer(struct mt7996_dev *dev, u8 pulse_num,
 		u32 diff, pri_value = 0;
 		char str[80];
 
-		if (pidx) {
-			diff = le_to_cpu(buff[pidx].start) - le_to_cpu(buff[pidx - 1].start);
-			pri_value = TIME_TRANS((diff + MAX_TIME) % MAX_TIME);
-		}
-
-		if (pulse_type == HW_PULSE)
+		if (pulse_type != HW_PULSE) {
+			if (pidx) {
+				diff = le_to_cpu(buff[pidx].start) -
+				       le_to_cpu(buff[pidx - 1].start);
+				pri_value = TIME_TRANS((diff + MAX_TIME) % MAX_TIME);
+			}
+			snprintf(str, sizeof(str), "%30d", pri_value);
+		} else {
 			snprintf(str, sizeof(str), "%20s | %12s | %22u | %9u",
 				 buff[pidx].hw.sc_pass ? "true" : "false",
 				 buff[pidx].hw.sw_reset ? "true" : "false",
 				 buff[pidx].hw.mdrdy_flag,
 				 buff[pidx].hw.tx_active);
-		else
-			snprintf(str, sizeof(str), "%30d", pri_value);
+		}
 
 		dev_info(dev->mt76.dev, "%5u | %15u | %16u | %11d | %s\n",
 			 pidx, TIME_TRANS(buff[pidx].start),
