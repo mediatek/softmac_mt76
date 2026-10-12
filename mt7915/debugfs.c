@@ -90,6 +90,7 @@ mt7915_sys_recovery_set(struct file *file, const char __user *user_buf,
 	 * 9: trigger firmware crash.
 	 * 10: trigger grab wa firmware coredump.
 	 * 11: trigger grab wm firmware coredump.
+	 * 12: hw bit detect only.
 	 */
 	case SER_QUERY:
 		ret = mt7915_mcu_set_ser(dev, 0, 0, band);
@@ -129,6 +130,10 @@ mt7915_sys_recovery_set(struct file *file, const char __user *user_buf,
 		break;
 	case SER_SET_FW_COREDUMP_WM:
 		mt7915_coredump(dev, MT7915_COREDUMP_MANUAL_WM);
+		break;
+	case SER_SET_HW_BIT_DETECT_ONLY:
+		ret = mt7915_mcu_set_ser(dev, SER_ENABLE, BIT(0), band);
+		break;
 	default:
 		break;
 	}
@@ -176,7 +181,8 @@ mt7915_sys_recovery_get(struct file *file, char __user *user_buf,
 			  "10: trigger grab wa firmware coredump\n");
 	desc += scnprintf(buff + desc, bufsz - desc,
 			  "11: trigger grab wm firmware coredump\n");
-
+	desc += scnprintf(buff + desc, bufsz - desc,
+			  "12: hw bit detect only\n");
 	/* SER statistics */
 	desc += scnprintf(buff + desc, bufsz - desc,
 			  "\nlet's dump firmware SER statistics...\n");
