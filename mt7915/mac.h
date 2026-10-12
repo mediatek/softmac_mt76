@@ -63,13 +63,7 @@ struct mt7915_dfs_pattern {
 	u8 min_stgpn;
 	u8 max_stgpn;
 	u8 min_stgpr;
-	u8 rsv[2];
 	u32 min_stgpr_diff;
 } __packed;
-
-struct mt7915_dfs_radar_spec {
-	struct mt7915_dfs_pulse pulse_th;
-	struct mt7915_dfs_pattern radar_pattern[16];
-};
 
 #endif

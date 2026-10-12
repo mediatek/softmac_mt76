@@ -668,14 +668,23 @@ mt7915_radar_trigger(void *data, u64 val)
 #define RADAR_BACKGROUND	2
 	struct mt7915_phy *phy = data;
 	struct mt7915_dev *dev = phy->dev;
-	int rdd_idx;
+	struct cfg80211_chan_def *chandef;
+	int rdd_idx, ret;
+
+	if (test_bit(MT76_SCANNING, &phy->mt76->state))
+		return -EBUSY;
 
 	if (!val || val > RADAR_BACKGROUND)
 		return -EINVAL;
 
-	if (val == RADAR_BACKGROUND && !dev->rdd2_phy) {
-		dev_err(dev->mt76.dev, "Background radar is not enabled\n");
-		return -EINVAL;
+	if (val == RADAR_BACKGROUND) {
+		if (!dev->rdd2_phy || !cfg80211_chandef_valid(&dev->rdd2_chandef)) {
+			dev_err(dev->mt76.dev, "Background radar is not enabled\n");
+			return -EINVAL;
+		}
+		chandef = &dev->rdd2_chandef;
+	} else {
+		chandef = &phy->mt76->chandef;
 	}
 
 	rdd_idx = mt7915_get_rdd_idx(phy, val == RADAR_BACKGROUND);
@@ -684,6 +693,12 @@ mt7915_radar_trigger(void *data, u64 val)
 		return -EINVAL;
 	}
 
+	ret = cfg80211_chandef_dfs_required(phy->mt76->hw->wiphy, chandef,
+					    NL80211_IFTYPE_AP);
+	if (ret <= 0)
+		return ret;
+
+	dev->rdd_emulate = true;
 	return mt76_connac_mcu_rdd_cmd(&dev->mt76, RDD_RADAR_EMULATE,
 				       rdd_idx, 0, 0);
 }
@@ -954,6 +969,99 @@ out:
 
 	return ret;
 }
+
+static ssize_t mt7915_rdd_radar_th_set(struct file *file,
+				       const char __user *user_buf,
+				       size_t count, loff_t *ppos)
+{
+	struct mt7915_dev *dev = file->private_data;
+	struct mt7915_dfs_pattern p;
+	char buf[100];
+	int ret, radar_type;
+
+	if (count >= sizeof(buf))
+		return -EINVAL;
+
+	if (copy_from_user(buf, user_buf, count))
+		return -EFAULT;
+
+	if (count && buf[count - 1] == '\n')
+		buf[count - 1] = '\0';
+	else
+		buf[count] = '\0';
+
+	if (sscanf(buf,
+		   "%d %hhu %hhu %hhu %hhu %hhu %hhu %u %u %hhu %hhu %hhu %hhu %hhu %hhu %u",
+		   &radar_type, &p.enb, &p.stgr, &p.min_crpn, &p.max_crpn, &p.min_crpr,
+		   &p.min_pw, &p.min_pri, &p.max_pri, &p.max_pw, &p.min_crbn, &p.max_crbn,
+		   &p.min_stgpn, &p.max_stgpn, &p.min_stgpr, &p.min_stgpr_diff) != 16) {
+		dev_err(dev->mt76.dev, "Invalid format\n");
+		return -EINVAL;
+	}
+
+	ret = mt7915_mcu_set_radar_th(dev, radar_type, &p);
+	if (ret)
+		return ret;
+	return count;
+}
+
+static const struct file_operations fops_rdd_radar_th = {
+	.write = mt7915_rdd_radar_th_set,
+	.open = simple_open,
+	.owner = THIS_MODULE,
+	.llseek = default_llseek,
+};
+
+static ssize_t mt7915_rdd_pulse_th_set(struct file *file,
+				       const char __user *user_buf,
+				       size_t count, loff_t *ppos)
+{
+	struct mt7915_dev *dev = file->private_data;
+	struct mt7915_dfs_pulse p;
+	char buf[100];
+	int ret;
+
+	if (count >= sizeof(buf))
+		return -EINVAL;
+
+	if (copy_from_user(buf, user_buf, count))
+		return -EFAULT;
+
+	if (count && buf[count - 1] == '\n')
+		buf[count - 1] = '\0';
+	else
+		buf[count] = '\0';
+
+	if (sscanf(buf,
+		   "%u %d %d %u %u %u %u",
+		   &p.max_width, &p.max_pwr, &p.min_pwr, &p.min_stgr_pri,
+		   &p.max_stgr_pri, &p.min_cr_pri, &p.max_cr_pri) != 7) {
+		dev_err(dev->mt76.dev, "Invalid format\n");
+		return -EINVAL;
+	}
+
+	ret = mt7915_mcu_set_pulse_th(dev, &p);
+	if (ret)
+		return ret;
+	return count;
+}
+
+static const struct file_operations fops_rdd_pulse_th = {
+	.write = mt7915_rdd_pulse_th_set,
+	.open = simple_open,
+	.owner = THIS_MODULE,
+	.llseek = default_llseek,
+};
+
+static int mt7915_rdd_fcc5_lpn_set(void *data, u64 val)
+{
+	struct mt7915_dev *dev = data;
+
+	return mt7915_mcu_set_fcc5_lpn(dev, val);
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(fops_rdd_fcc5_lpn, NULL,
+			 mt7915_rdd_fcc5_lpn_set, "%lld\n");
 
 static int
 mt7915_fw_debug_wm_set(void *data, u64 val)
@@ -2037,6 +2145,9 @@ int mt7915_init_debugfs(struct mt7915_phy *phy)
 				    &fops_radar_trigger);
 		debugfs_create_devm_seqfile(dev->mt76.dev, "rdd_monitor", dir,
 					    mt7915_rdd_monitor);
+		debugfs_create_file("rdd_radar_th", 0200, dir, dev, &fops_rdd_radar_th);
+		debugfs_create_file("rdd_pulse_th", 0200, dir, dev, &fops_rdd_pulse_th);
+		debugfs_create_file("rdd_fcc5_lpn", 0200, dir, dev, &fops_rdd_fcc5_lpn);
 	}
 	debugfs_create_file("otp", 0400, dir, dev, &mt7915_efuse_ops);
 	debugfs_create_file("power_table_filename", 0600, dir, phy,

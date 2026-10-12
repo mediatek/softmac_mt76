@@ -1989,8 +1989,7 @@ mt7915_set_radar_background(struct ieee80211_hw *hw,
 		  cfg80211_chandef_valid(&dev->rdd2_chandef) &&
 		  !!(dev->rdd2_chandef.chan->flags & IEEE80211_CHAN_RADAR);
 
-	if (!chandef || running ||
-	    !(chandef->chan->flags & IEEE80211_CHAN_RADAR)) {
+	if (!chandef || running) {
 		ret = mt7915_mcu_rdd_background_enable(phy, NULL);
 		if (ret)
 			goto out;

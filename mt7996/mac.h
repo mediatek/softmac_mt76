@@ -33,7 +33,6 @@ struct mt7996_dfs_pattern {
 	u8 min_stgpn;
 	u8 max_stgpn;
 	u8 min_stgpr;
-	u8 rsv[2];
 	u32 min_stgpr_diff;
 } __packed;
 
