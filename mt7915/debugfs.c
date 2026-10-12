@@ -8,7 +8,7 @@
 #include "mac.h"
 
 #define FW_BIN_LOG_MAGIC	0x44e98caf
-#ifdef MTK_DEBUG
+#ifdef CONFIG_MTK_DEBUG
 #define FW_BIN_LOG_MAGIC_V2	0x44d9c99a
 #endif
 static ssize_t
@@ -970,7 +970,7 @@ mt7915_fw_debug_wm_set(void *data, u64 val)
 	int ret;
 
 	dev->fw.debug_wm = val ? MCU_FW_LOG_TO_HOST : 0;
-#ifdef MTK_DEBUG
+#ifdef CONFIG_MTK_DEBUG
 	dev->fw.debug_wm = val;
 #endif
 
@@ -997,7 +997,7 @@ mt7915_fw_debug_wm_set(void *data, u64 val)
 		if (ret)
 			goto out;
 	}
-#ifdef MTK_DEBUG
+#ifdef CONFIG_MTK_DEBUG
 	mt7915_mcu_fw_dbg_ctrl(dev, 68, !!val);
 #endif
 
@@ -1008,7 +1008,7 @@ mt7915_fw_debug_wm_set(void *data, u64 val)
 	mt76_wr(dev, MT_MCU_WM_CIRQ_IRQ_MASK_CLR_ADDR, BIT(5));
 	mt76_wr(dev, MT_MCU_WM_CIRQ_IRQ_SOFT_ADDR, BIT(5));
 
-#ifdef MTK_DEBUG
+#ifdef CONFIG_MTK_DEBUG
 	if (dev->fw.debug_bin & BIT(3))
 		/* use bit 7 to indicate v2 magic number */
 		dev->fw.debug_wm |= BIT(7);
@@ -1026,7 +1026,7 @@ mt7915_fw_debug_wm_get(void *data, u64 *val)
 {
 	struct mt7915_dev *dev = data;
 
-#ifdef MTK_DEBUG
+#ifdef CONFIG_MTK_DEBUG
 	*val = dev->fw.debug_wm & ~BIT(7);
 #else
 	val = dev->fw.debug_wm;
@@ -1120,7 +1120,7 @@ mt7915_fw_debug_bin_set(void *data, u64 val)
 
 	relay_reset(dev->relay_fwlog);
 
-#ifdef MTK_DEBUG
+#ifdef CONFIG_MTK_DEBUG
 	dev->dbg.dump_mcu_pkt = val & BIT(4) ? true : false;
 	dev->dbg.dump_txd = val & BIT(5) ? true : false;
 	dev->dbg.dump_tx_pkt = val & BIT(6) ? true : false;
@@ -2048,7 +2048,7 @@ int mt7915_init_debugfs(struct mt7915_phy *phy)
 	if (!ext_phy)
 		dev->debugfs_dir = dir;
 
-#ifdef MTK_DEBUG
+#ifdef CONFIG_MTK_DEBUG
 	debugfs_create_u16("wlan_idx", 0600, dir, &dev->wlan_idx);
 	mt7915_mtk_init_debugfs(phy, dir);
 #endif
@@ -2099,7 +2099,7 @@ void mt7915_debugfs_rx_fw_monitor(struct mt7915_dev *dev, const void *data, int 
 		.msg_type = cpu_to_le16(PKT_TYPE_RX_FW_MONITOR),
 	};
 
-#ifdef MTK_DEBUG
+#ifdef CONFIG_MTK_DEBUG
 	struct {
 		__le32 magic;
 		u8 version;
@@ -2115,7 +2115,7 @@ void mt7915_debugfs_rx_fw_monitor(struct mt7915_dev *dev, const void *data, int 
 	};
 #endif
 
-#ifdef MTK_DEBUG
+#ifdef CONFIG_MTK_DEBUG
 	/* old magic num */
 	if (!(dev->fw.debug_wm & BIT(7))) {
 		hdr.timestamp = mt76_rr(dev, MT_LPON_FRCR(0));
@@ -2136,7 +2136,7 @@ void mt7915_debugfs_rx_fw_monitor(struct mt7915_dev *dev, const void *data, int 
 
 bool mt7915_debugfs_rx_log(struct mt7915_dev *dev, const void *data, int len)
 {
-#ifdef MTK_DEBUG
+#ifdef CONFIG_MTK_DEBUG
 	if (get_unaligned_le32(data) != FW_BIN_LOG_MAGIC &&
 	    get_unaligned_le32(data) != FW_BIN_LOG_MAGIC_V2 &&
 	    get_unaligned_le32(data) != PKT_BIN_DEBUG_MAGIC)

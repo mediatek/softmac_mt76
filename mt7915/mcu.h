@@ -36,45 +36,6 @@ struct mt7915_mcu_thermal_notify {
 	u8 rsv[8];
 } __packed;
 
-#ifdef MTK_DEBUG
-struct mt7915_mcu_sr_basic_event {
-	struct mt76_connac2_mcu_rxd rxd;
-
-	u8 sub_event_id;
-	u8 arg_num;
-	u8 band_idx;
-	u8 status;
-	u8 rsv[4];
-	__le32 value;
-} __packed;
-
-struct mt7915_mcu_sr_swsd_event {
-	struct mt7915_mcu_sr_basic_event basic;
-	u8 rsv[32];
-	__le32 sr_tx_airtime[2];
-	__le32 obss_airtime[2];
-	__le32 my_tx_airtime[2];
-	__le32 my_rx_airtime[2];
-	__le32 channel_busy_time[2];
-	__le32 total_airtime[2];
-	__le32 total_airtime_ratio[2];
-	__le32 obss_airtime_ratio[2];
-	u8 rule[2];
-	u8 rsv2[102];
-} __packed;
-
-struct mt7915_mcu_sr_hw_ind_event {
-	struct mt7915_mcu_sr_basic_event basic;
-	u8 rsv[2];
-	__le16 non_srg_valid_cnt;
-	u8 rsv2[4];
-	__le16 inter_bss_ppdu_cnt;
-	u8 rsv3[6];
-	__le32 sr_ampdu_mpdu_cnt;
-	__le32 sr_ampdu_mpdu_acked_cnt;
-} __packed;
-#endif
-
 struct mt7915_mcu_csa_notify {
 	struct mt76_connac2_mcu_rxd_hdr rxd;
 
@@ -386,7 +347,7 @@ enum {
 	MCU_WA_PARAM_PDMA_RX = 0x04,
 	MCU_WA_PARAM_CPU_UTIL = 0x0b,
 	MCU_WA_PARAM_RED = 0x0e,
-#ifdef MTK_DEBUG
+#ifdef CONFIG_MTK_DEBUG
 	MCU_WA_PARAM_RED_SHOW_STA = 0xf,
 	MCU_WA_PARAM_RED_TARGET_DELAY = 0x10,
 #endif

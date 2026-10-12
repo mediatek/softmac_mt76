@@ -9,7 +9,6 @@
 #include "../mt76_connac.h"
 #include "regs.h"
 
-#define MTK_DEBUG 1
 #define MT7915_MAX_INTERFACES		19
 #define MT7915_MAX_BSS			16
 #define MT7915_WTBL_SIZE		288
@@ -446,12 +445,12 @@ struct mt7915_phy {
 	u8 dfs_tx_mode;
 #endif
 	struct mt7915_scs_ctrl scs_ctrl;
-#ifdef MTK_DEBUG
+#ifdef CONFIG_MTK_DEBUG
 	bool sr_enable;
 #endif
 };
 
-#ifdef MTK_DEBUG
+#ifdef CONFIG_MTK_DEBUG
 enum {
 	ADIE0,
 	ADIE1,
@@ -547,7 +546,7 @@ struct mt7915_dev {
 	void __iomem *dcm;
 	void __iomem *sku;
 
-#ifdef MTK_DEBUG
+#ifdef CONFIG_MTK_DEBUG
 	u16 wlan_idx;
 	struct {
 		u32 fixed_rate;
@@ -954,10 +953,11 @@ int mt7915_mcu_set_ps_ctrl(struct mt7915_dev *dev, u16 threshold);
 int mt7915_mcu_set_tpo(struct mt7915_dev *dev, u8 type, u8 val);
 void mt7915_low_power_config(struct mt7915_dev *dev);
 
-#ifdef MTK_DEBUG
+#ifdef CONFIG_MTK_DEBUG
 int mt7915_mtk_init_debugfs(struct mt7915_phy *phy, struct dentry *dir);
 int mt7915_dbg_mcu_wa_cmd(struct mt7915_dev *dev, int cmd, u32 a1, u32 a2, u32 a3, bool wait_resp);
 int mt7915_mcu_set_red(struct mt7915_dev *dev, bool enabled);
+void mt7915_mcu_rx_sr_event(struct mt7915_dev *dev, struct sk_buff *skb);
 void mt7915_dump_tmac_info(u8 *tmac_info);
 int mt7915_mcu_set_txpower_level(struct mt7915_phy *phy, u8 drop_level);
 void mt7915_packet_log_to_host(struct mt7915_dev *dev, const void *data, int len, int type, int des_len);

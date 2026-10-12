@@ -4,7 +4,7 @@
 #ifndef __MT7915_DEBUG_H
 #define __MT7915_DEBUG_H
 
-#ifdef MTK_DEBUG
+#ifdef CONFIG_MTK_DEBUG
 
 #define DBG_INVALID_BASE		0xffffffff
 #define DBG_INVALID_OFFSET		0x0
