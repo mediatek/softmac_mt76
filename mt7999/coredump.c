@@ -1,5 +1,7 @@
-// SPDX-License-Identifier: BSD-3-Clause-Clear
-/* Copyright (C) 2026 MediaTek Inc. */
+/* SPDX-License-Identifier: BSD-3-Clause-Clear */
+/*
+ * Copyright (C) 2026 MediaTek Inc.
+ */
 
 #include <linux/devcoredump.h>
 #include <linux/kernel.h>

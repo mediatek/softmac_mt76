@@ -1,3 +1,8 @@
+/* SPDX-License-Identifier: BSD-3-Clause-Clear */
+/*
+ * Copyright (C) 2026 MediaTek Inc.
+ */
+
 #ifndef __MT7999_DMA_H
 #define __MT7999_DMA_H
 

@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: BSD-3-Clause-Clear */
-/* Copyright (C) 2026 MediaTek Inc. */
+/*
+ * Copyright (C) 2026 MediaTek Inc.
+ */
 
 #ifndef _COREDUMP_H_
 #define _COREDUMP_H_
