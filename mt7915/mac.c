@@ -267,7 +267,7 @@ mt7915_mac_fill_rx(struct mt7915_dev *dev, struct sk_buff *skb,
 	__le16 fc = 0;
 	int idx;
 
-#ifdef MTK_DEBUG
+#ifdef CONFIG_MTK_DEBUG
 	if (dev->dbg.dump_rx_raw)
 		mt7915_packet_log_to_host(dev, skb->data, skb->len, PKT_BIN_DEBUG_RX_RAW, 0);
 #endif
@@ -451,7 +451,7 @@ mt7915_mac_fill_rx(struct mt7915_dev *dev, struct sk_buff *skb,
 	}
 
 	hdr_gap = (u8 *)rxd - skb->data + 2 * remove_pad;
-#ifdef MTK_DEBUG
+#ifdef CONFIG_MTK_DEBUG
 	if (dev->dbg.dump_rx_pkt)
 		mt7915_packet_log_to_host(dev, skb->data, skb->len, PKT_BIN_DEBUG_RX, hdr_gap);
 #endif
@@ -797,7 +797,7 @@ int mt7915_tx_prepare_skb(struct mt76_dev *mdev, void *txwi_ptr,
 	tx_info->buf[1].skip_unmap = true;
 	tx_info->nbuf = MT_CT_DMA_BUF_NUM;
 
-#ifdef MTK_DEBUG
+#ifdef CONFIG_MTK_DEBUG
 	if (dev->dbg.dump_txd)
 		mt7915_packet_log_to_host(dev, txwi, MT_TXD_SIZE, PKT_BIN_DEBUG_TXD, 0);
 	if (dev->dbg.dump_tx_pkt)

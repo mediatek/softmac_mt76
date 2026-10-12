@@ -241,7 +241,7 @@ mt7915_mcu_send_message(struct mt76_dev *mdev, struct sk_buff *skb,
 		qid = MT_MCUQ_WM;
 
 	mt7915_mcu_set_timeout(mdev, cmd);
-#ifdef MTK_DEBUG
+#ifdef CONFIG_MTK_DEBUG
 	if (dev->dbg.dump_mcu_pkt)
 		mt7915_packet_log_to_host(dev, skb->data, skb->len, PKT_BIN_DEBUG_MCU, 0);
 #endif
@@ -529,101 +529,6 @@ mt7915_mcu_rx_bss_acq_pkt_cnt(struct mt7915_dev *dev, struct sk_buff * skb)
 	}
 }
 
-#ifdef MTK_DEBUG
-static void
-mt7915_mcu_rx_sr_swsd(struct mt7915_dev *dev, struct sk_buff *skb)
-{
-#define SR_SCENE_DETECTION_TIMER_PERIOD_MS 500
-	struct mt7915_mcu_sr_swsd_event *event;
-	static const char * const rules[] = {"NO CONNECTED", "NO CONGESTION",
-					     "NO INTERFERENCE", "MESH ILLEGAL APCLI",
-					     "SR ON"};
-	u8 idx, rule;
-
-	event = (struct mt7915_mcu_sr_swsd_event *)skb->data;
-	idx = event->basic.band_idx;
-
-	rule = event->rule[idx];
-	if (rule >= ARRAY_SIZE(rules)) {
-		dev_info(dev->mt76.dev, "Invalid SR rule %u\n", rule);
-		return;
-	}
-
-	dev_info(dev->mt76.dev, "Band index = %u\n", idx);
-	dev_info(dev->mt76.dev, "Hit Rule = %s\n", rules[rule]);
-	dev_info(dev->mt76.dev, "Timer Period = %d(us)\n"
-		 "Congestion Ratio  = %d.%1d%%\n",
-		 SR_SCENE_DETECTION_TIMER_PERIOD_MS * 1000,
-		 le32_to_cpu(event->total_airtime_ratio[idx]) / 10,
-		 le32_to_cpu(event->total_airtime_ratio[idx]) % 10);
-	dev_info(dev->mt76.dev,
-		 "Total Airtime = %d(us)\n"
-		 "ChBusy = %d\n"
-		 "SrTx = %d\n"
-		 "OBSS = %d\n"
-		 "MyTx = %d\n"
-		 "MyRx = %d\n"
-		 "Interference Ratio = %d.%1d%%\n",
-		 le32_to_cpu(event->total_airtime[idx]),
-		 le32_to_cpu(event->channel_busy_time[idx]),
-		 le32_to_cpu(event->sr_tx_airtime[idx]),
-		 le32_to_cpu(event->obss_airtime[idx]),
-		 le32_to_cpu(event->my_tx_airtime[idx]),
-		 le32_to_cpu(event->my_rx_airtime[idx]),
-		 le32_to_cpu(event->obss_airtime_ratio[idx]) / 10,
-		 le32_to_cpu(event->obss_airtime_ratio[idx]) % 10);
-}
-
-static void
-mt7915_mcu_rx_sr_hw_indicator(struct mt7915_dev *dev, struct sk_buff *skb)
-{
-	struct mt7915_mcu_sr_hw_ind_event *event;
-
-	event = (struct mt7915_mcu_sr_hw_ind_event *)skb->data;
-
-	dev_info(dev->mt76.dev, "Inter PPDU Count = %u\n",
-		 le16_to_cpu(event->inter_bss_ppdu_cnt));
-	dev_info(dev->mt76.dev, "SR Valid Count = %u\n",
-		 le16_to_cpu(event->non_srg_valid_cnt));
-	dev_info(dev->mt76.dev, "SR Tx Count = %u\n",
-		 le32_to_cpu(event->sr_ampdu_mpdu_cnt));
-	dev_info(dev->mt76.dev, "SR Tx Acked Count = %u\n",
-		 le32_to_cpu(event->sr_ampdu_mpdu_acked_cnt));
-}
-
-static void
-mt7915_mcu_rx_sr_event(struct mt7915_dev *dev, struct sk_buff *skb)
-{
-	struct mt7915_mcu_sr_basic_event *event;
-	struct mt7915_phy *phy;
-
-	event = (struct mt7915_mcu_sr_basic_event *)skb->data;
-
-	if (event->band_idx > MT_BAND1) {
-		dev_info(dev->mt76.dev, "Invalid band idx %d\n", event->band_idx);
-		return;
-	}
-
-	switch (event->sub_event_id) {
-	case SPR_EVENT_CFG_SR_ENABLE:
-		phy = dev->mt76.phys[event->band_idx]->priv;
-		if (phy)
-			phy->sr_enable = le32_to_cpu(event->value);
-		break;
-	case SPR_EVENT_SR_SW_SD:
-		mt7915_mcu_rx_sr_swsd(dev, skb);
-		break;
-	case SPR_EVENT_SR_HW_IND:
-		mt7915_mcu_rx_sr_hw_indicator(dev, skb);
-		break;
-	default:
-		dev_info(dev->mt76.dev, "Unknown SR event tag %d\n",
-			 event->sub_event_id);
-		break;
-	}
-}
-#endif
-
 static void
 mt7915_mcu_rx_ps_sync(struct mt7915_dev *dev, struct sk_buff *skb)
 {
@@ -669,7 +574,7 @@ mt7915_mcu_rx_ext_event(struct mt7915_dev *dev, struct sk_buff *skb)
 	case MCU_EXT_EVENT_PS_SYNC:
 		mt7915_mcu_rx_ps_sync(dev, skb);
 		break;
-#ifdef MTK_DEBUG
+#ifdef CONFIG_MTK_DEBUG
 	case MCU_EXT_EVENT_SR:
 		mt7915_mcu_rx_sr_event(dev, skb);
 		break;
@@ -2639,7 +2544,7 @@ static int mt7915_red_set_watermark(struct mt7915_dev *dev)
 				 sizeof(req), false);
 }
 
-#ifndef MTK_DEBUG
+#ifndef CONFIG_MTK_DEBUG
 static
 #endif
 int mt7915_mcu_set_red(struct mt7915_dev *dev, bool enabled)
@@ -4359,7 +4264,7 @@ int mt7915_mcu_add_obss_spr(struct mt7915_phy *phy, struct ieee80211_vif *vif,
 	if (ret)
 		return ret;
 
-#ifdef MTK_DEBUG
+#ifdef CONFIG_MTK_DEBUG
 	phy->sr_enable = he_obss_pd->enable;
 #endif
 
@@ -5680,23 +5585,6 @@ void mt7915_set_beacon_vif(void *data, u8 *mac, struct ieee80211_vif *vif)
 }
 #endif
 
-#ifdef MTK_DEBUG
-int mt7915_dbg_mcu_wa_cmd(struct mt7915_dev *dev, int cmd, u32 a1, u32 a2, u32 a3, bool wait_resp)
-{
-	struct {
-		__le32 args[3];
-	} req = {
-		.args = {
-			cpu_to_le32(a1),
-			cpu_to_le32(a2),
-			cpu_to_le32(a3),
-		},
-	};
-
-	return mt76_mcu_send_msg(&dev->mt76, cmd, &req, sizeof(req), wait_resp);
-}
-#endif
-
 int mt7915_mcu_rf_regval(struct mt7915_dev *dev, u32 regidx, u32 *val, bool set)
 {
 	struct {
@@ -5725,25 +5613,6 @@ int mt7915_mcu_rf_regval(struct mt7915_dev *dev, u32 regidx, u32 *val, bool set)
 
 	return 0;
 }
-
-#ifdef MTK_DEBUG
-int mt7915_mcu_set_amsdu_algo(struct mt7915_dev *dev, u16 wcid, u8 enable)
-{
-	struct {
-		__le16 action;
-		u8 _rsv1[2];
-		__le16 wcid;
-		u8 enable;
-		u8 _rsv2[5];
-	} __packed req = {
-		.action = cpu_to_le16(1),
-		.wcid = cpu_to_le16(wcid),
-		.enable = enable,
-	};
-
-	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(MEC_CTRL), &req, sizeof(req), true);
-}
-#endif
 
 int mt7915_mcu_sw_aci_set(struct mt7915_dev *dev, bool val)
 {

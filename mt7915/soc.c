@@ -360,7 +360,7 @@ static int mt798x_wmac_sku_setup(struct mt7915_dev *dev, u32 *adie_type)
 	*adie_type = FIELD_GET(MT_ADIE_CHIP_ID_MASK, adie_main) |
 		     (MT_ADIE_CHIP_ID_MASK & adie_ext);
 
-#ifdef MTK_DEBUG
+#ifdef CONFIG_MTK_DEBUG
 	dev->adie[ADIE0].id = FIELD_GET(MT_ADIE_CHIP_ID_MASK, adie_main);
 	dev->adie[ADIE0].version = FIELD_GET(MT_ADIE_VERSION_MASK, adie_main);
 	dev->adie[ADIE1].id = FIELD_GET(MT_ADIE_CHIP_ID_MASK, adie_ext);

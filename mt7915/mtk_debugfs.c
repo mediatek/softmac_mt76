@@ -8,7 +8,7 @@
 #include "mcu.h"
 #include "eeprom.h"
 
-#ifdef MTK_DEBUG
+#ifdef CONFIG_MTK_DEBUG
 #define LWTBL_IDX2BASE_ID		GENMASK(14, 8)
 #define LWTBL_IDX2BASE_DW		GENMASK(7, 2)
 #define LWTBL_IDX2BASE(_id, _dw)	(MT_DBG_WTBL_BASE | \
