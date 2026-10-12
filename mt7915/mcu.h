@@ -652,6 +652,8 @@ enum {
 	/* coredump */
 	SER_SET_FW_COREDUMP_WA,
 	SER_SET_FW_COREDUMP_WM,
+	/*hw bit detect only*/
+	SER_SET_HW_BIT_DETECT_ONLY,
 	/* action */
 	SER_ENABLE = 2,
 	SER_RECOVER
