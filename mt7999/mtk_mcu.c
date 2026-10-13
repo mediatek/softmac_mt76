@@ -1592,6 +1592,11 @@ int mt7999_mcu_sta_get_wtbl(struct mt7999_dev *dev, u16 idx,
 	}
 
 	msta_link = container_of(wcid, struct mt7999_sta_link, wcid);
+	if (!msta_link->sta || !msta_link->sta->vif) {
+		rcu_read_unlock();
+		return -EINVAL;
+	}
+
 	mlink = rcu_dereference(msta_link->sta->vif->mt76.link[wcid->link_id]);
 	if (!mlink) {
 		rcu_read_unlock();
