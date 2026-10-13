@@ -926,7 +926,7 @@ mt76_testmode_set_ru_sta(struct mt76_phy *phy, struct nlattr **tb)
 
 		sta = &td->sta_ru_info[td->ru_sta_idx];
 
-		if (mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_RATE_IDX], &sta->tx_rate_idx, 0, 15) ||
+		if (mt76_tm_get_u8(tb[MT76_TM_ATTR_TX_RATE_IDX], &sta->tx_rate_idx, 0, 23) ||
 		    mt76_tm_get_u8(tb[MT76_TM_ATTR_AID], &sta->aid,
 				   0, MT_TM_MAX_MU_STA * __MT_MAX_BAND) ||
 		    mt76_tm_get_u8(tb[MT76_TM_ATTR_RU_ALLOC], &sta->ru_alloc, 0, 255) ||
