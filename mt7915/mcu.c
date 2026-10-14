@@ -3051,7 +3051,209 @@ int mt7915_mcu_set_chan_info(struct mt7915_phy *phy, int cmd)
 	return mt76_mcu_send_msg(&dev->mt76, cmd, &req, sizeof(req), true);
 }
 
-static int mt7915_mcu_set_eeprom_flash(struct mt7915_dev *dev)
+static int mt7915_mcu_eeprom_rebinding(struct mt7915_dev *dev, u16 base)
+{
+#define MT_EE_ADIE1_MT7976C_OFFSET	0x270
+#define MT_EE_ADIE1_E3_OFFSET		0x271
+	u16 offset = MT_EE_ADIE1_MT7976C_OFFSET;
+	u8 *eeprom = dev->mt76.eeprom.data;
+	u8 buf[MT7915_EEPROM_BLOCK_SIZE];
+	int ret;
+
+	ret = mt7915_mcu_get_eeprom(dev, offset + base, buf);
+	if (ret)
+		return ret;
+
+	offset = (offset + base) % MT7915_EEPROM_BLOCK_SIZE;
+	eeprom[MT_EE_ADIE1_MT7976C_OFFSET] = buf[offset];
+	offset = (MT_EE_ADIE1_E3_OFFSET + base) % MT7915_EEPROM_BLOCK_SIZE;
+	eeprom[MT_EE_ADIE1_E3_OFFSET] = buf[offset];
+
+	return 0;
+}
+
+static int mt7915_mcu_get_cal_free_data(struct mt7915_dev *dev)
+{
+#define MT_EE_FREQ_OFFSET		0x77
+	struct adie_data {
+		u16 adie_offs;
+		u16 eep_offs; 		/* eeprom offset for adie 1 */
+	};
+	struct cal_free_data {
+		const struct adie_data *adie[__MT_MAX_BAND];
+		u16 adie_len[__MT_MAX_BAND];
+		u16 adie_base[__MT_MAX_BAND];
+		const u16 *ddie;
+		u16 ddie_len;
+	};
+	static const u16 cal_7915[] = {
+		0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19,
+		0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x20, 0x21, 0x22, 0x23, 0x24,
+		0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e,
+		0x52, 0x70, 0x71, 0x72, 0x76, 0xa8, 0xa9, 0xaa, 0xab, 0xac,
+		0xad, 0xae, 0xaf,
+	};
+	static const u16 cal_7916[] = {
+		0x30, 0x31, 0x34, 0x35, 0x36, 0x38, 0x3c, 0x3a, 0x3d, 0x44,
+		0x46, 0xc8, 0xc9, 0xca, 0xcb, 0xcc, 0xcd, 0xce, 0xcf, 0xe0,
+	};
+	static const struct adie_data cal_7975[] = {
+		{ 0x7cd, 0xe00 }, { 0x7cf, 0xe01 }, { 0x7d1, 0xe02 },
+		{ 0x7d3, 0xe03 }, { 0x802, 0xe04 }, { 0x803, 0xe05 },
+		{ 0x804, 0xe06 }, { 0x805, 0xe07 }, { 0x806, 0xe08 },
+		{ 0x808, 0xe09 }, { 0x80a, 0xe0a }, { 0x80b, 0xe0b },
+		{ 0x80c, 0xe0c }, { 0x80d, 0xe0d }, { 0x80e, 0xe0e },
+		{ 0x810, 0xe0f }, { 0x812, 0xe10 }, { 0x813, 0xe11 },
+		{ 0x814, 0xe12 }, { 0x815, 0xe13 }, { 0x816, 0xe14 },
+		{ 0x818, 0xe15 }, { 0x81a, 0xe16 }, { 0x81b, 0xe17 },
+		{ 0x81c, 0xe18 }, { 0x81d, 0xe19 }, { 0x81e, 0xe1a },
+		{ 0x820, 0xe1b }, { 0x822, 0xe1c }, { 0x823, 0xe1d },
+		{ 0x824, 0xe1e }, { 0x825, 0xe1f }, { 0x826, 0xe20 },
+		{ 0x827, 0xe21 }, { 0x828, 0xe22 }, { 0x829, 0xe23 },
+		{ 0x82f, 0xe24 }, { 0x8c0, 0xe25 }, { 0x8c1, 0xe26 },
+		{ 0x8c2, 0xe27 }, { 0x8c3, 0xe28 }, { 0x8d0, 0xe2a },
+		{ 0x8d1, 0xe2b }, { 0x8d7, 0xe2c }, { 0x8d8, 0xe2d },
+		{ 0x8fa, 0xe2e }, { 0x9a0, 0xe29 }, { 0x9a1, 0xe2f },
+		{ 0x9a5, 0xe33 }, { 0x9a6, 0xe34 }, { 0x9a8, 0xe36 },
+		{ 0x9aa, 0xe38 }, { 0x9b0, 0xe39 }, { 0x9b1, 0xe3a },
+		{ 0x9b2, 0xe3b }, { 0x9b3, 0xe3c }, { 0x9b4, 0xe3d },
+		{ 0x9b5, 0xe3e }, { 0x9b6, 0xe3f }, { 0x9b7, 0xe40 },
+	};
+	static const struct adie_data cal_7976[] = {
+		{ 0x24c, 0x33c }, { 0x24d, 0x33d }, { 0x24e, 0x33e },
+		{ 0x24f, 0x33f }, { 0x250, 0x340 }, { 0x251, 0x341 },
+		{ 0x253, 0x343 }, { 0x255, 0x345 }, { 0x257, 0x347 },
+		{ 0x259, 0x349 }, { 0x990, 0x359 }, { 0x991, 0x35a },
+		{ 0x994, 0x35d }, { 0x995, 0x35e }, { 0x9a6, 0x36a },
+		{ 0x9a8, 0x36c }, { 0x9aa, 0x36e },
+	};
+	struct cal_free_data cal_arr = {};
+	u8 *eeprom = dev->mt76.eeprom.data;
+	u8 buf[MT7915_EEPROM_BLOCK_SIZE];
+	u16 prev_block_idx = -1;
+	int ver, band, i, ret;
+
+#define DDIE_CAL(_ddie) do {						\
+		cal_arr.ddie = cal_##_ddie;				\
+		cal_arr.ddie_len = ARRAY_SIZE(cal_##_ddie);		\
+	} while (0)
+
+#define ADIE_CAL(_band, _adie, _base) do {				\
+		cal_arr.adie[_band] = cal_##_adie;			\
+		cal_arr.adie_len[_band] = ARRAY_SIZE(cal_##_adie);	\
+		cal_arr.adie_base[_band] = _base;			\
+	} while (0)
+
+	switch (mt76_chip(&dev->mt76)) {
+	case 0x7915:
+		ret = mt7915_mcu_get_eeprom(dev, MT_EE_ADIE_FT_VERSION, buf);
+		if (ret)
+			return ret == -EINVAL ? 0 : ret;
+
+		ver = buf[MT_EE_ADIE_FT_VERSION % MT7915_EEPROM_BLOCK_SIZE] - 1;
+		DDIE_CAL(7915);
+		ADIE_CAL(0, 7975, 0);
+		break;
+	case 0x7906:
+		DDIE_CAL(7916);
+		ADIE_CAL(0, 7976, 0);
+		break;
+	case 0x7981:
+		ret = mt7915_mcu_eeprom_rebinding(dev, 0);
+		if (ret)
+			return ret;
+
+		ADIE_CAL(0, 7976, 0);
+		break;
+	case 0x7986:
+		switch (mt7915_check_adie(dev, true)) {
+		case MT7975_DUAL_ADIE:
+			ADIE_CAL(1, 7975, MT_EE_ADIE1_BASE_7896);
+			fallthrough;
+		case MT7975_ONE_ADIE:
+			ADIE_CAL(0, 7975, 0);
+			break;
+		case MT7976_DUAL_ADIE:
+			ADIE_CAL(1, 7976, MT_EE_ADIE1_BASE_7896);
+			fallthrough;
+		case MT7976_ONE_ADIE_DBDC:
+		case MT7976_ONE_ADIE:
+			ADIE_CAL(0, 7976, 0);
+			ret = mt7915_mcu_eeprom_rebinding(dev, cal_arr.adie_base[1]);
+			if (ret)
+				return ret;
+			break;
+		default:
+			return -EINVAL;
+		}
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	/* ddie */
+	for (i = 0; i < cal_arr.ddie_len; i++) {
+		u16 offs = cal_arr.ddie[i];
+		u32 block_idx;
+
+		block_idx = offs / MT7915_EEPROM_BLOCK_SIZE;
+		if (prev_block_idx != block_idx) {
+			memset(buf, 0, sizeof(buf));
+			ret = mt7915_mcu_get_eeprom(dev, offs, buf);
+			if (ret) {
+				if (ret != -EINVAL)
+					return ret;
+				prev_block_idx = -1;
+				continue;
+			}
+		}
+
+		eeprom[offs] = buf[offs % MT7915_EEPROM_BLOCK_SIZE];
+		prev_block_idx = block_idx;
+	}
+
+	/* adie */
+	for (band = 0; band < __MT_MAX_BAND; band++) {
+		if (!cal_arr.adie[band])
+			continue;
+
+		prev_block_idx = -1;
+		for (i = 0; i < cal_arr.adie_len[band]; i++) {
+			u16 adie_offset, eep_offset;
+			u32 block_idx;
+
+			adie_offset = cal_arr.adie[band][i].adie_offs + cal_arr.adie_base[band];
+			eep_offset = band ? cal_arr.adie[band][i].eep_offs : adie_offset;
+			block_idx = adie_offset / MT7915_EEPROM_BLOCK_SIZE;
+
+			if (is_mt7915(&dev->mt76) && !ver &&
+			    adie_offset >= 0x8c0 && adie_offset <= 0x8c3)
+				continue;
+
+			if (prev_block_idx != block_idx) {
+				memset(buf, 0, sizeof(buf));
+				ret = mt7915_mcu_get_eeprom(dev, adie_offset, buf);
+				if (ret) {
+					if (ret != -EINVAL)
+						return ret;
+					prev_block_idx = -1;
+					continue;
+				}
+			}
+
+			eeprom[eep_offset] = buf[adie_offset % MT7915_EEPROM_BLOCK_SIZE];
+			prev_block_idx = block_idx;
+
+			/* workaround for 7915 */
+			if (is_mt7915(&dev->mt76) && adie_offset == 0x9a1)
+				eeprom[MT_EE_FREQ_OFFSET] = eeprom[adie_offset];
+		}
+	}
+
+	return 0;
+}
+
+int mt7915_mcu_set_eeprom(struct mt7915_dev *dev)
 {
 #define MAX_PAGE_IDX_MASK	GENMASK(7, 5)
 #define PAGE_IDX_MASK		GENMASK(4, 2)
@@ -3060,12 +3262,14 @@ static int mt7915_mcu_set_eeprom_flash(struct mt7915_dev *dev)
 	u16 eeprom_size = mt7915_eeprom_size(dev);
 	u8 total = DIV_ROUND_UP(eeprom_size, PER_PAGE_SIZE);
 	u8 *eep = (u8 *)dev->mt76.eeprom.data;
-	int eep_len;
-	int i;
+	int i, eep_len, ret;
+
+	ret = mt7915_mcu_get_cal_free_data(dev);
+	if (ret)
+		return ret;
 
 	for (i = 0; i < total; i++, eep += eep_len) {
 		struct sk_buff *skb;
-		int ret;
 
 		if (i == total - 1 && !!(eeprom_size % PER_PAGE_SIZE))
 			eep_len = eeprom_size % PER_PAGE_SIZE;
@@ -3091,20 +3295,6 @@ static int mt7915_mcu_set_eeprom_flash(struct mt7915_dev *dev)
 	}
 
 	return 0;
-}
-
-int mt7915_mcu_set_eeprom(struct mt7915_dev *dev)
-{
-	struct mt7915_mcu_eeprom req = {
-		.buffer_mode = EE_MODE_EFUSE,
-		.format = EE_FORMAT_WHOLE,
-	};
-
-	if (dev->flash_mode)
-		return mt7915_mcu_set_eeprom_flash(dev);
-
-	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(EFUSE_BUFFER_MODE),
-				 &req, sizeof(req), true);
 }
 
 int mt7915_mcu_get_eeprom(struct mt7915_dev *dev, u32 offset, u8 *read_buf)
