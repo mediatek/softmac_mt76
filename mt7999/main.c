@@ -1409,6 +1409,7 @@ void mt7999_mac_sta_remove_link(struct mt7999_dev *dev,
 	spin_unlock_bh(&dev->mt76.sta_poll_lock);
 
 	mt76_wcid_cleanup(&dev->mt76, &msta_link->wcid);
+	msta_link->wcid.sta_disabled = 1;
 
 	if (msta_link->wcid.link_valid) {
 		if (msta->deflink_id == link_id) {
@@ -1488,6 +1489,7 @@ mt7999_mac_sta_add_links(struct mt7999_dev *dev, struct ieee80211_vif *vif,
 		msta_link = mt76_dereference(msta->link[link_id], &dev->mt76);
 		if (msta_link) {
 			msta_link->wcid.link_valid = true;
+			msta_link->wcid.sta_disabled = 0;
 			continue;
 		}
 

@@ -1511,6 +1511,7 @@ void mt7996_mac_sta_remove_link(struct mt7996_dev *dev,
 	spin_unlock_bh(&dev->mt76.sta_poll_lock);
 
 	mt76_wcid_cleanup(&dev->mt76, &msta_link->wcid);
+	msta_link->wcid.sta_disabled = 1;
 
 	if (msta_link->wcid.link_valid) {
 		mt7996_mac_wtbl_update(dev, msta_link->wcid.idx,
@@ -1588,6 +1589,7 @@ mt7996_mac_sta_add_links(struct mt7996_dev *dev, struct ieee80211_vif *vif,
 		msta_link = mt76_dereference(msta->link[link_id], &dev->mt76);
 		if (msta_link) {
 			msta_link->wcid.link_valid = true;
+			msta_link->wcid.sta_disabled = 0;
 			continue;
 		}
 
