@@ -1458,7 +1458,7 @@ static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 			.subcmd = MTK_NL80211_VENDOR_SUBCMD_ABI_CONNAC2,
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV,
-		.dumpit = mt76_vendor_abi_connac2_dump,
+		.dumpit = mt76_vendor_abi_connac_dump,
 		.policy = VENDOR_CMD_RAW_DATA,
 		.maxattr = 1,
 	},

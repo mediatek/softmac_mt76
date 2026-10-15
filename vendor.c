@@ -186,9 +186,9 @@ const struct nl80211_vendor_cmd_info mt76_vendor_events[MT76_VENDOR_N_EVENTS] = 
 };
 EXPORT_SYMBOL_GPL(mt76_vendor_events);
 
-int mt76_vendor_abi_connac2_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
-				 struct sk_buff *skb, const void *data,
-				 int data_len, unsigned long *storage)
+int mt76_vendor_abi_connac_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
+				struct sk_buff *skb, const void *data,
+				int data_len, unsigned long *storage)
 {
 	if (*storage)
 		return -ENOENT;
@@ -196,7 +196,7 @@ int mt76_vendor_abi_connac2_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
 
 	return 1;
 }
-EXPORT_SYMBOL_GPL(mt76_vendor_abi_connac2_dump);
+EXPORT_SYMBOL_GPL(mt76_vendor_abi_connac_dump);
 
 int mt76_vendor_bss_color_ctrl_dump(struct wiphy *wiphy,
 				    struct wireless_dev *wdev,

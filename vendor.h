@@ -29,6 +29,9 @@ enum mtk_nl80211_vendor_subcmds {
 	MTK_NL80211_VENDOR_SUBCMD_EPCS_CTRL = 0xd4,
 	MTK_NL80211_VENDOR_SUBCMD_DFS_TX_CTRL = 0xd5,
 	MTK_NL80211_VENDOR_SUBCMD_ABI_CONNAC2 = 0xd6,
+	MTK_NL80211_VENDOR_SUBCMD_EDCCA_CBW_CTRL = 0xd7,
+	MTK_NL80211_VENDOR_SUBCMD_ABI_CONNAC3 = 0xd8,
+	MTK_NL80211_VENDOR_SUBCMD_ABI_CONNAC5 = 0xd9,
 };
 
 enum mtk_nl80211_vendor_events {
@@ -489,9 +492,9 @@ extern const struct nla_policy
 mt76_vendor_dfs_tx_ctrl_policy[NUM_MTK_VENDOR_ATTRS_DFS_TX_CTRL];
 extern const struct nla_policy
 mt76_vendor_beacon_ctrl_policy[NUM_MTK_VENDOR_ATTRS_BEACON_CTRL];
-int mt76_vendor_abi_connac2_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
-				 struct sk_buff *skb, const void *data,
-				 int data_len, unsigned long *storage);
+int mt76_vendor_abi_connac_dump(struct wiphy *wiphy, struct wireless_dev *wdev,
+				struct sk_buff *skb, const void *data,
+				int data_len, unsigned long *storage);
 
 int mt76_vendor_bss_color_ctrl_dump(struct wiphy *wiphy,
 				    struct wireless_dev *wdev,
