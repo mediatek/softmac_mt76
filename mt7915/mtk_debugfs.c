@@ -1400,8 +1400,13 @@ static u32 chip_show_sta_acq_info(struct seq_file *s, struct mt7915_dev *dev, u3
 					printk("ERROR!! no found STA wcid=%d\n", sta_num);
 					continue;
 				}
-				msta = container_of(wcid, struct mt7915_sta, wcid);
-				wmmidx = msta->vif->mt76.wmm_idx;
+
+				if (wcid == &dev->mt76.global_wcid) {
+					wmmidx = 0;
+				} else {
+					msta = container_of(wcid, struct mt7915_sta, wcid);
+					wmmidx = msta->vif->mt76.wmm_idx;
+				}
 
 				seq_printf(s, "\tSTA%d AC%d: ", sta_num, ac_n);
 
@@ -3924,8 +3929,10 @@ static int mt7915_reset_counter(void *data, u64 val)
 
 	rcu_read_lock();
 	wcid = rcu_dereference(dev->mt76.wcid[dev->wlan_idx]);
-	if (!wcid)
+	if (!wcid) {
+		rcu_read_unlock();
 		return -EINVAL;
+	}
 
 	memset(&wcid->stats, 0, sizeof(struct mt76_sta_stats));
 
@@ -3957,8 +3964,10 @@ mt7915_per_read(struct seq_file *s, void *data)
 
 	rcu_read_lock();
 	wcid = rcu_dereference(dev->mt76.wcid[dev->wlan_idx]);
-	if (!wcid)
+	if (!wcid) {
+		rcu_read_unlock();
 		return -EINVAL;
+	}
 
 	stats = &wcid->stats;
 

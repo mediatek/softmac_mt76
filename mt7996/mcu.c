@@ -827,7 +827,8 @@ static inline void __mt7996_stat_to_netdev(struct mt76_phy *mphy,
 	struct ieee80211_vif *vif;
 	struct wireless_dev *wdev;
 
-	if (wiphy_ext_feature_isset(mphy->hw->wiphy,
+	if (wcid != &mphy->dev->global_wcid &&
+	    wiphy_ext_feature_isset(mphy->hw->wiphy,
 				    NL80211_EXT_FEATURE_STAS_COUNT)) {
 		msta_link = container_of(wcid, struct mt7996_sta_link, wcid);
 		vif = container_of((void *)msta_link->sta->vif, struct ieee80211_vif,

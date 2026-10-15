@@ -3313,8 +3313,15 @@ mt7999_show_sta_acq_info(struct seq_file *s, unsigned long *ple_stat,
 					rcu_read_unlock();
 					continue;
 				}
-				msta_link = container_of(wcid, struct mt7999_sta_link, wcid);
-				wmmidx = msta_link->sta->vif->deflink.mt76.wmm_idx;
+
+				if (wcid == &dev->mt76.global_wcid) {
+					/* global wcid does not have vif */
+					wmmidx = 0;
+				} else {
+					msta_link = container_of(wcid,
+							struct mt7999_sta_link, wcid);
+					wmmidx = msta_link->sta->vif->deflink.mt76.wmm_idx;
+				}
 
 				if (sta_pause[wcid->phy_idx][j] & BIT(i))
 					ctrl = 2;
