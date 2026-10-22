@@ -4174,6 +4174,60 @@ mt7915_full_reset_disable_set(void *data, u64 val)
 DEFINE_DEBUGFS_ATTRIBUTE(fops_full_reset_disable, mt7915_full_reset_disable_get,
 			 mt7915_full_reset_disable_set, "%llu\n");
 
+static ssize_t mt7915_tpt_option_set(struct file *file,
+				     const char __user *user_buf,
+				     size_t count, loff_t *ppos)
+{
+	struct mt7915_dev *dev = file->private_data;
+	unsigned int type, val;
+	char buf[16];
+	int ret;
+
+	if (count >= sizeof(buf))
+		return -EINVAL;
+
+	if (copy_from_user(buf, user_buf, count))
+		return -EFAULT;
+
+	if (count && buf[count - 1] == '\n')
+		buf[count - 1] = '\0';
+	else
+		buf[count] = '\0';
+
+	if (sscanf(buf, "%u %u", &type, &val) != 2 ||
+	    type > MT7915_LP_TPO_MIN_TX || val > MT7915_LP_TPO_BAND_ALL ||
+	    (type == MT7915_LP_TPO_ALL && val > 1)) {
+		dev_warn(dev->mt76.dev, "format: type val\n");
+		return -EINVAL;
+	}
+
+	ret = mt7915_mcu_set_tpo(dev, type, val);
+
+	return ret ? ret : count;
+}
+
+static const struct file_operations fops_tpt_option = {
+	.write = mt7915_tpt_option_set,
+	.open = simple_open,
+	.owner = THIS_MODULE,
+	.llseek = default_llseek,
+};
+
+static int
+mt7915_low_power_info_read(struct seq_file *s, void *data)
+{
+	struct mt7915_dev *dev = dev_get_drvdata(s->private);
+
+	seq_printf(s, "Low Power Info:\n");
+
+	seq_printf(s, "TPO: %d\n", dev->dbg.lp.tpo);
+	seq_printf(s, "\tPB-TPO: %d\n", dev->dbg.lp.pb_tpo);
+	seq_printf(s, "\tLP-TPO: %d\n", dev->dbg.lp.lp_tpo);
+	seq_printf(s, "\tMinTx-TPO: %d\n", dev->dbg.lp.min_tx_tpo);
+
+	return 0;
+}
+
 int mt7915_mtk_init_debugfs(struct mt7915_phy *phy, struct dentry *dir)
 {
 	struct mt7915_dev *dev = phy->dev;
@@ -4268,6 +4322,13 @@ int mt7915_mtk_init_debugfs(struct mt7915_phy *phy, struct dentry *dir)
 	debugfs_create_file("rx_drop_stats", 0400, dir, phy, &mt7915_rx_drop_fops);
 	debugfs_create_file("ps_ctrl", 0200, dir, dev, &fops_ps_ctrl);
 	debugfs_create_file("full_reset_disable", 0600, dir, dev, &fops_full_reset_disable);
+
+	if (is_mt7981(&dev->mt76)) {
+		debugfs_create_file("tpt_option", 0200, dir, dev,
+				    &fops_tpt_option);
+		debugfs_create_devm_seqfile(dev->mt76.dev, "low_power_info",
+					    dir, mt7915_low_power_info_read);
+	}
 
 	return 0;
 }

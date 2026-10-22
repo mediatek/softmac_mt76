@@ -187,6 +187,12 @@ enum ext_cmd_vow_drr_ctrl {
 	VOW_DRR_STA_PAUSE_SETTING       = 0x30,
 };
 
+enum {
+	LOW_POWER_TX_TPO_POWER_BOOST = 1,		/* PB-TPO */
+	LOW_POWER_TX_TPO_POWER_REDUCE,			/* LP-TPO */
+	LOW_POWER_TX_TPO_ANTENNA_REDUCE,		/* Min Tx TPO */
+};
+
 struct mt7915_vow_sta_cfg{
 	u8 bss_grp_idx;
 	u8 dwrr_quantum[IEEE80211_NUM_ACS];
@@ -558,6 +564,13 @@ struct mt7915_dev {
 		bool dump_rx_pkt;
 		bool dump_rx_raw;
 		u32 token_idx;
+
+		struct {
+			u8 tpo;
+			u8 pb_tpo;
+			u8 lp_tpo;
+			u8 min_tx_tpo;
+		} lp;
 	} dbg;
 	const struct mt7915_dbg_reg_desc *dbg_reg;
 
@@ -937,6 +950,8 @@ int mt7915_mcu_set_scs_en(struct mt7915_phy *phy, u8 enable);
 void mt7915_mcu_scs_sta_poll(struct work_struct *work);
 int mt7915_mcu_thermal_debug(struct mt7915_dev *dev, u8 mode, u8 action);
 int mt7915_mcu_set_ps_ctrl(struct mt7915_dev *dev, u16 threshold);
+int mt7915_mcu_set_tpo(struct mt7915_dev *dev, u8 type, u8 val);
+void mt7915_low_power_config(struct mt7915_dev *dev);
 
 #ifdef MTK_DEBUG
 int mt7915_mtk_init_debugfs(struct mt7915_phy *phy, struct dentry *dir);

@@ -6,11 +6,19 @@
 #include <linux/hwmon-sysfs.h>
 #include <linux/of.h>
 #include <linux/thermal.h>
+#include <linux/module.h>
 #include "mt7915.h"
 #include "mac.h"
 #include "mcu.h"
 #include "coredump.h"
 #include "eeprom.h"
+
+static int lp_ctrl = 0xe;
+module_param(lp_ctrl, int, 0444);
+MODULE_PARM_DESC(lp_ctrl, "Low power control. "
+			  "Bit1: Tx Power Boost (PB-TPO). "
+			  "Bit2: Tx Power Reduction (LP-TPO). "
+			  "Bit3: Tx Antenna Reduction (MinTx-TPO).");
 
 static const struct ieee80211_iface_limit if_limits[] = {
 	{
@@ -788,6 +796,30 @@ unreg:
 	return ret;
 }
 
+void mt7915_low_power_config(struct mt7915_dev *dev)
+{
+	bool pb_en = lp_ctrl & BIT(LOW_POWER_TX_TPO_POWER_BOOST);
+	bool lp_en = lp_ctrl & BIT(LOW_POWER_TX_TPO_POWER_REDUCE);
+	bool min_tx_en = lp_ctrl & BIT(LOW_POWER_TX_TPO_ANTENNA_REDUCE);
+	bool tpo_en = pb_en || lp_en || min_tx_en;
+	int ret = 0;
+
+	if (!is_mt7981(&dev->mt76))
+		return;
+
+	/* Tx Power Optimization */
+	ret |= mt7915_mcu_set_tpo(dev, MT7915_LP_TPO_ALL, tpo_en);
+	ret |= mt7915_mcu_set_tpo(dev, MT7915_LP_TPO_PB,
+				  pb_en ? MT7915_LP_TPO_BAND_ALL : 0);
+	ret |= mt7915_mcu_set_tpo(dev, MT7915_LP_TPO_LP,
+				  lp_en ? MT7915_LP_TPO_BAND_ALL : 0);
+	ret |= mt7915_mcu_set_tpo(dev, MT7915_LP_TPO_MIN_TX,
+				  min_tx_en ? MT7915_LP_TPO_BAND_ALL : 0);
+
+	if (ret)
+		dev_warn(dev->mt76.dev, "failed to set TPO.\n");
+}
+
 static void mt7915_init_work(struct work_struct *work)
 {
 	struct mt7915_dev *dev = container_of(work, struct mt7915_dev,
@@ -796,6 +828,8 @@ static void mt7915_init_work(struct work_struct *work)
 	mt7915_mcu_set_eeprom(dev);
 	mt7915_mac_init(dev);
 	mt7915_txbf_init(dev);
+
+	mt7915_low_power_config(dev);
 }
 
 void mt7915_wfsys_reset(struct mt7915_dev *dev)

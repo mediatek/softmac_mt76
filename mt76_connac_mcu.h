@@ -1309,6 +1309,7 @@ enum {
 	MCU_EXT_CMD_SWLNA_ACI_CTRL = 0xc0,
 	MCU_EXT_CMD_CSI_CTRL = 0xc2,
 	MCU_EXT_CMD_LPI_CTRL = 0xc8,
+	MCU_EXT_CMD_TPT = 0xc9,
 };
 
 enum {

@@ -5989,3 +5989,41 @@ int mt7915_mcu_set_ps_ctrl(struct mt7915_dev *dev, u16 threshold)
 	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(PS_CTRL), &req,
 				 sizeof(req), true);
 }
+
+int mt7915_mcu_set_tpo(struct mt7915_dev *dev, u8 type, u8 val)
+{
+	struct {
+		u8 type;
+		u8 val;
+		u8 __rsv[2];
+	} __packed req = {
+		.type = type,
+		.val = val,
+	};
+	int ret;
+
+	ret = mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(TPT),
+				 &req, sizeof(req), true);
+	if (ret)
+		return ret;
+
+#ifdef MTK_DEBUG
+	switch (type) {
+	case MT7915_LP_TPO_ALL:
+		dev->dbg.lp.tpo = val;
+		break;
+	case MT7915_LP_TPO_PB:
+		dev->dbg.lp.pb_tpo = val;
+		break;
+	case MT7915_LP_TPO_LP:
+		dev->dbg.lp.lp_tpo = val;
+		break;
+	case MT7915_LP_TPO_MIN_TX:
+		dev->dbg.lp.min_tx_tpo = val;
+		break;
+	default:
+		break;
+	}
+#endif
+	return 0;
+}
