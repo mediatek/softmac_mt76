@@ -502,7 +502,7 @@ mt7999_init_wiphy_band(struct ieee80211_hw *hw, struct mt7999_phy *phy)
 		freq->end_freq = 5900000;
 	} else if (phy->mt76->cap.has_6ghz) {
 		freq->start_freq = 5900000;
-		freq->end_freq = 7200000;
+		freq->end_freq = 7250000;
 	} else {
 		return;
 	}

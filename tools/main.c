@@ -55,7 +55,7 @@ static void parse_radio_config(struct radio_config *radio, struct nlattr *freqs)
 			radio->parking_freq = 5180;
 			return;
 		}
-		if (start >= 5900 && end <= 7200) {
+		if (start >= 5900 && end <= 7250) {
 			radio->band = NL80211_BAND_6GHZ;
 			radio->parking_freq = 5955;
 			return;

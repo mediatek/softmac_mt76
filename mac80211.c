@@ -131,6 +131,13 @@ static const struct ieee80211_channel mt76_channels_6ghz[] = {
 	CHAN6G(225, 7075),
 	CHAN6G(229, 7095),
 	CHAN6G(233, 7115),
+	/* 802.11bn extended channel candidates */
+	CHAN6G(237, 7135),
+	CHAN6G(241, 7155),
+	CHAN6G(245, 7175),
+	CHAN6G(249, 7195),
+	CHAN6G(253, 7215),
+	CHAN6G(257, 7235),
 };
 
 static const struct ieee80211_tpt_blink mt76_tpt_blink[] = {
