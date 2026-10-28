@@ -1482,6 +1482,10 @@ mt7915_mac_full_reset(struct mt7915_dev *dev)
 
 	INIT_LIST_HEAD(&dev->sta_rc_list);
 	INIT_LIST_HEAD(&dev->twt_list);
+	/* stas are re-added after reset, drop stale stats_list entries */
+	INIT_LIST_HEAD(&dev->phy.stats_list);
+	if (phy2)
+		INIT_LIST_HEAD(&phy2->stats_list);
 
 	i = mt76_wcid_alloc(dev->mt76.wcid_mask, MT7915_WTBL_STA);
 	dev->mt76.global_wcid.idx = i;
