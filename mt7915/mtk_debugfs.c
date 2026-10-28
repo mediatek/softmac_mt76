@@ -2054,10 +2054,12 @@ static int mt7915_pseinfo_read(struct seq_file *s, void *data)
 	return 0;
 }
 
-static int mt7915_mibinfo_read_per_band(struct seq_file *s, int band_idx)
+static int mt7915_mibinfo_show(struct seq_file *s, void *data)
 {
 #define BSS_NUM	4
-	struct mt7915_dev *dev = dev_get_drvdata(s->private);
+	struct mt7915_phy *phy = s->private;
+	struct mt7915_dev *dev = phy->dev;
+	int band_idx = phy->mt76->band_idx;
 	u32 mac_val0, mac_val, mac_val1, idx, band_offset = 0;
 	u32 msdr6, msdr7, msdr8, msdr9, msdr10, msdr16, msdr17, msdr18, msdr19, msdr20, msdr21;
 	u32 mbxsdr[BSS_NUM][7];
@@ -2322,17 +2324,7 @@ static int mt7915_mibinfo_read_per_band(struct seq_file *s, int band_idx)
 	return 0;
 }
 
-static int mt7915_mibinfo_band0(struct seq_file *s, void *data)
-{
-	mt7915_mibinfo_read_per_band(s, 0);
-	return 0;
-}
-
-static int mt7915_mibinfo_band1(struct seq_file *s, void *data)
-{
-	mt7915_mibinfo_read_per_band(s, 1);
-	return 0;
-}
+DEFINE_SHOW_ATTRIBUTE(mt7915_mibinfo);
 
 static int mt7915_token_read(struct seq_file *s, void *data)
 {
@@ -4222,10 +4214,7 @@ int mt7915_mtk_init_debugfs(struct mt7915_phy *phy, struct dentry *dir)
 	debugfs_create_devm_seqfile(dev->mt76.dev, "pse_info", dir,
 				    mt7915_pseinfo_read);
 
-	debugfs_create_devm_seqfile(dev->mt76.dev, "mib_info0", dir,
-				    mt7915_mibinfo_band0);
-	debugfs_create_devm_seqfile(dev->mt76.dev, "mib_info1", dir,
-				    mt7915_mibinfo_band1);
+	debugfs_create_file("mibinfo", 0400, dir, phy, &mt7915_mibinfo_fops);
 
 	debugfs_create_u32("token_idx", 0600, dir, &dev->dbg.token_idx);
 	debugfs_create_devm_seqfile(dev->mt76.dev, "token", dir,
