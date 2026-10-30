@@ -132,6 +132,7 @@
 
 /* NOTE: used to map mt76_rates. idx may change if firmware expands table */
 #define MT7996_BASIC_RATES_TBL		31
+#define MT7996_BASIC_RATES_TBL_OFDM	(MT7996_BASIC_RATES_TBL + 4 * 2)
 #define MT7996_BEACON_RATES_TBL		25
 
 #define MT7996_THERMAL_THROTTLE_MAX	100
