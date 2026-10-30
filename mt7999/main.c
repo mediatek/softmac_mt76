@@ -438,7 +438,7 @@ int mt7999_vif_link_add(struct mt76_phy *mphy, struct ieee80211_vif *vif,
 		vif->offload_flags = 0;
 
 	if (phy->mt76->chandef.chan->band != NL80211_BAND_2GHZ)
-		mlink->basic_rates_idx = MT7999_BASIC_RATES_TBL + 4;
+		mlink->basic_rates_idx = MT7999_BASIC_RATES_TBL_OFDM;
 	else
 		mlink->basic_rates_idx = MT7999_BASIC_RATES_TBL;
 
