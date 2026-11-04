@@ -254,7 +254,7 @@ mt76_tx_check_non_aql(struct mt76_dev *dev, struct mt76_wcid *wcid,
 		if (!sta->txq[i])
 			continue;
 
-		ieee80211_schedule_txq(dev->hw, sta->txq[i]);
+		ieee80211_schedule_txq(mt76_phy_hw(dev, wcid->phy_idx), sta->txq[i]);
 	}
 }
 
