@@ -1497,6 +1497,18 @@ static void mt7915_sta_set_4addr(struct ieee80211_hw *hw,
 		 * add another STA with 4-address flag, so that special WCID
 		 * will be assigned.
 		 */
+		u16 ba_bitmap = 0;
+		int i;
+
+		rcu_read_lock();
+		for (i = 0; i < IEEE80211_NUM_TIDS; i++)
+			if (rcu_dereference(msta->wcid.aggr[i]))
+				ba_bitmap |= BIT(i);
+		rcu_read_unlock();
+
+		if (ba_bitmap)
+			ieee80211_stop_rx_ba_session(vif, ba_bitmap, sta->addr);
+
 		if (mt7915_wds_sta_remove(hw, vif, sta))
 			dev_err(dev->mt76.dev,
 				"Failed to remove original STA for WDS peer\n");
