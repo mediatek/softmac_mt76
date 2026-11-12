@@ -3444,6 +3444,9 @@ int mt7996_dfs_init_radar_detector(struct mt7996_phy *phy)
 	if (prev_state == dfs_state || rdd_idx < 0)
 		return 0;
 
+	mt76_phy_dbg(phy->mt76, "RDD idx %d changed dfs state from %d to %d\n",
+		     rdd_idx, prev_state, dfs_state);
+
 	if (prev_state == MT_DFS_STATE_UNKNOWN)
 		mt7996_dfs_stop_radar_detector(phy);
 
