@@ -59,6 +59,8 @@ struct mt7996_mcu_countdown_notify {
 	u8 rsv;
 } __packed;
 
+#define MAX_PULSE_BUF_SIZE	32
+
 struct mt7996_mcu_rdd_report {
 	struct mt7996_mcu_rxd rxd;
 
@@ -96,7 +98,7 @@ struct mt7996_mcu_rdd_report {
 		__le16 pulse_power;
 		u8 mdrdy_flag;
 		u8 rsv[3];
-	} long_pulse[32];
+	} long_pulse[MAX_PULSE_BUF_SIZE];
 
 	struct {
 		__le32 start;
@@ -104,7 +106,7 @@ struct mt7996_mcu_rdd_report {
 		__le16 pulse_power;
 		u8 mdrdy_flag;
 		u8 rsv[3];
-	} periodic_pulse[32];
+	} periodic_pulse[MAX_PULSE_BUF_SIZE];
 
 	struct {
 		__le32 start;
@@ -114,7 +116,7 @@ struct mt7996_mcu_rdd_report {
 		u8 sw_reset;
 		u8 mdrdy_flag;
 		u8 tx_active;
-	} hw_pulse[32];
+	} hw_pulse[MAX_PULSE_BUF_SIZE];
 } __packed;
 
 struct mt7996_rdd_ctrl {

@@ -5927,6 +5927,30 @@ static const struct file_operations fops_ple_flush_sta = {
 	.llseek = default_llseek,
 };
 
+static int
+mt7996_radar_log(void *data, u64 val)
+{
+	struct mt7996_phy *phy = data;
+	struct mt7996_dev *dev = phy->dev;
+	enum {
+		RDD_DETMODE_OFF,
+		RDD_DETMODE_ON,		/* send rdd report only when radar is detected */
+		RDD_DETMODE_DEBUG,	/* send rdd report every interrupt for debugging */
+		RDD_DETMODE_NUM,
+	};
+
+	if (val >= RDD_DETMODE_NUM)
+		return -EINVAL;
+
+	phy->rdd_log_en = !!val;
+	mt7996_mcu_rdd_cmd(dev, RDD_DET_MODE, 0, val);
+
+	return mt7996_mcu_set_rdd_log_config(dev, !!(val <= RDD_DETMODE_ON));
+}
+
+DEFINE_DEBUGFS_ATTRIBUTE(fops_radar_log, NULL,
+			 mt7996_radar_log, "%lld\n");
+
 void mt7996_mtk_init_band_debugfs(struct mt7996_phy *phy, struct dentry *dir)
 {
 	/* agg */
@@ -5958,6 +5982,9 @@ void mt7996_mtk_init_band_debugfs(struct mt7996_phy *phy, struct dentry *dir)
 	if (!is_mt7996(&phy->dev->mt76))
 		debugfs_create_file("mru_probe_enable", 0600, dir, phy,
 				    &fops_mru_probe_enable);
+
+	if (phy->mt76->cap.has_5ghz)
+		debugfs_create_file("radar_log", 0200, dir, phy, &fops_radar_log);
 }
 
 void mt7996_mtk_init_dev_debugfs(struct mt7996_dev *dev, struct dentry *dir)

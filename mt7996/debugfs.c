@@ -362,7 +362,7 @@ mt7996_radar_trigger(void *data, u64 val)
 #define RADAR_BACKGROUND	2
 	struct mt7996_phy *phy = data;
 	struct mt7996_dev *dev = phy->dev;
-	struct cfg80211_chan_def *chandef = &phy->mt76->chandef;
+	struct cfg80211_chan_def *chandef;
 	int rdd_idx, ret;
 
 	if (test_bit(MT76_SCANNING, &phy->mt76->state))
@@ -377,6 +377,8 @@ mt7996_radar_trigger(void *data, u64 val)
 			return -EINVAL;
 		}
 		chandef = &dev->rdd2_chandef;
+	} else {
+		chandef = &phy->mt76->chandef;
 	}
 
 	rdd_idx = mt7996_get_rdd_idx(phy, val == RADAR_BACKGROUND);
@@ -396,6 +398,7 @@ mt7996_radar_trigger(void *data, u64 val)
 		return -EINVAL;
 	}
 
+	phy->rdd_emulate = true;
 	return mt7996_mcu_rdd_cmd(dev, RDD_RADAR_EMULATE, rdd_idx, 0);
 }
 

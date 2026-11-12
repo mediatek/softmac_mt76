@@ -587,6 +587,7 @@ mt7996_mcu_rx_radar_detected(struct mt7996_dev *dev, struct sk_buff *skb)
 		ieee80211_radar_detected(mphy->hw, NULL);
 	}
 	dev->hw_pattern++;
+	phy->rdd_emulate = false;
 
 	dev_info(dev->mt76.dev, "radar detected on %s\n",
 		 r->rdd_idx == MT_RDD_IDX_BACKGROUND ?
