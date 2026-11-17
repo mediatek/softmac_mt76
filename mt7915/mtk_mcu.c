@@ -375,3 +375,185 @@ void mt7915_mcu_dump_radar_pulse(struct mt7915_dev *dev, void *rdd_report)
 	mt7915_mcu_dump_radar_pulse_buffer(dev, r->periodic_pulse_num, SHORT_PULSE,
 					   (struct pulse_buffer *)r->periodic_pulse);
 }
+
+static void
+mt7915_mcu_dump_txbf_pfmu_tag(struct mt7915_dev *dev,
+			      const struct mt7915_pfmu_tag *tag)
+{
+#define T1(m, i)	le32_get_bits(tag->t1.dw[i], PFMU_T1_##m)
+#define T1_SNR(n)	le32_get_bits(tag->t1.dw[4 + (n) / 4], PFMU_T1_SNR_STS(n))
+#define T2(m, i)	le32_get_bits(tag->t2.dw[i], PFMU_T2_##m)
+	const __le32 *t1 = tag->t1.dw, *t2 = tag->t2.dw;
+
+	dev_info(dev->mt76.dev, "=================== TXBf Profile Tag1 Info ==================\n");
+	dev_info(dev->mt76.dev,
+		 "DW0 = 0x%08x, DW1 = 0x%08x, DW2 = 0x%08x\n",
+		 le32_to_cpu(t1[0]), le32_to_cpu(t1[1]), le32_to_cpu(t1[2]));
+	dev_info(dev->mt76.dev,
+		 "DW3 = 0x%08x, DW4 = 0x%08x, DW5 = 0x%08x\n\n",
+		 le32_to_cpu(t1[3]), le32_to_cpu(t1[4]), le32_to_cpu(t1[5]));
+	dev_info(dev->mt76.dev, "PFMU ID = %d              Invalid status = %d\n",
+		 T1(PFMU_IDX, 0), T1(INVALID_PROF, 0));
+	dev_info(dev->mt76.dev, "iBf/eBf = %d\n\n", T1(EBF, 0));
+	dev_info(dev->mt76.dev, "DBW   = %d\n", T1(DATA_BW, 0));
+	dev_info(dev->mt76.dev, "SU/MU = %d\n", T1(IS_MU, 0));
+	dev_info(dev->mt76.dev, "RMSD  = %d\n", T1(RMSD, 0));
+	dev_info(dev->mt76.dev,
+		 "nrow = %d, ncol = %d, ng = %d, LM = %d, CodeBook = %d MobCalEn = %d\n",
+		 T1(NR, 0), T1(NC, 0), T1(NGROUP, 0), T1(LM, 0), T1(CODEBOOK, 0),
+		 T1(MOB_CAL_EN, 3));
+	dev_info(dev->mt76.dev, "RU start = %d, RU end = %d\n",
+		 T1(RU_START_ID, 3), T1(RU_END_ID, 3));
+	dev_info(dev->mt76.dev, "Mem Col1 = %d, Mem Row1 = %d, Mem Col2 = %d, Mem Row2 = %d\n",
+		 T1(COL_ID_LO, 1), T1(ROW_ID_LO, 1), T1(COL_ID_HI, 1), T1(ROW_ID_HI, 1));
+	dev_info(dev->mt76.dev, "Mem Col3 = %d, Mem Row3 = %d, Mem Col4 = %d, Mem Row4 = %d\n\n",
+		 T1(COL_ID_LO, 2), T1(ROW_ID_LO, 2), T1(COL_ID_HI, 2), T1(ROW_ID_HI, 2));
+	dev_info(dev->mt76.dev,
+		 "STS0_SNR = 0x%02x, STS1_SNR = 0x%02x, STS2_SNR = 0x%02x, STS3_SNR = 0x%02x\n",
+		 T1_SNR(0), T1_SNR(1), T1_SNR(2), T1_SNR(3));
+	dev_info(dev->mt76.dev,
+		 "STS4_SNR = 0x%02x, STS5_SNR = 0x%02x, STS6_SNR = 0x%02x, STS7_SNR = 0x%02x\n",
+		 T1_SNR(4), T1_SNR(5), T1_SNR(6), T1_SNR(7));
+	dev_info(dev->mt76.dev, "=============================================================\n");
+
+	dev_info(dev->mt76.dev, "=================== TXBf Profile Tag2 Info ==================\n");
+	dev_info(dev->mt76.dev,
+		 "DW0 = 0x%08x, DW1 = 0x%08x, DW2 = 0x%08x\n",
+		 le32_to_cpu(t2[0]), le32_to_cpu(t2[1]), le32_to_cpu(t2[2]));
+	dev_info(dev->mt76.dev,
+		 "DW3 = 0x%08x, DW4 = 0x%08x, DW5 = 0x%08x\n\n",
+		 le32_to_cpu(t2[3]), le32_to_cpu(t2[4]), le32_to_cpu(t2[5]));
+	dev_info(dev->mt76.dev, "Smart antenna ID = 0x%x,  SE index = %d\n",
+		 T2(SMART_ANT, 0), T2(SE_IDX, 0));
+	dev_info(dev->mt76.dev, "RMSD threshold = %d\n", T2(RMSD_THRES, 1));
+	dev_info(dev->mt76.dev, "Timeout = 0x%x\n", T2(IBF_TIMEOUT, 1));
+	dev_info(dev->mt76.dev, "Desired BW = %d, Desired Ncol = %d, Desired Nrow = %d\n",
+		 T2(IBF_DATA_BW, 2), T2(IBF_NC, 2), T2(IBF_NR, 2));
+	dev_info(dev->mt76.dev, "Desired RU Allocation = %d\n", T2(IBF_RU, 2));
+	dev_info(dev->mt76.dev, "Mobility DeltaT = %d, Mobility LQ = %d\n",
+		 T2(MOB_DELTA_T, 3), T2(MOB_LQ_RESULT, 3));
+	dev_info(dev->mt76.dev, "=============================================================\n");
+#undef T1
+#undef T1_SNR
+#undef T2
+}
+
+static void
+mt7915_mcu_dump_txbf_sta_rec(struct mt7915_dev *dev,
+			     struct sta_rec_bf *sta_info)
+{
+	dev_info(dev->mt76.dev, "===================== BF Station Record =====================\n");
+	dev_info(dev->mt76.dev, "pfmu           = %d\n", le16_to_cpu(sta_info->pfmu));
+	dev_info(dev->mt76.dev, "su_mu          = %d\n", sta_info->su_mu);
+	dev_info(dev->mt76.dev, "bf_cap         = %d\n", sta_info->bf_cap);
+	dev_info(dev->mt76.dev, "sounding_phy   = %d\n", sta_info->sounding_phy);
+	dev_info(dev->mt76.dev, "ndpa_rate      = %d\n", sta_info->ndpa_rate);
+	dev_info(dev->mt76.dev, "ndp_rate       = %d\n", sta_info->ndp_rate);
+	dev_info(dev->mt76.dev, "rept_poll_rate = %d\n", sta_info->rept_poll_rate);
+	dev_info(dev->mt76.dev, "tx_mode        = %d\n", sta_info->tx_mode);
+	dev_info(dev->mt76.dev, "ncol           = %d\n", sta_info->ncol);
+	dev_info(dev->mt76.dev, "nrow           = %d\n", sta_info->nrow);
+	dev_info(dev->mt76.dev, "bw             = %d\n", sta_info->bw);
+	dev_info(dev->mt76.dev, "mem_total      = %d\n", sta_info->mem_total);
+	dev_info(dev->mt76.dev, "mem_20m        = %d\n", sta_info->mem_20m);
+	dev_info(dev->mt76.dev, "mem_row0       = %d\n", sta_info->mem[0].row);
+	dev_info(dev->mt76.dev, "mem_col0       = %d\n", sta_info->mem[0].col);
+	dev_info(dev->mt76.dev, "mem_row1       = %d\n", sta_info->mem[1].row);
+	dev_info(dev->mt76.dev, "mem_col1       = %d\n", sta_info->mem[1].col);
+	dev_info(dev->mt76.dev, "mem_row2       = %d\n", sta_info->mem[2].row);
+	dev_info(dev->mt76.dev, "mem_col2       = %d\n", sta_info->mem[2].col);
+	dev_info(dev->mt76.dev, "mem_row3       = %d\n", sta_info->mem[3].row);
+	dev_info(dev->mt76.dev, "mem_col3       = %d\n", sta_info->mem[3].col);
+	dev_info(dev->mt76.dev, "smart_ant      = 0x%x\n", le16_to_cpu(sta_info->smart_ant));
+	dev_info(dev->mt76.dev, "se_idx         = %d\n", sta_info->se_idx);
+	dev_info(dev->mt76.dev, "auto_sounding  = %d\n", sta_info->auto_sounding);
+	dev_info(dev->mt76.dev, "ibf_timeout    = 0x%x\n", sta_info->ibf_timeout);
+	dev_info(dev->mt76.dev, "ibf_dbw        = %d\n", sta_info->ibf_dbw);
+	dev_info(dev->mt76.dev, "ibf_ncol       = %d\n", sta_info->ibf_ncol);
+	dev_info(dev->mt76.dev, "ibf_nrow       = %d\n", sta_info->ibf_nrow);
+	dev_info(dev->mt76.dev, "nrow_gt_bw80   = %d\n", sta_info->nrow_gt_bw80);
+	dev_info(dev->mt76.dev, "ncol_gt_bw80   = %d\n", sta_info->ncol_gt_bw80);
+	dev_info(dev->mt76.dev, "ru_start_idx   = %d\n", sta_info->ru_start_idx);
+	dev_info(dev->mt76.dev, "trigger_su     = %d\n", sta_info->trigger_su);
+	dev_info(dev->mt76.dev, "trigger_mu     = %d\n", sta_info->trigger_mu);
+	dev_info(dev->mt76.dev, "ng16_su        = %d\n", sta_info->ng16_su);
+	dev_info(dev->mt76.dev, "ng16_mu        = %d\n", sta_info->ng16_mu);
+	dev_info(dev->mt76.dev, "codebook42_su  = %d\n", sta_info->codebook42_su);
+	dev_info(dev->mt76.dev, "codebook75_mu  = %d\n", sta_info->codebook75_mu);
+	dev_info(dev->mt76.dev, "he_ltf         = %d\n", sta_info->he_ltf);
+	dev_info(dev->mt76.dev, "=============================================================\n");
+}
+
+void mt7915_mcu_rx_bf_event(struct mt7915_dev *dev, struct sk_buff *skb)
+{
+#define BF_STATUS_PFMU_TAG		16
+#define BF_STATUS_STA_REC		20
+#define BF_STATUS_PFMU_TAG_OFFS		8
+	struct mt7915_bf_status_hdr *hdr;
+
+	if (skb->len < sizeof(struct mt76_connac2_mcu_rxd) + sizeof(*hdr))
+		return;
+
+	skb_pull(skb, sizeof(struct mt76_connac2_mcu_rxd));
+	hdr = (struct mt7915_bf_status_hdr *)skb->data;
+
+	switch (hdr->format_id) {
+	case BF_STATUS_PFMU_TAG:
+		if (skb->len < BF_STATUS_PFMU_TAG_OFFS +
+			       sizeof(struct mt7915_pfmu_tag))
+			return;
+
+		skb_pull(skb, BF_STATUS_PFMU_TAG_OFFS);
+		mt7915_mcu_dump_txbf_pfmu_tag(dev,
+					  (struct mt7915_pfmu_tag *)skb->data);
+		break;
+	case BF_STATUS_STA_REC:
+		/* the status buffer does not contain the tag and len fields */
+		if (skb->len < sizeof(*hdr) + sizeof(struct sta_rec_bf) - 4)
+			return;
+
+		skb_pull(skb, sizeof(*hdr));
+		skb_push(skb, 4);
+		mt7915_mcu_dump_txbf_sta_rec(dev, (struct sta_rec_bf *)skb->data);
+		break;
+	default:
+		break;
+	}
+}
+
+int mt7915_mcu_bf_pfmu_tag_read(struct mt7915_phy *phy, u8 pfmu_id, bool bfer)
+{
+	struct mt7915_dev *dev = phy->dev;
+	struct {
+		u8 format_id;
+		u8 pfmu_id;
+		u8 bfer;
+		u8 dbdc_idx;
+	} __packed req = {
+		.format_id = MT_BF_PFMU_TAG_READ,
+		.pfmu_id = pfmu_id,
+		.bfer = bfer,
+		.dbdc_idx = phy->mt76->band_idx,
+	};
+
+	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(TXBF_ACTION), &req,
+				 sizeof(req), false);
+}
+
+int mt7915_mcu_bf_starec_read(struct mt7915_phy *phy, u16 wlan_idx)
+{
+	struct mt7915_dev *dev = phy->dev;
+	struct {
+		u8 action;
+		u8 wlan_idx_lo;
+		u8 wlan_idx_hi;
+		u8 rsv[5];
+	} __packed req = {
+		.action = MT_BF_STA_REC_READ,
+		.wlan_idx_lo = to_wcid_lo(wlan_idx),
+		.wlan_idx_hi = to_wcid_hi(wlan_idx),
+	};
+
+	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(TXBF_ACTION), &req,
+				 sizeof(req), false);
+}

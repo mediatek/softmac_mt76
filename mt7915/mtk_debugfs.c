@@ -3036,6 +3036,32 @@ mt7915_txpower_level_set(void *data, u64 val)
 DEFINE_DEBUGFS_ATTRIBUTE(fops_txpower_level, NULL,
 			 mt7915_txpower_level_set, "%lld\n");
 
+static int
+mt7915_bf_pfmu_tag_read_set(void *data, u64 pfmu_id)
+{
+	struct mt7915_phy *phy = data;
+
+	if (pfmu_id > U8_MAX)
+		return -EINVAL;
+
+	return mt7915_mcu_bf_pfmu_tag_read(phy, pfmu_id, true);
+}
+DEFINE_DEBUGFS_ATTRIBUTE(fops_bf_pfmu_tag_read, NULL,
+			 mt7915_bf_pfmu_tag_read_set, "%lld\n");
+
+static int
+mt7915_starec_bf_read_set(void *data, u64 wlan_idx)
+{
+	struct mt7915_phy *phy = data;
+
+	if (wlan_idx >= mt7915_wtbl_size(phy->dev))
+		return -EINVAL;
+
+	return mt7915_mcu_bf_starec_read(phy, wlan_idx);
+}
+DEFINE_DEBUGFS_ATTRIBUTE(fops_starec_bf_read, NULL,
+			 mt7915_starec_bf_read_set, "%lld\n");
+
 /* usage: echo 0x[arg3][arg2][arg1] > fw_wa_set */
 static int
 mt7915_wa_set(void *data, u64 val)
@@ -4327,6 +4353,9 @@ int mt7915_mtk_init_debugfs(struct mt7915_phy *phy, struct dentry *dir)
 
 	debugfs_create_file("txpower_level", 0400, dir, phy,
 			    &fops_txpower_level);
+
+	debugfs_create_file("bf_starec_read", 0200, dir, phy, &fops_starec_bf_read);
+	debugfs_create_file("pfmu_tag_read", 0200, dir, phy, &fops_bf_pfmu_tag_read);
 
 	debugfs_create_u8("mgmt_pwr_enhance", 0600, dir, &phy->mt76->mgmt_pwr_enhance);
 
