@@ -2700,13 +2700,18 @@ int mt7915_mcu_set_mac(struct mt7915_dev *dev, int band,
 	};
 	int ret;
 
-	ret = mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(RX_HDR_TRANS),
-				&req_trans, sizeof(req_trans), false);
-	if (ret)
-		return ret;
+	/* rx header translation is a per-device setting, configure it
+	 * only via band 0 so that stopping band 1 does not disable it
+	 */
+	if (band == MT_BAND0) {
+		ret = mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(RX_HDR_TRANS),
+					&req_trans, sizeof(req_trans), false);
+		if (ret)
+			return ret;
 
-	if (hdr_trans)
-		mt7915_mcu_set_rx_hdr_trans_blacklist(dev, band);
+		if (hdr_trans)
+			mt7915_mcu_set_rx_hdr_trans_blacklist(dev, band);
+	}
 
 	return mt76_mcu_send_msg(&dev->mt76, MCU_EXT_CMD(MAC_INIT_CTRL),
 				 &req_mac, sizeof(req_mac), true);
