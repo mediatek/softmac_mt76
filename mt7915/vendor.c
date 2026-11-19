@@ -1465,18 +1465,6 @@ static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 	{
 		.info = {
 			.vendor_id = MTK_NL80211_VENDOR_ID,
-			.subcmd = MTK_NL80211_VENDOR_SUBCMD_CSI_CTRL,
-		},
-		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
-			 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = mt7915_vendor_csi_ctrl,
-		.dumpit = mt7915_vendor_csi_ctrl_dump,
-		.policy = csi_ctrl_policy,
-		.maxattr = MTK_VENDOR_ATTR_CSI_CTRL_MAX,
-	},
-	{
-		.info = {
-			.vendor_id = MTK_NL80211_VENDOR_ID,
 			.subcmd = MTK_NL80211_VENDOR_SUBCMD_AMNT_CTRL,
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
@@ -1485,6 +1473,18 @@ static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 		.dumpit = mt7915_vendor_amnt_ctrl_dump,
 		.policy = mt76_vendor_amnt_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_AMNT_CTRL_MAX,
+	},
+	{
+		.info = {
+			.vendor_id = MTK_NL80211_VENDOR_ID,
+			.subcmd = MTK_NL80211_VENDOR_SUBCMD_CSI_CTRL,
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
+			 WIPHY_VENDOR_CMD_NEED_RUNNING,
+		.doit = mt7915_vendor_csi_ctrl,
+		.dumpit = mt7915_vendor_csi_ctrl_dump,
+		.policy = csi_ctrl_policy,
+		.maxattr = MTK_VENDOR_ATTR_CSI_CTRL_MAX,
 	},
 	{
 		.info = {
@@ -1581,6 +1581,17 @@ static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 	{
 		.info = {
 			.vendor_id = MTK_NL80211_VENDOR_ID,
+			.subcmd = MTK_NL80211_VENDOR_SUBCMD_BEACON_CTRL,
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
+			 WIPHY_VENDOR_CMD_NEED_RUNNING,
+		.doit = mt7915_vendor_beacon_ctrl,
+		.policy = mt76_vendor_beacon_ctrl_policy,
+		.maxattr = MTK_VENDOR_ATTR_BEACON_CTRL_MAX,
+	},
+	{
+		.info = {
+			.vendor_id = MTK_NL80211_VENDOR_ID,
 			.subcmd = MTK_NL80211_VENDOR_SUBCMD_TXPOWER_CTRL,
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
@@ -1592,13 +1603,13 @@ static const struct wiphy_vendor_command mt7915_vendor_commands[] = {
 	{
 		.info = {
 			.vendor_id = MTK_NL80211_VENDOR_ID,
-			.subcmd = MTK_NL80211_VENDOR_SUBCMD_BEACON_CTRL,
+			.subcmd = MTK_NL80211_VENDOR_SUBCMD_DFS_TX_CTRL,
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
-			 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = mt7915_vendor_beacon_ctrl,
-		.policy = mt76_vendor_beacon_ctrl_policy,
-		.maxattr = MTK_VENDOR_ATTR_BEACON_CTRL_MAX,
+			WIPHY_VENDOR_CMD_NEED_RUNNING,
+		.doit = mt76_vendor_dfs_tx_ctrl,
+		.policy = mt76_vendor_dfs_tx_ctrl_policy,
+		.maxattr = MTK_VENDOR_ATTR_DFS_TX_CTRL_MAX,
 	},
 };
 

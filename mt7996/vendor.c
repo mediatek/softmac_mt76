@@ -1150,14 +1150,37 @@ static const struct wiphy_vendor_command mt7996_vendor_commands[] = {
 	{
 		.info = {
 			.vendor_id = MTK_NL80211_VENDOR_ID,
-			.subcmd = MTK_NL80211_VENDOR_SUBCMD_MU_CTRL,
+			.subcmd = MTK_NL80211_VENDOR_SUBCMD_AMNT_CTRL,
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
 			 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = mt76_vendor_mu_ctrl,
-		.dumpit = mt76_vendor_mu_ctrl_dump,
-		.policy = mt76_vendor_mu_ctrl_policy,
-		.maxattr = MTK_VENDOR_ATTR_MU_CTRL_MAX,
+		.doit = mt7996_vendor_amnt_ctrl,
+		.dumpit = mt7996_vendor_amnt_ctrl_dump,
+		.policy = mt76_vendor_amnt_ctrl_policy,
+		.maxattr = MTK_VENDOR_ATTR_AMNT_CTRL_MAX,
+	},
+	{
+		.info = {
+			.vendor_id = MTK_NL80211_VENDOR_ID,
+			.subcmd = MTK_NL80211_VENDOR_SUBCMD_CSI_CTRL,
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
+			 WIPHY_VENDOR_CMD_NEED_RUNNING,
+		.doit = mt7996_vendor_csi_ctrl,
+		.dumpit = mt7996_vendor_csi_ctrl_dump,
+		.policy = mt76_vendor_csi_ctrl_policy,
+		.maxattr = MTK_VENDOR_ATTR_CSI_CTRL_MAX,
+	},
+	{
+		.info = {
+			.vendor_id = MTK_NL80211_VENDOR_ID,
+			.subcmd = MTK_NL80211_VENDOR_SUBCMD_RFEATURE_CTRL,
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
+			WIPHY_VENDOR_CMD_NEED_RUNNING,
+		.doit = mt7996_vendor_rfeature_ctrl,
+		.policy = mt76_vendor_rfeature_ctrl_policy,
+		.maxattr = MTK_VENDOR_ATTR_RFEATURE_CTRL_MAX,
 	},
 	{
 		.info = {
@@ -1174,25 +1197,14 @@ static const struct wiphy_vendor_command mt7996_vendor_commands[] = {
 	{
 		.info = {
 			.vendor_id = MTK_NL80211_VENDOR_ID,
-			.subcmd = MTK_NL80211_VENDOR_SUBCMD_AMNT_CTRL,
+			.subcmd = MTK_NL80211_VENDOR_SUBCMD_MU_CTRL,
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
 			 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = mt7996_vendor_amnt_ctrl,
-		.dumpit = mt7996_vendor_amnt_ctrl_dump,
-		.policy = mt76_vendor_amnt_ctrl_policy,
-		.maxattr = MTK_VENDOR_ATTR_AMNT_CTRL_MAX,
-	},
-	{
-		.info = {
-			.vendor_id = MTK_NL80211_VENDOR_ID,
-			.subcmd = MTK_NL80211_VENDOR_SUBCMD_BSS_COLOR_CTRL,
-		},
-		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.dumpit = mt76_vendor_bss_color_ctrl_dump,
-		.policy = mt76_vendor_bss_color_ctrl_policy,
-		.maxattr = MTK_VENDOR_ATTR_BSS_COLOR_CTRL_MAX,
+		.doit = mt76_vendor_mu_ctrl,
+		.dumpit = mt76_vendor_mu_ctrl_dump,
+		.policy = mt76_vendor_mu_ctrl_policy,
+		.maxattr = MTK_VENDOR_ATTR_MU_CTRL_MAX,
 	},
 	{
 		.info = {
@@ -1232,24 +1244,13 @@ static const struct wiphy_vendor_command mt7996_vendor_commands[] = {
 	{
 		.info = {
 			.vendor_id = MTK_NL80211_VENDOR_ID,
-			.subcmd = MTK_NL80211_VENDOR_SUBCMD_PP_CTRL,
+			.subcmd = MTK_NL80211_VENDOR_SUBCMD_BSS_COLOR_CTRL,
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
 			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = mt7996_vendor_pp_ctrl,
-		.policy = mt76_vendor_pp_ctrl_policy,
-		.maxattr = MTK_VENDOR_ATTR_PP_CTRL_MAX,
-	},
-	{
-		.info = {
-			.vendor_id = MTK_NL80211_VENDOR_ID,
-			.subcmd = MTK_NL80211_VENDOR_SUBCMD_RFEATURE_CTRL,
-		},
-		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
-			WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = mt7996_vendor_rfeature_ctrl,
-		.policy = mt76_vendor_rfeature_ctrl_policy,
-		.maxattr = MTK_VENDOR_ATTR_RFEATURE_CTRL_MAX,
+		.dumpit = mt76_vendor_bss_color_ctrl_dump,
+		.policy = mt76_vendor_bss_color_ctrl_policy,
+		.maxattr = MTK_VENDOR_ATTR_BSS_COLOR_CTRL_MAX,
 	},
 	{
 		.info = {
@@ -1265,6 +1266,17 @@ static const struct wiphy_vendor_command mt7996_vendor_commands[] = {
 	{
 		.info = {
 			.vendor_id = MTK_NL80211_VENDOR_ID,
+			.subcmd = MTK_NL80211_VENDOR_SUBCMD_PP_CTRL,
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
+			WIPHY_VENDOR_CMD_NEED_RUNNING,
+		.doit = mt7996_vendor_pp_ctrl,
+		.policy = mt76_vendor_pp_ctrl_policy,
+		.maxattr = MTK_VENDOR_ATTR_PP_CTRL_MAX,
+	},
+	{
+		.info = {
+			.vendor_id = MTK_NL80211_VENDOR_ID,
 			.subcmd = MTK_NL80211_VENDOR_SUBCMD_BEACON_CTRL,
 		},
 		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
@@ -1272,29 +1284,6 @@ static const struct wiphy_vendor_command mt7996_vendor_commands[] = {
 		.doit = mt76_vendor_beacon_ctrl,
 		.policy = mt76_vendor_beacon_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_BEACON_CTRL_MAX,
-	},
-	{
-		.info = {
-			.vendor_id = MTK_NL80211_VENDOR_ID,
-			.subcmd = MTK_NL80211_VENDOR_SUBCMD_CSI_CTRL,
-		},
-		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
-			 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = mt7996_vendor_csi_ctrl,
-		.dumpit = mt7996_vendor_csi_ctrl_dump,
-		.policy = mt76_vendor_csi_ctrl_policy,
-		.maxattr = MTK_VENDOR_ATTR_CSI_CTRL_MAX,
-	},
-	{
-		.info = {
-			.vendor_id = MTK_NL80211_VENDOR_ID,
-			.subcmd = MTK_NL80211_VENDOR_SUBCMD_EPCS_CTRL,
-		},
-		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
-			 WIPHY_VENDOR_CMD_NEED_RUNNING,
-		.doit = mt7996_vendor_epcs_ctrl,
-		.policy = mt76_vendor_epcs_ctrl_policy,
-		.maxattr = MTK_VENDOR_ATTR_EPCS_CTRL_MAX,
 	},
 	{
 		.info = {
@@ -1317,6 +1306,17 @@ static const struct wiphy_vendor_command mt7996_vendor_commands[] = {
 		.doit = mt7996_vendor_scs_ctrl,
 		.policy = mt76_vendor_scs_ctrl_policy,
 		.maxattr = MTK_VENDOR_ATTR_SCS_CTRL_MAX,
+	},
+	{
+		.info = {
+			.vendor_id = MTK_NL80211_VENDOR_ID,
+			.subcmd = MTK_NL80211_VENDOR_SUBCMD_EPCS_CTRL,
+		},
+		.flags = WIPHY_VENDOR_CMD_NEED_NETDEV |
+			 WIPHY_VENDOR_CMD_NEED_RUNNING,
+		.doit = mt7996_vendor_epcs_ctrl,
+		.policy = mt76_vendor_epcs_ctrl_policy,
+		.maxattr = MTK_VENDOR_ATTR_EPCS_CTRL_MAX,
 	},
 	{
 		.info = {
