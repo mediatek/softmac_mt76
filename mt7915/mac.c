@@ -2135,7 +2135,7 @@ static void mt7915_mac_dynamic_txop(struct mt7915_dev *dev)
 #define MT7915_TXOP_PREFER_RX	0x0
 	u8 band, i;
 
-#ifdef MTK_DEBUG
+#ifdef CONFIG_MTK_DEBUG
 	if (dev->disable_dynamic_txop)
 		return;
 #endif

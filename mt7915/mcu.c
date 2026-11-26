@@ -6089,7 +6089,7 @@ int mt7915_mcu_set_tpo(struct mt7915_dev *dev, u8 type, u8 val)
 	if (ret)
 		return ret;
 
-#ifdef MTK_DEBUG
+#ifdef CONFIG_MTK_DEBUG
 	switch (type) {
 	case MT7915_LP_TPO_ALL:
 		dev->dbg.lp.tpo = val;
